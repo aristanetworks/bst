@@ -1,0 +1,27 @@
+usage: %1$s [-h] [options] <root> <exe> <argv0> [argv1 ...]
+
+Chroot into <root> and execute <exe> with the specified argv array,
+setting up namespaces and other low-level minutiae that are needed in
+order to enter a sane, isolated environment.
+
+Options:
+	-h, --help:     print this message
+	-p, --pidns:    unshare the PID namespace
+	-m, --mountns:  unshare the mount namespace
+	-c, --cgroupns: unshare the cgroup namespace
+	-i, --ipcns:    unshare the ipc namespace
+	-n, --netns:    unshare the network namespace
+	-U, --userns:   unshare the user namespace
+	-u, --utsns:    unshare the UTS namespace
+
+	--workdir <directory>:
+	                set current work directory
+	--mount <source,target,type,options>:
+	                mount source over target before executing the program
+	--mutable <path>:
+	                make path mutable
+	--uid <uid>:    set uid in entered namespace
+	--gid <gid>:    set gid in entered namespace
+	--groups <gid,gid,...>:
+	                set additional groups in entered namespace
+	--arch <arch>:  sets the execution domain
