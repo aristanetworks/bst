@@ -9,10 +9,10 @@ SRCS := main.c enter.c userns.c mount.c cp.c setarch.c usage.c signal.c
 OBJS := $(subst .c,.o,$(SRCS))
 BINS := b5-enter b5-enter--userns-helper
 
-ifeq ($(shell id -u),0)
-SETUID_BIT = 4
+ifeq ($(NO_SETCAP),)
+SETCAP = sudo setcap
 else
-SETUID_BIT =
+SETCAP = :
 endif
 
 all: $(BINS)
@@ -29,10 +29,12 @@ b5-enter: $(OBJS)
 
 b5-enter--userns-helper: userns-helper.o
 	$(LINK.o) -o $@ $^
+	$(SETCAP) cap_setuid,cap_setgid+ep $@
 
 install: $(BINS)
 	install -m 755 -D b5-enter $(DESTDIR)$(BINDIR)/b5-enter
-	install -m $(SETUID_BIT)755 -D b5-enter--userns-helper $(DESTDIR)$(BINDIR)/b5-enter--userns-helper
+	install -m 755 -D b5-enter--userns-helper $(DESTDIR)$(BINDIR)/b5-enter--userns-helper
+	$(SETCAP) cap_setuid,cap_setgid+ep $(DESTDIR)$(BINDIR)/b5-enter--userns-helper
 
 clean:
 	$(RM) $(BINS) $(OBJS) userns-helper.o
