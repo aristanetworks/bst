@@ -2,6 +2,7 @@
    Arista Networks, Inc. Confidential and Proprietary. */
 
 #include <err.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <ftw.h>
 #include <limits.h>
@@ -28,7 +29,7 @@ static int copyfile(const char *target, const char *source, const struct stat *s
 		}
 		return 0;
 	case S_IFDIR:
-		if (mkdir(target, srcinfo->st_mode & 07777) == -1) {
+		if (mkdir(target, srcinfo->st_mode & 07777) == -1 && errno != EEXIST) {
 			err(1, "copyfile: mkdir(\"%s\", %o)", target, srcinfo->st_mode);
 		}
 		return 0;
