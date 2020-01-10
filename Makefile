@@ -25,7 +25,7 @@ generate: usage.txt
 	 xxd -i usage.txt) > usage.c
 
 b5-enter: $(OBJS)
-	$(LINK.o) -o $@ $^
+	$(LINK.o) -o $@ $^ -lcap
 
 b5-enter--userns-helper: userns-helper.o
 	$(LINK.o) -o $@ $^

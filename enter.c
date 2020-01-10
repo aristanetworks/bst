@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/capability.h>
 #include <sys/mount.h>
 #include <sys/prctl.h>
 #include <sys/wait.h>
@@ -114,6 +115,10 @@ int enter(const struct entry_settings *opts)
 		userns_helper_close(&userns_helper);
 	}
 
+	/* The setuid will drop privileges. We ask to keep permitted capabilities
+	   in order to restore them for the rest of the program. */
+	prctl(PR_SET_KEEPCAPS, 1);
+
 	if (opts->ngroups != 0 && setgroups(opts->ngroups, opts->groups) == -1) {
 		err(1, "setgroups");
 	}
@@ -122,6 +127,36 @@ int enter(const struct entry_settings *opts)
 	}
 	if (setreuid(opts->uid, opts->uid) == -1) {
 		err(1, "setreuid");
+	}
+
+	/* give ourselves back CAP_SYS_CHROOT if we need to chroot, and
+	   CAP_SYS_ADMIN if we want to mount. */
+
+	cap_value_t cap_list[2];
+
+	size_t ncaps = 0;
+	if (strcmp(opts->root, "/") != 0) {
+		cap_list[ncaps++] = CAP_SYS_CHROOT;
+	}
+	if (opts->nmounts > 0 || opts->nmutables > 0) {
+		cap_list[ncaps++] = CAP_SYS_ADMIN;
+	}
+
+	cap_t caps = cap_get_proc();
+	if (caps == NULL) {
+		err(1, "cap_get_proc");
+	}
+
+	if (ncaps > 0 && cap_set_flag(caps, CAP_EFFECTIVE, ncaps, cap_list, CAP_SET) == -1) {
+		err(1, "cap_set_flag");
+	}
+
+	if (cap_set_proc(caps) == -1) {
+		err(1, "caps_set_proc");
+	}
+
+	if (cap_free(caps) == -1) {
+		err(1, "cap_free");
 	}
 
 	/* We have to do this after setuid/setgid/setgroups since mounting
