@@ -141,7 +141,9 @@ int enter(const struct entry_settings *opts)
 		mount_mutables(opts->root, opts->mutables, opts->nmutables);
 	}
 
-	if (chroot(opts->root) == -1) {
+	/* Don't chroot if opts->root is "/". This is a better default since it
+	   allows us to run commands that unshare nothing unprivileged. */
+	if (strcmp(opts->root, "/") != 0 && chroot(opts->root) == -1) {
 		err(1, "chroot");
 	}
 	if (chdir(opts->workdir) == -1) {
