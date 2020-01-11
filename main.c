@@ -40,7 +40,10 @@ int usage(int error, char *argv0)
 
 int main(int argc, char *argv[], char *envp[])
 {
-	static struct entry_settings opts;
+	static struct entry_settings opts = {
+		.uid = -1,
+		.gid = -1,
+	};
 
 	static struct option options[] = {
 		{ "help",       no_argument,        NULL,           'h' },

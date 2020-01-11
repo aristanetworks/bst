@@ -114,14 +114,14 @@ int enter(const struct entry_settings *opts)
 		userns_helper_close(&userns_helper);
 	}
 
-	if (setgroups(opts->ngroups, opts->groups) == -1) {
+	if (opts->ngroups != 0 && setgroups(opts->ngroups, opts->groups) == -1) {
 		err(1, "setgroups");
 	}
-	if (setgid(opts->gid) == -1) {
-		err(1, "setgid");
+	if (setregid(opts->gid, opts->gid) == -1) {
+		err(1, "setregid");
 	}
-	if (setuid(opts->uid) == -1) {
-		err(1, "setuid");
+	if (setreuid(opts->uid, opts->uid) == -1) {
+		err(1, "setreuid");
 	}
 
 	/* We have to do this after setuid/setgid/setgroups since mounting
