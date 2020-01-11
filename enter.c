@@ -107,7 +107,11 @@ int enter(const struct entry_settings *opts)
 		if (TEMP_FAILURE_RETRY(waitpid(pid, &status, 0)) == -1) {
 			err(1, "waitpid");
 		}
-		return WEXITSTATUS(status) | WTERMSIG(status) << 7;
+
+		if (WIFEXITED(status)) {
+			return WEXITSTATUS(status);
+		}
+		return WTERMSIG(status) | 1 << 7;
 	}
 
 	if (opts->user) {
