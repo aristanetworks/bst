@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include "enter.h"
+#include "signal.h"
 
 enum {
 	OPTION_MOUNT = 128,
@@ -143,14 +144,16 @@ int main(int argc, char *argv[], char *envp[])
 		errx(1, "workdir must be an absolute path.");
 	}
 
-	/* These are typically sent to the foreground process group, which
-	   includes us and our child process. We act on good faith that whatever
+	/* Ignore all user-sent signals, and a few kernel-sent ones.
+	
+	   Some of these signals are typically sent to the foreground process group,
+	   which includes us and our child process. We act on good faith that whatever
 	   the child chooses to do (e.g. ignore SIGINT) we want to politely
 	   leave them alone until completion. */
-	signal(SIGINT, SIG_IGN);
-	signal(SIGQUIT, SIG_IGN);
-	signal(SIGHUP, SIG_IGN);
-	signal(SIGTERM, SIG_IGN);
+
+	for (int sig = 1; sig <= SIGRTMAX; ++sig) {
+		ignoresig(sig);
+	}
 
 	return enter(&opts);
 }

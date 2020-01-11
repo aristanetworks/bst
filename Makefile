@@ -5,7 +5,7 @@ CPPFLAGS += -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
 PREFIX ?= /usr
 BINDIR ?= $(PREFIX)/bin
 
-SRCS := main.c enter.c userns.c mount.c cp.c setarch.c usage.c
+SRCS := main.c enter.c userns.c mount.c cp.c setarch.c usage.c signal.c
 OBJS := $(subst .c,.o,$(SRCS))
 BINS := b5-enter b5-enter--userns-helper
 
