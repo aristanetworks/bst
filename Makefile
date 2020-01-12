@@ -1,9 +1,10 @@
-CFLAGS ?= -O2
-CFLAGS += -std=c99 -Wall -Wextra -Wno-unused-parameter -fno-strict-aliasing
-CPPFLAGS += -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
-
 PREFIX ?= /usr
 BINDIR ?= $(PREFIX)/bin
+LIBEXECDIR ?= $(PREFIX)/libexec
+
+CFLAGS ?= -O2
+CFLAGS += -std=c99 -Wall -Wextra -Wno-unused-parameter -fno-strict-aliasing
+CPPFLAGS += -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -DLIBEXECDIR=\"$(LIBEXECDIR)\"
 
 SRCS := main.c enter.c userns.c mount.c cp.c setarch.c usage.c signal.c
 OBJS := $(subst .c,.o,$(SRCS))
@@ -33,8 +34,8 @@ b5-enter--userns-helper: userns-helper.o
 
 install: $(BINS)
 	install -m 755 -D b5-enter $(DESTDIR)$(BINDIR)/b5-enter
-	install -m 755 -D b5-enter--userns-helper $(DESTDIR)$(BINDIR)/b5-enter--userns-helper
-	$(SETCAP) cap_setuid,cap_setgid+ep $(DESTDIR)$(BINDIR)/b5-enter--userns-helper
+	install -m 755 -D b5-enter--userns-helper $(DESTDIR)$(LIBEXECDIR)/b5-enter--userns-helper
+	$(SETCAP) cap_setuid,cap_setgid+ep $(DESTDIR)$(LIBEXECDIR)/b5-enter--userns-helper
 
 clean:
 	$(RM) $(BINS) $(OBJS) userns-helper.o

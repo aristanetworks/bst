@@ -88,8 +88,8 @@ struct userns_helper userns_helper_spawn(void)
 					child_pid, sizeof (child_pid_str));
 		}
 
-		execlp("b5-enter--userns-helper", "b5-enter--userns-helper", child_pid_str, NULL);
-		err(1, "userns_helper: execlp");
+		execl(LIBEXECDIR "/b5-enter--userns-helper", "b5-enter--userns-helper", child_pid_str, NULL);
+		err(1, "userns_helper: execl");
 	}
 
 	if (TEMP_FAILURE_RETRY(waitpid(helper_pid, NULL, 0)) == -1) {
