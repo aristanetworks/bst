@@ -24,7 +24,7 @@ static int copyfile(const char *target, const char *source, const struct stat *s
 			err(1, "copyfile: readlink(\"%s\")", source);
 		}
 		realpath[linksz] = 0;
-		if (symlink(target, realpath) == -1) {
+		if (symlink(realpath, target) == -1) {
 			err(1, "copyfile: symlink(\"%s\", \"%s\")", target, realpath);
 		}
 		return 0;
