@@ -16,6 +16,7 @@
 #include <sys/capability.h>
 #include <sys/mount.h>
 #include <sys/prctl.h>
+#include <sys/syscall.h>
 #include <sys/wait.h>
 
 #include "enter.h"
@@ -163,6 +164,14 @@ int enter(const struct entry_settings *opts)
 		err(1, "cap_free");
 	}
 
+	/* We have a special case for pivot_root: the syscall wants the
+	   new root to be a mount point, so we indulge. */
+	if (opts->mount && strcmp(opts->root, "/") != 0) {
+		if (mount(opts->root, opts->root, "none", MS_BIND, "") == -1) {
+			err(1, "mount(\"/\", \"/\", MS_BIND)");
+		}
+	}
+
 	/* We have to do this after setuid/setgid/setgroups since mounting
 	   tmpfses in user namespaces forces the options uid=<real-uid> and
 	   gid=<real-gid>. */
@@ -182,8 +191,46 @@ int enter(const struct entry_settings *opts)
 
 	/* Don't chroot if opts->root is "/". This is a better default since it
 	   allows us to run commands that unshare nothing unprivileged. */
-	if (strcmp(opts->root, "/") != 0 && chroot(opts->root) == -1) {
-		err(1, "chroot");
+	if (strcmp(opts->root, "/") != 0) {
+
+		/* The chroot-ing logic is a bit delicate. If we don't have a mount
+		   namespace, we just use chroot. This has its limitations though,
+		   namely, in that situation, you won't be able to nest user
+		   namespaces, and you'll instead get baffling EPERMs when calling
+		   unshare(CLONE_NEWUSER).
+
+		   In order to remediate that, we pivot the root. Since this actively
+		   changes the world for every running process, we *insist* that this
+		   must be done in a mount namespace, because otherwise pivot_root
+		   will burn your house, invoke dragons, and eat your children. */
+
+		if (!opts->mount) {
+			if (chroot(opts->root) == -1) {
+				err(1, "chroot");
+			}
+		} else {
+			if (chdir(opts->root) == -1) {
+				err(1, "pivot_root: pre chdir");
+			}
+			/* Pivot the root to opts->root (new_root) and mount the old root
+			   (old_dir) on top of it. Then, unmount "." to get rid of the
+			   old root.
+
+			   The pivot_root manpage documents this approach: old_dir is
+			   always layered on top of new_root, which means that we can
+			   use this technique to avoid creating a mount point for the
+			   old root under new_root, or assuming anything about the layout
+			   of the new root. */
+			if (syscall(SYS_pivot_root, ".", ".") == -1) {
+				err(1, "pivot_root");
+			}
+			if (umount2(".", MNT_DETACH)) {
+				err(1, "pivot_root: umount2");
+			}
+			if (chdir("/") == -1) {
+				err(1, "pivot_root: post chdir");
+			}
+		}
 	}
 	if (chdir(opts->workdir) == -1) {
 		err(1, "chdir");
