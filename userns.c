@@ -92,7 +92,7 @@ struct userns_helper userns_helper_spawn(void)
 		err(1, "userns_helper: execl");
 	}
 
-	if (TEMP_FAILURE_RETRY(waitpid(helper_pid, NULL, 0)) == -1) {
+	if (waitpid(helper_pid, NULL, 0) == -1) {
 		err(1, "userns_helper: waitpid");
 	}
 
@@ -111,7 +111,7 @@ void userns_helper_sendpid(const struct userns_helper *helper, pid_t pid)
 	}
 
 	int status;
-	if (TEMP_FAILURE_RETRY(waitpid(helper->pid, &status, 0)) == -1) {
+	if (waitpid(helper->pid, &status, 0) == -1) {
 		err(1, "userns_helper_sendpid: waitpid");
 	}
 

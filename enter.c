@@ -104,7 +104,7 @@ int enter(const struct entry_settings *opts)
 			userns_helper_close(&userns_helper);
 		}
 
-		if (TEMP_FAILURE_RETRY(waitpid(pid, &status, 0)) == -1) {
+		if (waitpid(pid, &status, 0) == -1) {
 			err(1, "waitpid");
 		}
 
