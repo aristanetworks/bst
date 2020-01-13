@@ -10,8 +10,14 @@ SRCS := main.c enter.c userns.c mount.c cp.c setarch.c usage.c signal.c
 OBJS := $(subst .c,.o,$(SRCS))
 BINS := b5-enter b5-enter--userns-helper
 
+ifeq ($(shell id -u),0)
+SUDO =
+else
+SUDO = sudo
+endif
+
 ifeq ($(NO_SETCAP),)
-SETCAP = sudo setcap
+SETCAP = $(SUDO) setcap
 else
 SETCAP = :
 endif
