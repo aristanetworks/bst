@@ -33,9 +33,11 @@ static int opts_to_unshareflags(const struct entry_settings *opts)
 	if (opts->mount) {
 		flags |= CLONE_NEWNS;
 	}
+#ifdef HAVE_CLONE_NEWCGROUP
 	if (opts->cgroup) {
 		flags |= CLONE_NEWCGROUP;
 	}
+#endif
 	if (opts->ipc) {
 		flags |= CLONE_NEWIPC;
 	}
