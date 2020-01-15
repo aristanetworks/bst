@@ -55,10 +55,10 @@ static int opts_to_unshareflags(const struct entry_settings *opts)
 
 int enter(const struct entry_settings *opts)
 {
-	/* We can't afford to leave children alive in the background if b5-enter
+	/* We can't afford to leave children alive in the background if bst
 	   dies from uncatcheable signals. Or at least, we could, but this makes us
 	   leaky by default which isn't great, and the obvious workaround to
-	   daemonize the process tree is to just nohup b5-enter. */
+	   daemonize the process tree is to just nohup bst. */
 	if (prctl(PR_SET_PDEATHSIG, SIGKILL) == -1) {
 		err(1, "prctl(PR_SET_PDEATHSIG)");
 	}

@@ -8,7 +8,7 @@ CPPFLAGS += -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -DLIBEXECDIR=\"$(LIBEXECDIR)\"
 
 SRCS := main.c enter.c userns.c mount.c cp.c setarch.c usage.c signal.c
 OBJS := $(subst .c,.o,$(SRCS))
-BINS := b5-enter b5-enter--userns-helper
+BINS := bst bst--userns-helper
 
 ifeq ($(shell id -u),0)
 SUDO =
@@ -31,17 +31,17 @@ generate: usage.txt
 	 echo "/* This file is generated from usage.txt. Do not edit. */"; \
 	 xxd -i usage.txt) > usage.c
 
-b5-enter: $(OBJS)
+bst: $(OBJS)
 	$(LINK.o) -o $@ $^ -lcap
 
-b5-enter--userns-helper: userns-helper.o
+bst--userns-helper: userns-helper.o
 	$(LINK.o) -o $@ $^
 	$(SETCAP) cap_setuid,cap_setgid+ep $@
 
 install: $(BINS)
-	install -m 755 -D b5-enter $(DESTDIR)$(BINDIR)/b5-enter
-	install -m 755 -D b5-enter--userns-helper $(DESTDIR)$(LIBEXECDIR)/b5-enter--userns-helper
-	$(SETCAP) cap_setuid,cap_setgid+ep $(DESTDIR)$(LIBEXECDIR)/b5-enter--userns-helper
+	install -m 755 -D bst $(DESTDIR)$(BINDIR)/bst
+	install -m 755 -D bst--userns-helper $(DESTDIR)$(LIBEXECDIR)/bst--userns-helper
+	$(SETCAP) cap_setuid,cap_setgid+ep $(DESTDIR)$(LIBEXECDIR)/bst--userns-helper
 
 clean:
 	$(RM) $(BINS) $(OBJS) userns-helper.o

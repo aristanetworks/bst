@@ -9,7 +9,7 @@
 
 #include "userns.h"
 
-/* userns_helper_spawn invokes the privileged b5-enter--userns-helper executable
+/* userns_helper_spawn invokes the privileged bst--userns-helper executable
    whose only purpose is to modify the uid and gid mappings of our target
    process (TP).
 
@@ -19,7 +19,7 @@
 
    The reason why this helper is necessary is because once we enter the user
    namespace, we drop CAP_SET[UG]ID on the host namespace, which means we
-   can't map arbitrary sub[ug]id ranges. We could setuid b5-enter itself and
+   can't map arbitrary sub[ug]id ranges. We could setuid bst itself and
    do these mappings from a regular fork(), but this means that we can no
    longer do the right thing w.r.t unprivileged user namespaces, not to mention
    that I'm not happy with having a rootkit that everyone can use on my own
@@ -27,7 +27,7 @@
 
    The canonical way to do all of this on a modern Linux distribution is to
    call the newuidmap and newgidmap utilities, which are generic interfaces
-   that do exactly what b5-enter--userns-helper does, which is writing to
+   that do exactly what bst--userns-helper does, which is writing to
    /proc/pid/[ug]id_map any id ranges that a user is allowed to map by looking
    allocated IDs for that user in /etc/sub[ug]id. We obviously don't want
    to rely on any external program that may or may not be installed on the
@@ -88,7 +88,7 @@ struct userns_helper userns_helper_spawn(void)
 					child_pid, sizeof (child_pid_str));
 		}
 
-		execl(LIBEXECDIR "/b5-enter--userns-helper", "b5-enter--userns-helper", child_pid_str, NULL);
+		execl(LIBEXECDIR "/bst--userns-helper", "bst--userns-helper", child_pid_str, NULL);
 		err(1, "userns_helper: execl");
 	}
 

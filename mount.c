@@ -205,7 +205,7 @@ void mount_mutables(const char *root, const char *const *mutables, size_t nmutab
 			err(1, "mount_mutables: stat(\"%s\")", mutpath);
 		}
 
-		char tmpdir[PATH_MAX] = "/tmp/b5-enter.XXXXXX";
+		char tmpdir[PATH_MAX] = "/tmp/bst.XXXXXX";
 		if (!mkdtemp(tmpdir)) {
 			err(1, "mount_mutables: mkdtemp");
 		}
