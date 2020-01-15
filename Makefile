@@ -43,7 +43,10 @@ install: $(BINS)
 	install -m 755 -D bst--userns-helper $(DESTDIR)$(LIBEXECDIR)/bst--userns-helper
 	$(SETCAP) cap_setuid,cap_setgid+ep $(DESTDIR)$(LIBEXECDIR)/bst--userns-helper
 
+check: $(BINS)
+	./test/cram.sh test
+
 clean:
 	$(RM) $(BINS) $(OBJS) userns-helper.o
 
-.PHONY: all clean install generate
+.PHONY: all clean install generate check
