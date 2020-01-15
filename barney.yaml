@@ -1,0 +1,5 @@
+image-manifests:
+  export:
+    imageunits:
+    - floor: arista.com/horseland/alpine%image
+      sh: make install
