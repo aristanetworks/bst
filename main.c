@@ -22,6 +22,7 @@ enum {
 	OPTION_WORKDIR,
 	OPTION_ARCH,
 	OPTION_SHARE,
+	OPTION_ARGV0,
 };
 
 /* Usage is generated from usage.txt. Note that the array is not null-terminated,
@@ -60,9 +61,12 @@ int main(int argc, char *argv[], char *envp[])
 		{ "groups",     required_argument,  NULL,           OPTION_GROUPS   },
 		{ "arch",       required_argument,  NULL,           OPTION_ARCH     },
 		{ "share",      required_argument,  NULL,           OPTION_SHARE    },
+		{ "argv0",      required_argument,  NULL,           OPTION_ARGV0    },
 
 		{ 0, 0, 0, 0 }
 	};
+
+	char *argv0 = NULL;
 
 	int error = 0;
 	int c;
@@ -124,6 +128,10 @@ int main(int argc, char *argv[], char *envp[])
 				}
 				break;
 
+			case OPTION_ARGV0:
+				argv0 = optarg;
+				break;
+
 			case 'r':
 				opts.root = optarg;
 				break;
@@ -146,11 +154,19 @@ int main(int argc, char *argv[], char *envp[])
 		}
 	}
 
-	if (optind + 2 > argc) {
+	if (optind + 1 > argc) {
 		return usage(1, argv[0]);
 	}
-	opts.pathname = argv[optind++];
-	opts.argv = argv + optind;
+
+	char *new_argv[argc - optind + 1];
+	new_argv[0] = argv0 ? argv0 : argv[optind];
+	for (int i = 1; i < argc - optind; ++i) {
+		new_argv[i] = argv[optind + i];
+	}
+	new_argv[argc - optind] = NULL;
+
+	opts.pathname = argv[optind];
+	opts.argv = new_argv;
 	opts.envp = envp;
 
 	if (!opts.workdir || opts.workdir[0] == 0) {
