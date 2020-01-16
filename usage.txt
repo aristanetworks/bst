@@ -1,4 +1,4 @@
-usage: %1$s [-h] [options] <root> <exe> <argv0> [argv1 ...]
+usage: %1$s [-h] [options] <exe> <argv0> [argv1 ...]
 
 Chroot into <root> and execute <exe> with the specified argv array,
 setting up namespaces and other low-level minutiae that are needed in
@@ -6,6 +6,8 @@ order to enter a sane, isolated environment.
 
 Options:
 	-h, --help:     print this message
+	-r, --root <dir>:
+	                set root directory
 
 	--share <ns,ns,...>:
 	                share the specified namespaces with the host.

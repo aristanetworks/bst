@@ -49,6 +49,7 @@ int main(int argc, char *argv[], char *envp[])
 
 	static struct option options[] = {
 		{ "help",       no_argument,        NULL,           'h' },
+		{ "root",       required_argument,  NULL,           'r' },
 
 		/* long options without shorthand */
 		{ "workdir",    required_argument,  NULL,           OPTION_WORKDIR  },
@@ -65,7 +66,7 @@ int main(int argc, char *argv[], char *envp[])
 
 	int error = 0;
 	int c;
-	while ((c = getopt_long(argc, argv, "+h", options, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "+hr:", options, NULL)) != -1) {
 		switch (c) {
 			case 0:
 				break;
@@ -123,6 +124,10 @@ int main(int argc, char *argv[], char *envp[])
 				}
 				break;
 
+			case 'r':
+				opts.root = optarg;
+				break;
+
 			case '?':
 				error = 1;
 				/* fallthrough */
@@ -141,10 +146,9 @@ int main(int argc, char *argv[], char *envp[])
 		}
 	}
 
-	if (optind + 3 > argc) {
+	if (optind + 2 > argc) {
 		return usage(1, argv[0]);
 	}
-	opts.root = argv[optind++];
 	opts.pathname = argv[optind++];
 	opts.argv = argv + optind;
 	opts.envp = envp;

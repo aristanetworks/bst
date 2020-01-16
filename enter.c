@@ -171,7 +171,7 @@ int enter(const struct entry_settings *opts)
 	cap_value_t cap_list[2];
 
 	size_t ncaps = 0;
-	if (strcmp(opts->root, "/") != 0) {
+	if (opts->root) {
 		cap_list[ncaps++] = CAP_SYS_CHROOT;
 	}
 	if (opts->nmounts > 0 || opts->nmutables > 0) {
@@ -197,7 +197,7 @@ int enter(const struct entry_settings *opts)
 
 	/* We have a special case for pivot_root: the syscall wants the
 	   new root to be a mount point, so we indulge. */
-	if (unshareflags & CLONE_NEWNS && strcmp(opts->root, "/") != 0) {
+	if (unshareflags & CLONE_NEWNS && opts->root) {
 		if (mount(opts->root, opts->root, "none", MS_BIND, "") == -1) {
 			err(1, "mount(\"/\", \"/\", MS_BIND)");
 		}
@@ -216,13 +216,14 @@ int enter(const struct entry_settings *opts)
 			errx(1, "attempted to mount things on the host mount namespace.");
 		}
 
-		mount_entries(opts->root, opts->mounts, opts->nmounts);
-		mount_mutables(opts->root, opts->mutables, opts->nmutables);
+		const char *root = opts->root ? opts->root : "/";
+		mount_entries(root, opts->mounts, opts->nmounts);
+		mount_mutables(root, opts->mutables, opts->nmutables);
 	}
 
-	/* Don't chroot if opts->root is "/". This is a better default since it
+	/* Don't chroot if opts->root is NULL. This is a better default since it
 	   allows us to run commands that unshare nothing unprivileged. */
-	if (strcmp(opts->root, "/") != 0) {
+	if (opts->root) {
 
 		/* The chroot-ing logic is a bit delicate. If we don't have a mount
 		   namespace, we just use chroot. This has its limitations though,
