@@ -82,6 +82,14 @@ found:
 
 int enter(const struct entry_settings *opts)
 {
+	const char *root = opts->root ? opts->root : "/";
+
+	char resolved_root[PATH_MAX];
+	if (realpath(root, resolved_root) == NULL) {
+		err(1, "realpath(\"%s\")", root);
+	}
+	root = resolved_root;
+
 	/* We can't afford to leave children alive in the background if bst
 	   dies from uncatcheable signals. Or at least, we could, but this makes us
 	   leaky by default which isn't great, and the obvious workaround to
@@ -171,7 +179,7 @@ int enter(const struct entry_settings *opts)
 	cap_value_t cap_list[2];
 
 	size_t ncaps = 0;
-	if (opts->root) {
+	if (strcmp(root, "/") != 0) {
 		cap_list[ncaps++] = CAP_SYS_CHROOT;
 	}
 	if (opts->nmounts > 0 || opts->nmutables > 0) {
@@ -197,8 +205,8 @@ int enter(const struct entry_settings *opts)
 
 	/* We have a special case for pivot_root: the syscall wants the
 	   new root to be a mount point, so we indulge. */
-	if (unshareflags & CLONE_NEWNS && opts->root) {
-		if (mount(opts->root, opts->root, "none", MS_BIND, "") == -1) {
+	if (unshareflags & CLONE_NEWNS && strcmp(root, "/") != 0) {
+		if (mount(root, root, "none", MS_BIND, "") == -1) {
 			err(1, "mount(\"/\", \"/\", MS_BIND)");
 		}
 	}
@@ -216,14 +224,13 @@ int enter(const struct entry_settings *opts)
 			errx(1, "attempted to mount things on the host mount namespace.");
 		}
 
-		const char *root = opts->root ? opts->root : "/";
 		mount_entries(root, opts->mounts, opts->nmounts);
 		mount_mutables(root, opts->mutables, opts->nmutables);
 	}
 
-	/* Don't chroot if opts->root is NULL. This is a better default since it
+	/* Don't chroot if root is "/". This is a better default since it
 	   allows us to run commands that unshare nothing unprivileged. */
-	if (opts->root) {
+	if (strcmp(root, "/") != 0) {
 
 		/* The chroot-ing logic is a bit delicate. If we don't have a mount
 		   namespace, we just use chroot. This has its limitations though,
@@ -237,14 +244,14 @@ int enter(const struct entry_settings *opts)
 		   will burn your house, invoke dragons, and eat your children. */
 
 		if (!(unshareflags & CLONE_NEWNS)) {
-			if (chroot(opts->root) == -1) {
+			if (chroot(root) == -1) {
 				err(1, "chroot");
 			}
 		} else {
-			if (chdir(opts->root) == -1) {
+			if (chdir(root) == -1) {
 				err(1, "pivot_root: pre chdir");
 			}
-			/* Pivot the root to opts->root (new_root) and mount the old root
+			/* Pivot the root to `root` (new_root) and mount the old root
 			   (old_dir) on top of it. Then, unmount "." to get rid of the
 			   old root.
 
