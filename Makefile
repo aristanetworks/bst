@@ -16,10 +16,14 @@ else
 SUDO = sudo
 endif
 
-ifeq ($(NO_SETCAP),)
-SETCAP = $(SUDO) setcap
+ifeq ($(NO_SETCAP_OR_SUID),)
+SETCAP ?= $(SUDO) setcap
+CHOWN = $(SUDO) chown
+CHMOD = $(SUDO) chmod
 else
 SETCAP = :
+CHOWN = :
+CHMOD = :
 endif
 
 all: $(BINS)
@@ -36,12 +40,15 @@ bst: $(OBJS)
 
 bst--userns-helper: userns-helper.o
 	$(LINK.o) -o $@ $^
-	$(SETCAP) cap_setuid,cap_setgid+ep $@
+	$(SETCAP) cap_setuid,cap_setgid+ep $@ \
+		|| ($(CHOWN) root $@ && $(CHMOD) u+s $@)
 
+install: HELPER_INSTALLPATH = $(DESTDIR)$(LIBEXECDIR)/bst--userns-helper
 install: $(BINS)
 	install -m 755 -D bst $(DESTDIR)$(BINDIR)/bst
-	install -m 755 -D bst--userns-helper $(DESTDIR)$(LIBEXECDIR)/bst--userns-helper
-	$(SETCAP) cap_setuid,cap_setgid+ep $(DESTDIR)$(LIBEXECDIR)/bst--userns-helper
+	install -m 755 -D bst--userns-helper $(HELPER_INSTALLPATH)
+	$(SETCAP) cap_setuid,cap_setgid+ep $(HELPER_INSTALLPATH) \
+		|| ($(CHOWN) root $(HELPER_INSTALLPATH) && $(CHMOD) u+s $(HELPER_INSTALLPATH))
 
 check: $(BINS)
 	./test/cram.sh test
