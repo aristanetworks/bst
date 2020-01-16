@@ -5,21 +5,21 @@
 # define ENTER_H_
 
 # include <unistd.h>
+# include <limits.h>
 # include "mount.h"
 
 enum {
 	MAX_MOUNT = 4096,
+
+	/* this is a very generous upper bound for the number of supported
+	   namespaces. unshare(2) takes an int for its CLONE_* flags, so we can
+	   use the number of bits in an int as upper bound. */
+	MAX_SHARES = CHAR_BIT * sizeof (int),
 };
 
 struct entry_settings {
-	// unshare modes
-	int pid;
-	int mount;
-	int cgroup;
-	int ipc;
-	int net;
-	int user;
-	int uts;
+	const char *shares[MAX_SHARES];
+	size_t nshares;
 
 	const char *pathname;
 	char *const *argv;

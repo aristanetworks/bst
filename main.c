@@ -21,6 +21,7 @@ enum {
 	OPTION_GROUPS,
 	OPTION_WORKDIR,
 	OPTION_ARCH,
+	OPTION_SHARE,
 };
 
 /* Usage is generated from usage.txt. Note that the array is not null-terminated,
@@ -48,13 +49,6 @@ int main(int argc, char *argv[], char *envp[])
 
 	static struct option options[] = {
 		{ "help",       no_argument,        NULL,           'h' },
-		{ "pidns",      no_argument,        &opts.pid,      'p' },
-		{ "mountns",    no_argument,        &opts.mount,    'm' },
-		{ "cgroupns",   no_argument,        &opts.cgroup,   'c' },
-		{ "ipcns",      no_argument,        &opts.ipc,      'i' },
-		{ "netns",      no_argument,        &opts.net,      'n' },
-		{ "userns",     no_argument,        &opts.user,     'U' },
-		{ "utsns",      no_argument,        &opts.uts,      'u' },
 
 		/* long options without shorthand */
 		{ "workdir",    required_argument,  NULL,           OPTION_WORKDIR  },
@@ -64,13 +58,14 @@ int main(int argc, char *argv[], char *envp[])
 		{ "gid",        required_argument,  NULL,           OPTION_GID      },
 		{ "groups",     required_argument,  NULL,           OPTION_GROUPS   },
 		{ "arch",       required_argument,  NULL,           OPTION_ARCH     },
+		{ "share",      required_argument,  NULL,           OPTION_SHARE    },
 
 		{ 0, 0, 0, 0 }
 	};
 
 	int error = 0;
 	int c;
-	while ((c = getopt_long(argc, argv, "+hpmcinUu", options, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "+h", options, NULL)) != -1) {
 		switch (c) {
 			case 0:
 				break;
@@ -108,6 +103,12 @@ int main(int argc, char *argv[], char *envp[])
 
 			case OPTION_ARCH:
 				opts.arch = optarg;
+				break;
+
+			case OPTION_SHARE:
+				for (char *share = strtok(optarg, ","); share; share = strtok(NULL, ",")) {
+					opts.shares[opts.nshares++] = share;
+				}
 				break;
 
 			case '?':

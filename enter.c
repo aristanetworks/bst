@@ -24,33 +24,60 @@
 #include "setarch.h"
 #include "userns.h"
 
+#define lengthof(Arr) (sizeof (Arr) / sizeof (*Arr))
+
+struct cloneflag {
+	const char *name;
+	int flag;
+};
+
+enum {
+	ALL_NAMESPACES = 0
+#ifdef HAVE_CLONE_NEWCGROUP
+		| CLONE_NEWCGROUP
+#endif
+		| CLONE_NEWIPC
+		| CLONE_NEWNS
+		| CLONE_NEWNET
+		| CLONE_NEWPID
+		| CLONE_NEWUSER
+		| CLONE_NEWUTS,
+};
+
 static int opts_to_unshareflags(const struct entry_settings *opts)
 {
-	int flags = 0;
-	if (opts->pid) {
-		flags |= CLONE_NEWPID;
-	}
-	if (opts->mount) {
-		flags |= CLONE_NEWNS;
-	}
+	static struct cloneflag flags[] = {
 #ifdef HAVE_CLONE_NEWCGROUP
-	if (opts->cgroup) {
-		flags |= CLONE_NEWCGROUP;
-	}
+		{ "cgroup",  CLONE_NEWCGROUP },
 #endif
-	if (opts->ipc) {
-		flags |= CLONE_NEWIPC;
+		{ "ipc",     CLONE_NEWIPC },
+		{ "mount",   CLONE_NEWNS },
+		{ "network", CLONE_NEWNET },
+		{ "pid",     CLONE_NEWPID },
+		{ "user",    CLONE_NEWUSER },
+		{ "uts",     CLONE_NEWUTS },
+		{ "all",     ALL_NAMESPACES },
+	};
+
+	int unshareflags = ALL_NAMESPACES;
+	for (const char *const *s = opts->shares; s < opts->shares + opts->nshares; ++s) {
+		struct cloneflag *f;
+		for (f = flags; f < flags + lengthof(flags); ++f) {
+			if (strcmp(f->name, *s) == 0) {
+				goto found;
+			}
+		}
+		fprintf(stderr, "namespace `%s` does not exist.\n", *s);
+		fprintf(stderr, "valid namespaces are: ");
+		for (f = flags; f < flags + lengthof(flags) - 1; ++f) {
+			fprintf(stderr, "%s, ", f->name);
+		}
+		fprintf(stderr, "%s.\n", f->name);
+		exit(1);
+found:
+		unshareflags &= ~f->flag;
 	}
-	if (opts->net) {
-		flags |= CLONE_NEWNET;
-	}
-	if (opts->uts) {
-		flags |= CLONE_NEWUTS;
-	}
-	if (opts->user) {
-		flags |= CLONE_NEWUSER;
-	}
-	return flags;
+	return unshareflags;
 }
 
 int enter(const struct entry_settings *opts)
@@ -63,13 +90,15 @@ int enter(const struct entry_settings *opts)
 		err(1, "prctl(PR_SET_PDEATHSIG)");
 	}
 
+	int unshareflags = opts_to_unshareflags(opts);
+
 	struct userns_helper userns_helper;
 
-	if (opts->user) {
+	if (unshareflags & CLONE_NEWUSER) {
 		userns_helper = userns_helper_spawn();
 	}
 
-	if (unshare(opts_to_unshareflags(opts)) == -1) {
+	if (unshare(unshareflags) == -1) {
 		err(1, "unshare");
 	}
 
@@ -77,7 +106,7 @@ int enter(const struct entry_settings *opts)
 	   every mount entry private, any change we make will be applied to the
 	   parent mount namespace if it happens to have MS_SHARED propagation. We
 	   don't like coin flips. */
-	if (opts->mount && mount("none", "/", "", MS_REC | MS_PRIVATE, "") == -1) {
+	if (unshareflags & CLONE_NEWNS && mount("none", "/", "", MS_REC | MS_PRIVATE, "") == -1) {
 		err(1, "could not make / private: mount");
 	}
 
@@ -102,7 +131,7 @@ int enter(const struct entry_settings *opts)
 	if (pid) {
 		int status;
 
-		if (opts->user) {
+		if (unshareflags & CLONE_NEWUSER) {
 			userns_helper_sendpid(&userns_helper, pid);
 			userns_helper_close(&userns_helper);
 		}
@@ -117,7 +146,7 @@ int enter(const struct entry_settings *opts)
 		return WTERMSIG(status) | 1 << 7;
 	}
 
-	if (opts->user) {
+	if (unshareflags & CLONE_NEWUSER) {
 		userns_helper_wait(&userns_helper);
 		userns_helper_close(&userns_helper);
 	}
@@ -168,7 +197,7 @@ int enter(const struct entry_settings *opts)
 
 	/* We have a special case for pivot_root: the syscall wants the
 	   new root to be a mount point, so we indulge. */
-	if (opts->mount && strcmp(opts->root, "/") != 0) {
+	if (unshareflags & CLONE_NEWNS && strcmp(opts->root, "/") != 0) {
 		if (mount(opts->root, opts->root, "none", MS_BIND, "") == -1) {
 			err(1, "mount(\"/\", \"/\", MS_BIND)");
 		}
@@ -183,7 +212,7 @@ int enter(const struct entry_settings *opts)
 		   it's a terrible idea due to the sheer amount of things that can go
 		   wrong, like "what do I do if one of the mounts failed but the previous
 		   ones didn't?", or "how do I clean up things that I've (re)mounted?". */
-		if (!opts->mount) {
+		if (!(unshareflags & CLONE_NEWNS)) {
 			errx(1, "attempted to mount things on the host mount namespace.");
 		}
 
@@ -206,7 +235,7 @@ int enter(const struct entry_settings *opts)
 		   must be done in a mount namespace, because otherwise pivot_root
 		   will burn your house, invoke dragons, and eat your children. */
 
-		if (!opts->mount) {
+		if (!(unshareflags & CLONE_NEWNS)) {
 			if (chroot(opts->root) == -1) {
 				err(1, "chroot");
 			}

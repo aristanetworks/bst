@@ -6,14 +6,9 @@ order to enter a sane, isolated environment.
 
 Options:
 	-h, --help:     print this message
-	-p, --pidns:    unshare the PID namespace
-	-m, --mountns:  unshare the mount namespace
-	-c, --cgroupns: unshare the cgroup namespace
-	-i, --ipcns:    unshare the ipc namespace
-	-n, --netns:    unshare the network namespace
-	-U, --userns:   unshare the user namespace
-	-u, --utsns:    unshare the UTS namespace
 
+	--share <ns,ns,...>:
+	                share the specified namespaces with the host.
 	--workdir <directory>:
 	                set current work directory
 	--mount <source,target,type,options>:
