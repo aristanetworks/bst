@@ -11,7 +11,7 @@
 #include <unistd.h>
 
 #include "enter.h"
-#include "signal.h"
+#include "sig.h"
 
 enum {
 	OPTION_MOUNT = 128,
