@@ -90,14 +90,6 @@ int enter(const struct entry_settings *opts)
 	}
 	root = resolved_root;
 
-	/* We can't afford to leave children alive in the background if bst
-	   dies from uncatcheable signals. Or at least, we could, but this makes us
-	   leaky by default which isn't great, and the obvious workaround to
-	   daemonize the process tree is to just nohup bst. */
-	if (prctl(PR_SET_PDEATHSIG, SIGKILL) == -1) {
-		err(1, "prctl(PR_SET_PDEATHSIG)");
-	}
-
 	int unshareflags = opts_to_unshareflags(opts);
 
 	struct userns_helper userns_helper;
@@ -152,6 +144,14 @@ int enter(const struct entry_settings *opts)
 			return WEXITSTATUS(status);
 		}
 		return WTERMSIG(status) | 1 << 7;
+	}
+
+	/* We can't afford to leave the child alive in the background if bst
+	   dies from uncatcheable signals. Or at least, we could, but this makes us
+	   leaky by default which isn't great, and the obvious workaround to
+	   daemonize the process tree is to just nohup bst. */
+	if (prctl(PR_SET_PDEATHSIG, SIGKILL) == -1) {
+		err(1, "prctl(PR_SET_PDEATHSIG)");
 	}
 
 	if (unshareflags & CLONE_NEWUSER) {
