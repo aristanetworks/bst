@@ -5,21 +5,16 @@ setting up namespaces and other low-level minutiae that are needed in
 order to enter a sane, isolated environment.
 
 Options:
-	-h, --help:     print this message
-	-r, --root <dir>:
-	                set root directory
+	-h, --help:             Print this message.
+	-r, --root <dir>:       Set root directory.
 
-	--argv0 <arg>:  set argv[0] (defaults to <exe>)
-	--share <ns,ns,...>:
-	                share the specified namespaces with the host.
-	--workdir <directory>:
-	                set current work directory
+	--argv0 <arg>:          Set argv[0] (defaults to <exe>).
+	--share <ns,ns,...>:    Share the specified namespaces with the host.
+	--workdir <directory>:  Set current work directory.
 	--mount <source,target,type,options>:
-	                mount source over target before executing the program
-	--mutable <path>:
-	                make path mutable
-	--uid <uid>:    set uid in entered namespace
-	--gid <gid>:    set gid in entered namespace
-	--groups <gid,gid,...>:
-	                set additional groups in entered namespace
-	--arch <arch>:  sets the execution domain
+	                        Mount source over target before executing the program.
+	--mutable <path>:       Make path mutable.
+	--uid <uid>:            Set user ID.
+	--gid <gid>:            Set group ID.
+	--groups <gid,gid,...>: Set additional groups.
+	--arch <arch>:          Set the execution domain.
