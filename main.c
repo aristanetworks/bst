@@ -75,6 +75,9 @@ int main(int argc, char *argv[], char *envp[])
 				break;
 
 			case OPTION_MOUNT:
+				if (opts.nmounts >= MAX_MOUNT) {
+					err(1, "can only mount a maximum of %d entries", MAX_MOUNT);
+				}
 				opts.mounts[opts.nmounts].source  = strtok(optarg, ",");
 				opts.mounts[opts.nmounts].target  = strtok(NULL, ",");
 				opts.mounts[opts.nmounts].type    = strtok(NULL, ",");
@@ -83,6 +86,9 @@ int main(int argc, char *argv[], char *envp[])
 				break;
 
 			case OPTION_MUTABLE:
+				if (opts.nmutables >= MAX_MOUNT) {
+					err(1, "can only mount a maximum of %d mutables", MAX_MOUNT);
+				}
 				opts.mutables[opts.nmutables] = optarg;
 				opts.nmutables++;
 				break;
@@ -97,6 +103,9 @@ int main(int argc, char *argv[], char *envp[])
 
 			case OPTION_GROUPS:
 				for (char *grp = strtok(optarg, ","); grp; grp = strtok(NULL, ",")) {
+					if (opts.ngroups >= NGROUPS_MAX) {
+						err(1, "can only be part of a maximum of %d groups", NGROUPS_MAX);
+					}
 					opts.groups[opts.ngroups++] = atoi(grp);
 				}
 				break;
@@ -107,6 +116,9 @@ int main(int argc, char *argv[], char *envp[])
 
 			case OPTION_SHARE:
 				for (char *share = strtok(optarg, ","); share; share = strtok(NULL, ",")) {
+					if (opts.nshares >= MAX_SHARES) {
+						err(1, "can only share a maximum of %d namespaces", MAX_SHARES);
+					}
 					opts.shares[opts.nshares++] = share;
 				}
 				break;
