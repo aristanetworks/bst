@@ -206,8 +206,8 @@ int enter(const struct entry_settings *opts)
 	/* We have a special case for pivot_root: the syscall wants the
 	   new root to be a mount point, so we indulge. */
 	if (unshareflags & CLONE_NEWNS && strcmp(root, "/") != 0) {
-		if (mount(root, root, "none", MS_BIND, "") == -1) {
-			err(1, "mount(\"/\", \"/\", MS_BIND)");
+		if (mount(root, root, "none", MS_BIND|MS_REC, "") == -1) {
+			err(1, "mount(\"/\", \"/\", MS_BIND|MS_REC)");
 		}
 	}
 
