@@ -1,6 +1,7 @@
 PREFIX ?= /usr
 BINDIR ?= $(PREFIX)/bin
 LIBEXECDIR ?= $(PREFIX)/libexec
+MANDIR ?= $(PREFIX)/man
 
 CFLAGS ?= -O2
 CFLAGS += -std=c99 -Wall -Wextra -Wno-unused-parameter -fno-strict-aliasing
@@ -26,7 +27,7 @@ CHOWN = :
 CHMOD = :
 endif
 
-all: $(BINS)
+all: $(BINS) man
 
 generate: usage.txt
 	(echo "/* Copyright (c) 2020 Arista Networks, Inc.  All rights reserved."; \
@@ -43,12 +44,18 @@ bst--userns-helper: userns-helper.o
 	$(SETCAP) cap_setuid,cap_setgid+ep $@ \
 		|| ($(CHOWN) root $@ && $(CHMOD) u+s $@)
 
+%.gz: %.scd
+	scdoc <$< | gzip -c >$@
+
+man: bst.1.gz
+
 install: HELPER_INSTALLPATH = $(DESTDIR)$(LIBEXECDIR)/bst--userns-helper
 install: $(BINS)
 	install -m 755 -D bst $(DESTDIR)$(BINDIR)/bst
 	install -m 755 -D bst--userns-helper $(HELPER_INSTALLPATH)
 	$(SETCAP) cap_setuid,cap_setgid+ep $(HELPER_INSTALLPATH) \
 		|| ($(CHOWN) root $(HELPER_INSTALLPATH) && $(CHMOD) u+s $(HELPER_INSTALLPATH))
+	install -m 644 -D bst.1.gz $(DESTDIR)$(MANDIR)/man1/bst.1.gz
 
 check: $(BINS)
 	./test/cram.sh test
@@ -56,4 +63,4 @@ check: $(BINS)
 clean:
 	$(RM) $(BINS) $(OBJS) userns-helper.o
 
-.PHONY: all clean install generate check
+.PHONY: all clean install generate check man

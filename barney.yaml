@@ -1,5 +1,9 @@
 image-manifests:
+  build-floor:
+    images:
+    - arista.com/horseland/alpine%image
+    - arista.com/horseland/scdoc%static
   export:
     imageunits:
-    - floor: arista.com/horseland/alpine%image
+    - floor: arista.com/horseland/bestie%build-floor
       sh: make install
