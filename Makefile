@@ -1,15 +1,14 @@
 PREFIX ?= /usr
 BINDIR ?= $(PREFIX)/bin
-LIBEXECDIR ?= $(PREFIX)/libexec
 MANDIR ?= $(PREFIX)/man
 
 CFLAGS ?= -O2
 CFLAGS += -std=c99 -Wall -Wextra -Wno-unused-parameter -fno-strict-aliasing
-CPPFLAGS += -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -DLIBEXECDIR=\"$(LIBEXECDIR)\"
+CPPFLAGS += -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
 
 SRCS := main.c enter.c userns.c mount.c cp.c setarch.c usage.c sig.c
 OBJS := $(subst .c,.o,$(SRCS))
-BINS := bst bst--userns-helper
+BINS := bst
 
 ifeq ($(shell id -u),0)
 SUDO =
@@ -38,10 +37,7 @@ generate: usage.txt
 
 bst: $(OBJS)
 	$(LINK.o) -o $@ $^ -lcap
-
-bst--userns-helper: userns-helper.o
-	$(LINK.o) -o $@ $^
-	$(SETCAP) cap_setuid,cap_setgid+ep $@ \
+	$(SETCAP) cap_setuid,cap_setgid,cap_dac_override,cap_sys_admin+ep $@ \
 		|| ($(CHOWN) root $@ && $(CHMOD) u+s $@)
 
 %.gz: %.scd
@@ -49,14 +45,10 @@ bst--userns-helper: userns-helper.o
 
 man: bst.1.gz
 
-install: HELPER_INSTALLPATH = $(DESTDIR)$(LIBEXECDIR)/bst--userns-helper
 install: BST_INSTALLPATH = $(DESTDIR)$(BINDIR)/bst
 install: $(BINS) man
 	install -m 755 -D bst $(BST_INSTALLPATH)
-	install -m 755 -D bst--userns-helper $(HELPER_INSTALLPATH)
-	$(SETCAP) cap_setuid,cap_setgid,cap_dac_override+ep $(HELPER_INSTALLPATH) \
-		|| ($(CHOWN) root $(HELPER_INSTALLPATH) && $(CHMOD) u+s $(HELPER_INSTALLPATH))
-	$(SETCAP) cap_sys_admin+ep $(BST_INSTALLPATH) \
+	$(SETCAP) cap_setuid,cap_setgid,cap_dac_override,cap_sys_admin+ep $(BST_INSTALLPATH) \
 		|| ($(CHOWN) root $(BST_INSTALLPATH) && $(CHMOD) u+s $(BST_INSTALLPATH))
 	install -m 644 -D bst.1.gz $(DESTDIR)$(MANDIR)/man1/bst.1.gz
 
@@ -64,6 +56,6 @@ check: $(BINS)
 	./test/cram.sh test
 
 clean:
-	$(RM) $(BINS) $(OBJS) userns-helper.o
+	$(RM) $(BINS) $(OBJS)
 
 .PHONY: all clean install generate check man
