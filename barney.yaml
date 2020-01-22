@@ -1,7 +1,13 @@
 image-manifests:
   build-floor:
+    imageunits:
+    - floor: arista.com/horseland/alpine%floor-builder
+      sh: |
+        set -e
+        install -D /etc/apk/repositories $DESTDIR/etc/apk/repositories
+        apk add --allow-untrusted --root=$DESTDIR --no-cache --initdb alpine-base make gcc libcap-dev musl-dev
+        mkdir -p $DESTDIR/src $DESTDIR/dest
     images:
-    - arista.com/horseland/alpine%image
     - arista.com/horseland/scdoc%static
   export:
     imageunits:
@@ -9,5 +15,5 @@ image-manifests:
       sh: make install
   static:
     imageunits:
-    - floor: arista.com/horseland/alpine%image
+    - floor: arista.com/horseland/bestie%build-floor
       sh: make install CFLAGS="-static -O2"
