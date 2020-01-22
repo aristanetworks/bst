@@ -28,23 +28,6 @@ static int cmpflags(const void *lhs, const void *rhs)
 	return strcmp(flagname, flag->name);
 }
 
-int mkdir_recursive(const char *dir, int mode)
-{
-	char tmp[PATH_MAX];
-	if (snprintf(tmp, PATH_MAX, "%s", dir) >= PATH_MAX) {
-		errx(1, "mkdir_recursive: path larger than PATH_MAX.");
-	}
-	for (char *p = tmp + 1; *p; p++) {
-		if (*p != '/') { continue; }
-		*p = 0;
-		if (mkdir(tmp, mode) == -1 && errno != EEXIST) {
-			return -1;
-		}
-		*p = '/';
-	}
-	return mkdir(tmp, mode);
-}
-
 /* update_mount_flags_and_options updates in-place its own input by
    iterating through `opts`, updating `mountflags` when encountering any option
    defined in man mount(8) by its equivalent change in the bitfield, and
@@ -168,10 +151,6 @@ void mount_entries(const char *root, const struct mount_entry *mounts, size_t nm
 			errx(1, "mount_entries: target \"%s\" must be an absolute path.", mnt->target);
 		}
 		const char *target = makepath("%s%s", root, mnt->target);
-
-		if (mkdir_recursive(target, 0777) == -1 && errno != EEXIST) {
-			err(1, "mount: mkdir_recursive(\"%s\", %o)", target, 0777);
-		}
 
 		if (mount(mnt->source, target, mnt->type, flags, mnt->options) == -1) {
 			err(1, "mount_entries: mount(\"%s\", \"%s\", \"%s\", %lu, \"%s\")",
