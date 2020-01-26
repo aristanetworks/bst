@@ -98,6 +98,11 @@ int enter(const struct entry_settings *opts)
 		userns_helper = userns_helper_spawn();
 	}
 
+	/* Drop all privileges, or none if we're real uid 0. */
+	if (setuid(getuid()) == -1) {
+		err(1, "setuid");
+	}
+
 	if (unshare(unshareflags) == -1) {
 		err(1, "unshare");
 	}
