@@ -160,6 +160,17 @@ void mount_entries(const char *root, const struct mount_entry *mounts, size_t nm
 					flags,
 					mnt->options);
 		}
+
+		/* Special case: we can't just do read-only bind mounts in a single step.
+		   instead, we have to remount it with MS_RDONLY afterwards. */
+
+		int ro_bind = (flags & (MS_BIND | MS_RDONLY)) == (MS_BIND | MS_RDONLY)
+				&& !(flags & MS_REMOUNT);
+		if (ro_bind && mount("none", target, NULL, flags | MS_REMOUNT, NULL) == -1) {
+			err(1, "mount_entries: mount(\"none\", \"%s\", NULL, %lu | MS_REMOUNT, NULL)",
+					mnt->target,
+					flags);
+		}
 	}
 }
 
