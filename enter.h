@@ -27,6 +27,9 @@ struct entry_settings {
 	char *root;
 	char *workdir;
 
+	char *hostname;
+	char *domainname;
+
 	uid_t uid;
 	gid_t gid;
 	gid_t groups[NGROUPS_MAX];

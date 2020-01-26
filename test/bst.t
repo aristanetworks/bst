@@ -90,3 +90,15 @@ Testing --argv0
 
 	$ bst --argv0 hello sh -c 'echo $0'
 	hello
+
+Testing hostname semantics
+
+	$ bst uname -n
+	localhost
+
+	$ bst --hostname foobar uname -n
+	foobar
+
+	$ bst --share=uts --hostname foobar false
+	bst: attempted to set host or domain names on the host UTS namespace.
+	[1]

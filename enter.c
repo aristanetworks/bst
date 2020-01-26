@@ -159,6 +159,27 @@ int enter(const struct entry_settings *opts)
 		userns_helper_close(&userns_helper);
 	}
 
+	/* Set the host and domain names only when in an UTS namespace. */
+	if ((opts->hostname || opts->domainname) && !(unshareflags & CLONE_NEWUTS)) {
+		errx(1, "attempted to set host or domain names on the host UTS namespace.");
+	}
+
+	const char *hostname = opts->hostname;
+	if (!hostname && (unshareflags & CLONE_NEWUTS)) {
+		hostname = "localhost";
+	}
+	if (hostname && sethostname(hostname, strlen(hostname)) == -1) {
+		err(1, "sethostname");
+	}
+
+	const char *domainname = opts->domainname;
+	if (!domainname && (unshareflags & CLONE_NEWUTS)) {
+		domainname = "localdomain";
+	}
+	if (domainname && setdomainname(domainname, strlen(domainname)) == -1) {
+		err(1, "setdomainname");
+	}
+
 	/* The setuid will drop privileges. We ask to keep permitted capabilities
 	   in order to restore them for the rest of the program. */
 	prctl(PR_SET_KEEPCAPS, 1);

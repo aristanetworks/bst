@@ -23,6 +23,8 @@ enum {
 	OPTION_ARCH,
 	OPTION_SHARE,
 	OPTION_ARGV0,
+	OPTION_HOSTNAME,
+	OPTION_DOMAIN,
 };
 
 /* Usage is generated from usage.txt. Note that the array is not null-terminated,
@@ -62,6 +64,8 @@ int main(int argc, char *argv[], char *envp[])
 		{ "arch",       required_argument,  NULL,           OPTION_ARCH     },
 		{ "share",      required_argument,  NULL,           OPTION_SHARE    },
 		{ "argv0",      required_argument,  NULL,           OPTION_ARGV0    },
+		{ "hostname",   required_argument,  NULL,           OPTION_HOSTNAME },
+		{ "domainname", required_argument,  NULL,           OPTION_DOMAIN   },
 
 		{ 0, 0, 0, 0 }
 	};
@@ -130,6 +134,14 @@ int main(int argc, char *argv[], char *envp[])
 
 			case OPTION_ARGV0:
 				argv0 = optarg;
+				break;
+
+			case OPTION_HOSTNAME:
+				opts.hostname = optarg;
+				break;
+
+			case OPTION_DOMAIN:
+				opts.domainname = optarg;
 				break;
 
 			case 'r':

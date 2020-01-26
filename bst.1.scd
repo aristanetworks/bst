@@ -92,6 +92,22 @@ Users of bst may choose to opt-out of some of the isolation.
 	This affects the output of _uname -m_, and takes the same architecture names
 	as *setarch*(1).
 
+\--hostname <hostname>
+	Set the hostname for the inner process' UTS namespace.
+
+	By default, if the UTS namespace is unshared, *bst* sets the hostname to
+	_"localhost"_.
+
+	You cannot use this option with _--share=uts_.
+
+\--domainname <domainname>
+	Set the domain name for the inner process' UTS namespace.
+
+	By default, if the UTS namespace is unshared, *bst* sets the domain name to
+	_"localdomain"_.
+
+	You cannot use this option with _--share=uts_.
+
 # SEE ALSO
 
 *namespaces*(7), *mount*(1), *setarch*(1)
