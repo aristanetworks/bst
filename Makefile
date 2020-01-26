@@ -50,7 +50,7 @@ bst--userns-helper: userns-helper.o
 man: bst.1.gz
 
 install: HELPER_INSTALLPATH = $(DESTDIR)$(LIBEXECDIR)/bst--userns-helper
-install: $(BINS)
+install: $(BINS) man
 	install -m 755 -D bst $(DESTDIR)$(BINDIR)/bst
 	install -m 755 -D bst--userns-helper $(HELPER_INSTALLPATH)
 	$(SETCAP) cap_setuid,cap_setgid+ep $(HELPER_INSTALLPATH) \
