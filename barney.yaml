@@ -3,17 +3,28 @@ image-manifests:
     imageunits:
     - floor: arista.com/horseland/alpine%floor-builder
       sh: |
-        set -e
+        set -ex
         install -D /etc/apk/repositories $DESTDIR/etc/apk/repositories
         apk add --allow-untrusted --root=$DESTDIR --no-cache --initdb alpine-base make gcc libcap-dev libcap-static musl-dev
-        mkdir -p $DESTDIR/src $DESTDIR/dest
+        mkdir -p $DESTDIR/src $DESTDIR/dest $DESTDIR/proc
     images:
     - arista.com/horseland/scdoc%static
-  export:
-    imageunits:
-    - floor: arista.com/horseland/bestie%build-floor
-      sh: make install
   static:
     imageunits:
     - floor: arista.com/horseland/bestie%build-floor
       sh: make install LDFLAGS="-static"
+  test-floor:
+    imageunits:
+    - floor: arista.com/horseland/alpine%floor-builder
+      sh: |
+        set -ex
+        install -D /etc/apk/repositories $DESTDIR/etc/apk/repositories
+        apk add --allow-untrusted --root=$DESTDIR --no-cache --initdb alpine-base make gawk git util-linux
+        install -m 644 -D entry-settings.json $DESTDIR/etc/barney/entry.d/1-bestie
+        mkdir -p $DESTDIR/src $DESTDIR/dest $DESTDIR/proc
+    images:
+    - arista.com/horseland/bestie%static
+  breadth_test:
+    imageunits:
+    - floor: arista.com/horseland/bestie%test-floor
+      sh: make check BINS=

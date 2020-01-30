@@ -77,7 +77,10 @@ if [ -f "$what" -a -x "$what" ]; then
 	'
 
 	# git diff complains when there are differences on the x bit
-	chmod --reference="$what" "$what.err"
+	# busybox doesn't support --reference
+	if [ -x "$what" ]; then
+	    chmod a+x "$what.err"
+	fi
 
 	set +e
 	git diff --exit-code --no-index "$what" "$what.err"
@@ -92,8 +95,5 @@ if [ -f "$what" -a -x "$what" ]; then
 	exit "$status"
 fi
 
-# make current cram.sh available in the path
-export PATH=$PATH:$(dirname $0)
-
 # $what can be empty, in which case this defaults to cwd.
-find $what -name '*.t' -exec {} \;
+find $what -name '*.t' -print0 | xargs -0 -n1 --no-run-if-empty $0

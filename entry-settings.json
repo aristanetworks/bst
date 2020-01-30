@@ -1,0 +1,8 @@
+{
+    "mounts": {
+        "/tmp": { "source": "tmpfs", "type": "tmpfs" },
+        "/proc": { "source": "proc", "type": "proc" },
+        "/sys": { "source": "sysfs", "type": "sysfs" },
+        "/dev": { "source": "/dev", "options": "rbind" }
+    }
+}
