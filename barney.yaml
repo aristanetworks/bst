@@ -5,7 +5,7 @@ image-manifests:
       sh: |
         set -e
         install -D /etc/apk/repositories $DESTDIR/etc/apk/repositories
-        apk add --allow-untrusted --root=$DESTDIR --no-cache --initdb alpine-base make gcc libcap-dev musl-dev
+        apk add --allow-untrusted --root=$DESTDIR --no-cache --initdb alpine-base make gcc libcap-dev libcap-static musl-dev
         mkdir -p $DESTDIR/src $DESTDIR/dest
     images:
     - arista.com/horseland/scdoc%static
@@ -16,4 +16,4 @@ image-manifests:
   static:
     imageunits:
     - floor: arista.com/horseland/bestie%build-floor
-      sh: make install CFLAGS="-static -O2"
+      sh: make install LDFLAGS="-static"
