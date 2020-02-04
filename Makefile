@@ -1,6 +1,7 @@
 PREFIX ?= /usr
 BINDIR ?= $(PREFIX)/bin
-MANDIR ?= $(PREFIX)/man
+DATADIR ?= $(PREFIX)/share
+MANDIR ?= $(DATADIR)/man
 
 CFLAGS ?= -O2
 CFLAGS += -std=c99 -Wall -Wextra -Wno-unused-parameter -fno-strict-aliasing
