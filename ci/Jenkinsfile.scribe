@@ -1,0 +1,18 @@
+node {
+    dir( "scribe") {
+        echo sh(returnStdout: true, script: 'env')
+        def branch = env.GERRIT_BRANCH
+        if ( branch == null ) {
+            branch = env.BRANCH_NAME
+        }
+        println "Checking out scribe from $branch"
+        checkout([$class: 'GitSCM', branches: [[name: branch]],
+                  userRemoteConfigs: [
+                    [url: "https://horseland-gerrit.infra.corp.arista.io/scribe.git"]
+                ]])
+    }
+    script {
+        env.REPOURI = "arista.com/horseland/bestie"
+    }
+    load 'scribe/Jenkinsfile'
+}
