@@ -2,23 +2,23 @@
 // Arista Networks, Inc. Confidential and Proprietary.
 
 def GetBranch() {
+    println sh( script: 'env' )
     def branch = env.GERRIT_BRANCH
     if ( branch == null ) {
-        branch = env.BRANCH_NAME
+        def tag = env.TAG_NAME
+        if ( tag == null ) {
+            branch = env.BRANCH_NAME
+        } else {
+            // Branch is the tag, so just use master.
+            branch = "master"
+        }
     }
     return branch
 }
 
-def InstallBestie() {
-    dir("${BESTIEDIR}") {
-        sh 'mkdir -p ${B5DIR}'
-        sh 'make install DESTDIR=$B5DIR'
-    }
-}
-
 def CloneHorselandRepo( String repo ) {
     dir("${B5PATH}/arista.com/horseland/${repo}") {
-        if ( repo == env.GERRIT_PROJECT ) {
+        if ( env.GIT_URL.endsWith( "/"+ repo ) ) {
             checkout scm
             sh "git fetch origin refs/notes/barney"
             sh "git update-ref refs/notes/barney FETCH_HEAD"
@@ -60,25 +60,12 @@ pipeline {
                     steps {
                         gerritReview labels: [Verified: 0]
                         sh '''
-                        env
                         id -a
                         uname -a
                         mount
                         '''
                         CloneHorselandRepo( "bestie" )
                         sh "mkdir -p ${GOCACHE}"
-                    }
-                }
-                stage('Format') {
-                    steps {
-                        dir( "$BESTIEDIR" ) {
-                            sh 'test -z "$(git diff-tree --no-commit-id --name-only -r HEAD | grep -E ".go\$" | xargs gofmt -l)"'
-                        }
-                    }
-                }
-                stage('Install') {
-                    steps {
-                        InstallBestie()
                     }
                 }
                 stage('BD') {
@@ -96,22 +83,17 @@ pipeline {
                         }
                     }
                 }
-                stage('B5 Test') {
+                stage('Package') {
+                    when { tag "v*" }
                     steps {
                         dir( "$BESTIEDIR" ) {
-                            sh 'env PATH=$B5DIR/bin:$PATH b5 -v test .'
+                            sh 'make package DESTDIR=$B5DIR'
+                            archiveArtifacts artifacts: 'bestie.x86_64.*'
+                            archiveArtifacts artifacts: 'bestie.i686.*'
                         }
                     }
                 }
             }
-        }
-    }
-    post {
-        success {
-            gerritReview labels: [Verified: 1], message: "$BUILD_URL"
-        }
-        failure {
-            gerritReview labels: [Verified: -1], message: "$BUILD_URL"
         }
     }
 }

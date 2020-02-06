@@ -60,7 +60,26 @@ check: export PATH := $(DESTDIR)$(BINDIR):${PATH}
 check: $(BINS)
 	./test/cram.sh test
 
+
+PACKAGES=rpm deb apk tgz
+NAME=bestie
 clean:
-	$(RM) $(BINS) $(OBJS)
+	$(RM) $(BINS) $(OBJS) bst.1.gz $(PACKAGES:%=$(NAME).x86_64.%) $(PACKAGES:%=$(NAME).i686.%)
+FORCE:
+
+VERSION = $(shell git describe --long --dirty 2>/dev/null)
+ifeq ($(VERSION),)
+VERSION = v0.0.0-1
+endif
+PKGVER=$(shell echo $(VERSION:v%=%) | cut -f 1 -d -)
+PKGITER=$(shell echo $(VERSION) | cut -f 2- -d - | tr - .)
+FPM_OPTS=-n $(NAME) -v $(PKGVER) --iteration $(PKGITER) \
+	 --url $(shell git remote get-url origin) --description "run executables in their own spacetime"
+$(PACKAGES:%=$(NAME).x86_64.%):$(NAME).x86_64.%: FORCE
+	setarch x86_64 b5 fpm --image .%static -f -t $(@:$(NAME).x86_64.%=%) -p $@ -a x86_64 $(FPM_OPTS)
+$(PACKAGES:%=$(NAME).i686.%):$(NAME).i686.%: FORCE
+	setarch i686 b5 fpm --image .%static -f -t $(@:$(NAME).i686.%=%) -p $@ -a i686 $(FPM_OPTS)
+package: export PATH := $(DESTDIR)$(BINDIR):${PATH}
+package: $(filter-out %.tar,$(PACKAGES:%=$(NAME).x86_64.%) $(PACKAGES:%=$(NAME).i686.%))
 
 .PHONY: all clean install generate check man
