@@ -5,7 +5,10 @@ MANDIR ?= $(DATADIR)/man
 
 CFLAGS ?= -O2
 CFLAGS += -std=c99 -Wall -Wextra -Wno-unused-parameter -fno-strict-aliasing
-CPPFLAGS += -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
+CPPFLAGS += -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 $(HAVE_FLAGS)
+ifneq ($(shell $(CC) features/clone_newcgroup_test.c || echo notfound),notfound)
+HAVE_FLAGS += -DHAVE_CLONE_NEWCGROUP=1
+endif
 
 SRCS := main.c enter.c userns.c mount.c cp.c setarch.c usage.c sig.c
 OBJS := $(subst .c,.o,$(SRCS))
@@ -53,6 +56,7 @@ install: $(BINS) man
 		|| ($(CHOWN) root $(BST_INSTALLPATH) && $(CHMOD) u+s $(BST_INSTALLPATH))
 	install -m 644 -D bst.1.gz $(DESTDIR)$(MANDIR)/man1/bst.1.gz
 
+check: export PATH := $(DESTDIR)$(BINDIR):${PATH}
 check: $(BINS)
 	./test/cram.sh test
 

@@ -29,7 +29,7 @@ Testing namespace sharing
 Testing uid/gid/groups semantics
 
 	$ bst id
-	uid=0(root) gid=0(root) groups=0(root),65534(nobody)
+	uid=0(root) gid=0(root) groups=0(root)
 
 	$ [ "$(bst --share=all id)" = "$(id)" ]
 
@@ -45,16 +45,15 @@ Program must be init of its pid namespace
 
 Testing mount semantics
 
-	$ bst --mount tmp,/tmp,tmpfs,defaults sh -c 'tail -n 1 /proc/mounts | sed -Ee "s/,uid=[[:digit:]]+,gid=[[:digit:]]+//"'
+	$ bst --mount tmp,/tmp,tmpfs,defaults sh -c 'tail -n 1 /proc/mounts | sed -Ee "s/,uid=[[:digit:]]+,gid=[[:digit:]]+//" -e "s/,seclabel//"'
 	tmp /tmp tmpfs rw,relatime 0 0
 
-	$ bst --mount /tmp,/mnt,none,bind sh -c 'tail -n 1 /proc/mounts | sed -Ee "s/,uid=[[:digit:]]+,gid=[[:digit:]]+//"'
-	tmpfs /mnt tmpfs rw,nosuid,nodev 0 0
+	$ [ "$(bst --mount /dev/shm,/mnt,none,bind sh -c 'tail -n 1 /proc/mounts | sed -Ee "s/,uid=[[:digit:]]+,gid=[[:digit:]]+//" -e "s|/mnt|/dev/shm|"')" = "$(grep /dev/shm /proc/mounts | sed -Ee "s/,uid=[[:digit:]]+,gid=[[:digit:]]+//")" ]
 
-	$ bst --mount tmp,/tmp,tmpfs,dirsync,noatime,nodev,nodiratime,noexec,nosuid,relatime,ro,silent,strictatime,sync sh -c 'tail -n 1 /proc/mounts | sed -Ee "s/,uid=[[:digit:]]+,gid=[[:digit:]]+//"'
+	$ bst --mount tmp,/tmp,tmpfs,dirsync,noatime,nodev,nodiratime,noexec,nosuid,relatime,ro,silent,strictatime,sync sh -c 'tail -n 1 /proc/mounts | sed -Ee "s/,uid=[[:digit:]]+,gid=[[:digit:]]+//" -e "s/,seclabel//"'
 	tmp /tmp tmpfs ro,sync,dirsync,nosuid,nodev,noexec,nodiratime 0 0
 
-	$ bst --mount tmp,/tmp,tmpfs,noatime,atime,nodev,dev,nodiratime,diratime,noexec,exec,nosuid,suid,relatime,norelatime,ro,rw,silent,loud,strictatime,nostrictatime,sync,async sh -c 'tail -n 1 /proc/mounts | sed -Ee "s/,uid=[[:digit:]]+,gid=[[:digit:]]+//"'
+	$ bst --mount tmp,/tmp,tmpfs,noatime,atime,nodev,dev,nodiratime,diratime,noexec,exec,nosuid,suid,relatime,norelatime,ro,rw,silent,loud,strictatime,nostrictatime,sync,async sh -c 'tail -n 1 /proc/mounts | sed -Ee "s/,uid=[[:digit:]]+,gid=[[:digit:]]+//" -e "s/,seclabel//"'
 	tmp /tmp tmpfs rw,relatime 0 0
 
 	$ bst --mount tmp,/tmp,tmpfs,foo=bar true
@@ -88,8 +87,8 @@ Testing --argv0
 	$ bst sh -c 'echo $0'
 	sh
 
-	$ bst --argv0 hello sh -c 'echo $0'
-	hello
+	$ bst --argv0 ash sh -c 'echo $0'
+	ash
 
 Testing hostname semantics
 
