@@ -1,24 +1,22 @@
 image-manifests:
   build-floor:
-    imageunits:
+    units:
     - floor: arista.com/horseland/alpine%floor-builder
       sh: |
         apk add --root=$DESTDIR --initdb alpine-base make git gawk gcc libcap-dev libcap-static musl-dev util-linux
         mkdir -p $DESTDIR/src $DESTDIR/dest $DESTDIR/proc
-    images:
-    - arista.com/horseland/scdoc%static
+    - image: arista.com/horseland/scdoc%static
   static:
-    imageunits:
+    units:
     - floor: arista.com/horseland/bestie%build-floor
       sh: make install LDFLAGS="-static"
   test-floor:
-    imageunits:
+    units:
     - floor: arista.com/horseland/alpine%floor-builder
       sh: install -m 644 -D entry-settings.json $DESTDIR/etc/barney/entry.d/1-bestie
-    images:
-    - arista.com/horseland/bestie%build-floor
-    - arista.com/horseland/bestie%static
+    - image: arista.com/horseland/bestie%build-floor
+    - image: arista.com/horseland/bestie%static
   breadth_test:
-    imageunits:
+    units:
     - floor: arista.com/horseland/bestie%test-floor
       sh: make check BINS=
