@@ -74,7 +74,8 @@ endif
 PKGVER=$(shell echo $(VERSION:v%=%) | cut -f 1 -d -)
 PKGITER=$(shell echo $(VERSION) | cut -f 2- -d - | tr - .)
 FPM_OPTS=-n $(NAME) -v $(PKGVER) --iteration $(PKGITER) \
-	 --url $(shell git remote get-url origin) --description "run executables in their own spacetime"
+	 --url $(shell git remote get-url origin) --description "run executables in their own spacetime" \
+	 --after-install post_install.sh
 $(PACKAGES:%=$(NAME).x86_64.%):$(NAME).x86_64.%: FORCE
 	setarch x86_64 b5 fpm --image .%static -f -t $(@:$(NAME).x86_64.%=%) -p $@ -a x86_64 $(FPM_OPTS)
 $(PACKAGES:%=$(NAME).i686.%):$(NAME).i686.%: FORCE
