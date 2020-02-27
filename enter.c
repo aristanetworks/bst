@@ -7,7 +7,7 @@
 #include <grp.h>
 #include <inttypes.h>
 #include <limits.h>
-#include <linux/sched.h>
+#include <sched.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
