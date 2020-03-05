@@ -1,5 +1,16 @@
 image-manifests:
   build-floor:
+    entry:
+      mounts:
+      - target: /dev
+        source: /dev
+        options: rbind
+      - target: /proc
+        source: proc
+        type: proc
+      - target: /tmp
+        source: tmp
+        type: tmpfs
     units:
     - floor: arista.com/horseland/alpine%floor-builder
       sh: |
