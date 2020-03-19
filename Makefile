@@ -69,11 +69,9 @@ FORCE:
 
 VERSION = $(shell git describe --long --dirty 2>/dev/null)
 ifeq ($(VERSION),)
-VERSION = v0.0.0-1
+VERSION = v0.1.0
 endif
-PKGVER=$(shell echo $(VERSION:v%=%) | cut -f 1 -d -)
-PKGITER=$(shell echo $(VERSION) | cut -f 2- -d - | tr - .)
-FPM_OPTS=-n $(NAME) -v $(PKGVER) --iteration $(PKGITER) \
+FPM_OPTS=-n $(NAME) -v $(VERSION:v%=%) --iteration 1 \
 	 --url $(shell git remote get-url origin) --description "run executables in their own spacetime" \
 	 --after-install post_install.sh
 $(PACKAGES:%=$(NAME).x86_64.%):$(NAME).x86_64.%: FORCE
