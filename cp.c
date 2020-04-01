@@ -49,7 +49,7 @@ static int copyfile(const char *target, const char *source, const struct stat *s
 		err(1, "copyfile: open(\"%s\", O_RDONLY)", source);
 	}
 
-	if ((to = open(target, O_WRONLY | O_CREAT | O_EXCL)) == -1) {
+	if ((to = open(target, O_WRONLY | O_CREAT | O_EXCL, 0777)) == -1) {
 		err(1, "copyfile: open(\"%s\", O_WRONLY | O_CREAT)", target);
 	}
 
