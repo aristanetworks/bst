@@ -35,30 +35,37 @@ struct cloneflag {
 };
 
 enum {
+
+	/* To ensure backward and forward compatibility for the ability of
+	   unsharing the maximum of namespaces, we re-define these constants. */
+	BST_CLONE_NEWNET    = 0x40000000,
+	BST_CLONE_NEWUTS    = 0x04000000,
+	BST_CLONE_NEWCGROUP = 0x02000000,
+	BST_CLONE_NEWNS     = 0x00020000,
+	BST_CLONE_NEWPID    = 0x20000000,
+	BST_CLONE_NEWUSER   = 0x10000000,
+	BST_CLONE_NEWIPC    = 0x08000000,
+
 	ALL_NAMESPACES = 0
-#ifdef HAVE_CLONE_NEWCGROUP
-		| CLONE_NEWCGROUP
-#endif
-		| CLONE_NEWIPC
-		| CLONE_NEWNS
-		| CLONE_NEWNET
-		| CLONE_NEWPID
-		| CLONE_NEWUSER
-		| CLONE_NEWUTS,
+		| BST_CLONE_NEWCGROUP
+		| BST_CLONE_NEWIPC
+		| BST_CLONE_NEWNS
+		| BST_CLONE_NEWNET
+		| BST_CLONE_NEWPID
+		| BST_CLONE_NEWUSER
+		| BST_CLONE_NEWUTS,
 };
 
 static int opts_to_unshareflags(const struct entry_settings *opts)
 {
 	static struct cloneflag flags[] = {
-#ifdef HAVE_CLONE_NEWCGROUP
-		{ "cgroup",  CLONE_NEWCGROUP },
-#endif
-		{ "ipc",     CLONE_NEWIPC },
-		{ "mount",   CLONE_NEWNS },
-		{ "network", CLONE_NEWNET },
-		{ "pid",     CLONE_NEWPID },
-		{ "user",    CLONE_NEWUSER },
-		{ "uts",     CLONE_NEWUTS },
+		{ "cgroup",  BST_CLONE_NEWCGROUP },
+		{ "ipc",     BST_CLONE_NEWIPC },
+		{ "mount",   BST_CLONE_NEWNS },
+		{ "network", BST_CLONE_NEWNET },
+		{ "pid",     BST_CLONE_NEWPID },
+		{ "user",    BST_CLONE_NEWUSER },
+		{ "uts",     BST_CLONE_NEWUTS },
 		{ "all",     ALL_NAMESPACES },
 	};
 
@@ -97,7 +104,7 @@ int enter(const struct entry_settings *opts)
 
 	struct userns_helper userns_helper;
 
-	if (unshareflags & CLONE_NEWUSER) {
+	if (unshareflags & BST_CLONE_NEWUSER) {
 		userns_helper = userns_helper_spawn();
 	}
 
@@ -106,15 +113,43 @@ int enter(const struct entry_settings *opts)
 		err(1, "setuid");
 	}
 
-	if (unshare(unshareflags) == -1) {
-		err(1, "unshare");
+	/* Unshare all relevant namespaces. It's hard to check in advance which
+	   namespaces are supported, so we unshare them one by one in order. */
+
+	int unshareables[] = {
+		/* User namespace must be unshared first and foremost. */
+		BST_CLONE_NEWUSER,
+		BST_CLONE_NEWNS,
+		BST_CLONE_NEWUTS,
+		BST_CLONE_NEWPID,
+		BST_CLONE_NEWNET,
+		BST_CLONE_NEWIPC,
+		BST_CLONE_NEWCGROUP,
+		0,
+	};
+
+	for (int *flag = &unshareables[0]; *flag != 0; ++flag) {
+		if (!(unshareflags & *flag)) {
+			continue;
+		}
+
+		int rc = unshare(*flag);
+		if (rc == -1 && errno == EINVAL) {
+			/* We realized that the namespace isn't supported -- remove it
+			   from the unshare set. */
+			unshareflags &= ~*flag;
+			continue;
+		}
+		if (rc == -1) {
+			err(1, "unshare");
+		}
 	}
 
 	/* Just unsharing the mount namespace is not sufficient -- if we don't make
 	   every mount entry private, any change we make will be applied to the
 	   parent mount namespace if it happens to have MS_SHARED propagation. We
 	   don't like coin flips. */
-	if (unshareflags & CLONE_NEWNS && mount("none", "/", "", MS_REC | MS_PRIVATE, "") == -1) {
+	if (unshareflags & BST_CLONE_NEWNS && mount("none", "/", "", MS_REC | MS_PRIVATE, "") == -1) {
 		err(1, "could not make / private: mount");
 	}
 
@@ -139,7 +174,7 @@ int enter(const struct entry_settings *opts)
 	if (pid) {
 		int status;
 
-		if (unshareflags & CLONE_NEWUSER) {
+		if (unshareflags & BST_CLONE_NEWUSER) {
 			userns_helper_sendpid(&userns_helper, pid);
 			userns_helper_close(&userns_helper);
 		}
@@ -162,18 +197,18 @@ int enter(const struct entry_settings *opts)
 		err(1, "prctl(PR_SET_PDEATHSIG)");
 	}
 
-	if (unshareflags & CLONE_NEWUSER) {
+	if (unshareflags & BST_CLONE_NEWUSER) {
 		userns_helper_wait(&userns_helper);
 		userns_helper_close(&userns_helper);
 	}
 
 	/* Set the host and domain names only when in an UTS namespace. */
-	if ((opts->hostname || opts->domainname) && !(unshareflags & CLONE_NEWUTS)) {
+	if ((opts->hostname || opts->domainname) && !(unshareflags & BST_CLONE_NEWUTS)) {
 		errx(1, "attempted to set host or domain names on the host UTS namespace.");
 	}
 
 	const char *hostname = opts->hostname;
-	if (!hostname && (unshareflags & CLONE_NEWUTS)) {
+	if (!hostname && (unshareflags & BST_CLONE_NEWUTS)) {
 		hostname = "localhost";
 	}
 	if (hostname && sethostname(hostname, strlen(hostname)) == -1) {
@@ -181,7 +216,7 @@ int enter(const struct entry_settings *opts)
 	}
 
 	const char *domainname = opts->domainname;
-	if (!domainname && (unshareflags & CLONE_NEWUTS)) {
+	if (!domainname && (unshareflags & BST_CLONE_NEWUTS)) {
 		domainname = "localdomain";
 	}
 	if (domainname && setdomainname(domainname, strlen(domainname)) == -1) {
@@ -234,7 +269,7 @@ int enter(const struct entry_settings *opts)
 
 	/* We have a special case for pivot_root: the syscall wants the
 	   new root to be a mount point, so we indulge. */
-	if (unshareflags & CLONE_NEWNS && strcmp(root, "/") != 0) {
+	if (unshareflags & BST_CLONE_NEWNS && strcmp(root, "/") != 0) {
 		if (mount(root, root, "none", MS_BIND|MS_REC, "") == -1) {
 			err(1, "mount(\"/\", \"/\", MS_BIND|MS_REC)");
 		}
@@ -249,7 +284,7 @@ int enter(const struct entry_settings *opts)
 		   it's a terrible idea due to the sheer amount of things that can go
 		   wrong, like "what do I do if one of the mounts failed but the previous
 		   ones didn't?", or "how do I clean up things that I've (re)mounted?". */
-		if (!(unshareflags & CLONE_NEWNS)) {
+		if (!(unshareflags & BST_CLONE_NEWNS)) {
 			errx(1, "attempted to mount things on the host mount namespace.");
 		}
 
@@ -272,7 +307,7 @@ int enter(const struct entry_settings *opts)
 		   must be done in a mount namespace, because otherwise pivot_root
 		   will burn your house, invoke dragons, and eat your children. */
 
-		if (!(unshareflags & CLONE_NEWNS)) {
+		if (!(unshareflags & BST_CLONE_NEWNS)) {
 			if (chroot(root) == -1) {
 				err(1, "chroot");
 			}

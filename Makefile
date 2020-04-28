@@ -5,10 +5,7 @@ MANDIR ?= $(DATADIR)/man
 
 CFLAGS ?= -O2
 CFLAGS += -std=c99 -Wall -Wextra -Wno-unused-parameter -fno-strict-aliasing
-CPPFLAGS += -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 $(HAVE_FLAGS)
-ifneq ($(shell $(CC) -D_GNU_SOURCE features/clone_newcgroup_test.c || echo notfound),notfound)
-HAVE_FLAGS += -DHAVE_CLONE_NEWCGROUP=1
-endif
+CPPFLAGS += -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
 
 SRCS := main.c enter.c userns.c mount.c cp.c setarch.c usage.c sig.c
 OBJS := $(subst .c,.o,$(SRCS))
