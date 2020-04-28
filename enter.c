@@ -45,6 +45,7 @@ enum {
 	BST_CLONE_NEWPID    = 0x20000000,
 	BST_CLONE_NEWUSER   = 0x10000000,
 	BST_CLONE_NEWIPC    = 0x08000000,
+	BST_CLONE_NEWTIME   = 0x00000080,
 
 	ALL_NAMESPACES = 0
 		| BST_CLONE_NEWCGROUP
@@ -53,7 +54,9 @@ enum {
 		| BST_CLONE_NEWNET
 		| BST_CLONE_NEWPID
 		| BST_CLONE_NEWUSER
-		| BST_CLONE_NEWUTS,
+		| BST_CLONE_NEWUTS
+		| BST_CLONE_NEWTIME
+		,
 };
 
 static int opts_to_unshareflags(const struct entry_settings *opts)
@@ -64,6 +67,7 @@ static int opts_to_unshareflags(const struct entry_settings *opts)
 		{ "mount",   BST_CLONE_NEWNS },
 		{ "network", BST_CLONE_NEWNET },
 		{ "pid",     BST_CLONE_NEWPID },
+		{ "time",    BST_CLONE_NEWTIME },
 		{ "user",    BST_CLONE_NEWUSER },
 		{ "uts",     BST_CLONE_NEWUTS },
 		{ "all",     ALL_NAMESPACES },
@@ -125,6 +129,7 @@ int enter(const struct entry_settings *opts)
 		BST_CLONE_NEWNET,
 		BST_CLONE_NEWIPC,
 		BST_CLONE_NEWCGROUP,
+		BST_CLONE_NEWTIME,
 		0,
 	};
 

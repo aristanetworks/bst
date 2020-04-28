@@ -37,6 +37,7 @@ Users of bst may choose to opt-out of some of the isolation.
 	- *mount*
 	- *network* (since Linux 2.6.24)
 	- *pid* (since Linux 3.8)
+	- *time* (since Linux 5.6)
 	- *uts* (since Linux 2.6.19)
 	- *user* (since Linux 3.8)
 
