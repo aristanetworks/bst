@@ -112,6 +112,19 @@ int enter(const struct entry_settings *opts)
 		userns_helper = userns_helper_spawn();
 	}
 
+	int timens_offsets = -1;
+	if (unshareflags & BST_CLONE_NEWTIME) {
+		timens_offsets = open("/proc/self/timens_offsets", O_WRONLY);
+		if (timens_offsets == -1) {
+			if (errno != ENOENT) {
+				err(1, "open(\"/proc/self/timens_offsets\")");
+			}
+			/* The kernel evidently don't support time namespaces yet. No need
+			   to try below. */
+			unshareflags &= ~BST_CLONE_NEWTIME;
+		}
+	}
+
 	/* Drop all privileges, or none if we're real uid 0. */
 	if (setuid(getuid()) == -1) {
 		err(1, "setuid");
@@ -160,6 +173,14 @@ int enter(const struct entry_settings *opts)
 
 	if (opts->arch && opts->arch[0] != 0) {
 		setarch(opts->arch);
+	}
+
+	if (unshareflags & BST_CLONE_NEWTIME) {
+		init_clocks(timens_offsets, opts->clockspecs, lengthof(opts->clockspecs));
+	}
+
+	if (timens_offsets != -1 && close(timens_offsets) == -1) {
+		err(1, "close(timens_offsets)");
 	}
 
 	/* You can't "really" unshare the PID namespace of a running process

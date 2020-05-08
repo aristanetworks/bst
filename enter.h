@@ -7,9 +7,11 @@
 #ifndef ENTER_H_
 # define ENTER_H_
 
-# include <unistd.h>
 # include <limits.h>
+# include <time.h>
+# include <unistd.h>
 # include "mount.h"
+# include "timens.h"
 
 enum {
 	MAX_MOUNT = 4096,
@@ -42,6 +44,8 @@ struct entry_settings {
 	size_t nmounts;
 	const char *mutables[MAX_MOUNT];
 	size_t nmutables;
+
+	struct timespec clockspecs[MAX_CLOCK + 1];
 
 	const char *arch;
 };
