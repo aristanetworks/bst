@@ -18,4 +18,6 @@ Options:
 	--gid <gid>:            Set group ID.
 	--groups <gid,gid,...>: Set additional groups.
 	--arch <arch>:          Set the execution domain.
+	--hostname <host>:      Set the host name.
+	--domainname <domain>:  Set the domain name.
 	--time <name>=<s>[.ns]: Set the time of a specific clock.
