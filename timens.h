@@ -9,6 +9,8 @@
 
 enum {
 	MAX_CLOCK = 11, // CLOCK_TAI
+
+	SEC_IN_NS = 1000000000,
 };
 
 typedef long clockspecs[MAX_CLOCK];

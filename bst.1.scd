@@ -109,6 +109,14 @@ Users of bst may choose to opt-out of some of the isolation.
 
 	You cannot use this option with _--share=uts_.
 
+\--time <name-or-id>=<seconds>[.<nanoseconds>]
+	Set the value of the specified clock for the inner process' time namespace.
+
+	Valid clock names are the same as the ones described in *time_namespaces*(7).
+	Alternatively, the numerical clock IDs can be supplied.
+
+	You cannot use this option with _--share=time_.
+
 # SEE ALSO
 
 *namespaces*(7), *mount*(1), *setarch*(1)

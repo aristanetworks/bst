@@ -18,3 +18,4 @@ Options:
 	--gid <gid>:            Set group ID.
 	--groups <gid,gid,...>: Set additional groups.
 	--arch <arch>:          Set the execution domain.
+	--time <name>=<s>[.ns]: Set the time of a specific clock.

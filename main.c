@@ -4,7 +4,9 @@
  * in the LICENSE file.
  */
 
+#include <ctype.h>
 #include <err.h>
+#include <errno.h>
 #include <getopt.h>
 #include <limits.h>
 #include <signal.h>
@@ -28,6 +30,7 @@ enum {
 	OPTION_ARGV0,
 	OPTION_HOSTNAME,
 	OPTION_DOMAIN,
+	OPTION_TIME,
 };
 
 /* Usage is generated from usage.txt. Note that the array is not null-terminated,
@@ -69,8 +72,14 @@ int main(int argc, char *argv[], char *envp[])
 		{ "argv0",      required_argument,  NULL,           OPTION_ARGV0    },
 		{ "hostname",   required_argument,  NULL,           OPTION_HOSTNAME },
 		{ "domainname", required_argument,  NULL,           OPTION_DOMAIN   },
+		{ "time",       required_argument,  NULL,           OPTION_TIME     },
 
 		{ 0, 0, 0, 0 }
+	};
+
+	static const char *clocknames[MAX_CLOCK + 1] = {
+		[CLOCK_MONOTONIC] = "monotonic",
+		[CLOCK_BOOTTIME]  = "boottime",
 	};
 
 	char *argv0 = NULL;
@@ -146,6 +155,57 @@ int main(int argc, char *argv[], char *envp[])
 			case OPTION_DOMAIN:
 				opts.domainname = optarg;
 				break;
+
+			case OPTION_TIME:
+			{
+				const char *name  = strtok(optarg, "=");
+				const char *secs  = strtok(NULL, ".");
+				const char *nsecs = strtok(NULL, "");
+
+				clockid_t clock = -1;
+				for (clockid_t id = 0; id < MAX_CLOCK + 1; ++id) {
+					if (clocknames[id] && strcmp(clocknames[id], name) == 0) {
+						clock = id;
+						break;
+					}
+				}
+
+				if (clock == -1 && isdigit(name[0])) {
+					errno = 0;
+					clock = strtol(name, NULL, 10);
+					if (errno != 0) {
+						clock = -1;
+					}
+				}
+
+				if (clock < 0 || clock > MAX_CLOCK) {
+					errx(2, "%s is not a valid clock ID or name", name);
+				}
+
+				struct timespec ts = {0, 0};
+				errno = 0;
+				ts.tv_sec  = strtol(secs, NULL, 10);
+				if (errno != 0) {
+					err(2, "%s is not a valid number of seconds", secs);
+				}
+				if (ts.tv_sec < 0) {
+					errx(2, "%s must be a positive number of seconds", secs);
+				}
+				if (nsecs && nsecs[0] != '\0') {
+					errno = 0;
+					ts.tv_nsec = strtol(nsecs, NULL, 10);
+					if (errno != 0) {
+						err(2, "%s is not a valid number of nanoseconds", nsecs);
+					}
+					if (ts.tv_nsec < 0 || ts.tv_nsec >= SEC_IN_NS) {
+						errx(2, "%s as nanoseconds is out of range (must be "
+								"between 0 and 999.999.999)", nsecs);
+					}
+				}
+
+				opts.clockspecs[clock] = ts;
+				break;
+			}
 
 			case 'r':
 				opts.root = optarg;

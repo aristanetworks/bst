@@ -11,10 +11,6 @@
 #include <time.h>
 #include "timens.h"
 
-enum {
-    GIGA = 1000000000,
-};
-
 void init_clocks(int fd, const struct timespec *times, size_t nclocks)
 {
 	FILE *clocks = fdopen(fd, "w");
@@ -37,10 +33,10 @@ void init_clocks(int fd, const struct timespec *times, size_t nclocks)
 		}
 
 		tp.tv_sec  = times[clock].tv_sec - tp.tv_sec - 1;
-		tp.tv_nsec = GIGA - tp.tv_nsec + times[clock].tv_nsec;
-		while (tp.tv_nsec > GIGA) {
+		tp.tv_nsec = SEC_IN_NS - tp.tv_nsec + times[clock].tv_nsec;
+		while (tp.tv_nsec > SEC_IN_NS) {
 			tp.tv_sec += 1;
-			tp.tv_nsec -= GIGA;
+			tp.tv_nsec -= SEC_IN_NS;
 		}
 
 		fprintf(clocks, "%d %ld %ld\n", clock, tp.tv_sec, tp.tv_nsec);
