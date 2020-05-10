@@ -13,6 +13,7 @@
 #include <string.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
+#include <sys/sysmacros.h>
 #include <unistd.h>
 #include "cp.h"
 #include "mount.h"
@@ -120,6 +121,50 @@ static void update_mount_flags_and_options(unsigned long *mountflags, char *opts
 	*newopts = 0;
 }
 
+/* cleanpath cleans the specified absolute filepath. It does the following:
+   * removes duplicate slashes
+   * removes . components
+   * cancels inner .. components with preceding components */
+static void cleanpath(char *path) {
+	if (path[0] != '/') {
+		errx(1, "cleanpath: must be called on absolute path, got \"%s\"", path);
+	}
+	++path;
+
+	char *out = path;
+	char *start = path;
+
+	while (*path) {
+		if (*path == '/') {
+			// empty component
+			++path;
+		} else if (*path == '.' && (!*(path+1) || *(path+1) == '/')) {
+			// . component
+			++path;
+		} else if (*path == '.' && *(path+1) == '.' && (!*(path+1) || *(path+1) == '/')) {
+			// .. component
+			path += 2;
+
+			if (out > start) {
+				--out;
+				for (; out > start && *out != '/'; --out) {
+					continue;
+				}
+			}
+		} else {
+			// normal component
+			if (out != start) {
+				*out = '/';
+				++out;
+			}
+			for (; *path && *path != '/'; ++path, ++out) {
+				*out = *path;
+			}
+		}
+	}
+	*out = '\0';
+}
+
 /* This constructs a path in `out`, using a format string and arguments.
    `out` must be of size PATH_MAX. */
 static void makepath_r(char *out, char *fmt, ...) {
@@ -129,6 +174,8 @@ static void makepath_r(char *out, char *fmt, ...) {
 		errx(1, "makepath: resulting path larger than PATH_MAX.");
 	}
 	va_end(vl);
+
+	cleanpath(out);
 }
 
 static char *makepath(char *fmt, ...) {
@@ -141,6 +188,7 @@ static char *makepath(char *fmt, ...) {
 	}
 	va_end(vl);
 
+	cleanpath(buf);
 	return buf;
 }
 
@@ -154,12 +202,19 @@ void mount_entries(const char *root, const struct mount_entry *mounts, size_t nm
 			errx(1, "mount_entries: target \"%s\" must be an absolute path.", mnt->target);
 		}
 		const char *target = makepath("%s%s", root, mnt->target);
+		const char *type = mnt->type;
 
-		if (mount(mnt->source, target, mnt->type, flags, mnt->options) == -1) {
+		/* Special case: we might want to construct a fake devtmpfs. We indicate that
+		   through a special mount fstype that we recognize. */
+		if (strcmp(mnt->type, "bst_devtmpfs") == 0) {
+			type = "tmpfs";
+		}
+
+		if (mount(mnt->source, target, type, flags, mnt->options) == -1) {
 			err(1, "mount_entries: mount(\"%s\", \"%s\", \"%s\", %lu, \"%s\")",
 					mnt->source,
 					mnt->target,
-					mnt->type,
+					type,
 					flags,
 					mnt->options);
 		}
@@ -173,6 +228,88 @@ void mount_entries(const char *root, const struct mount_entry *mounts, size_t nm
 			err(1, "mount_entries: mount(\"none\", \"%s\", NULL, %lu | MS_REMOUNT, NULL)",
 					mnt->target,
 					flags);
+		}
+
+		/* Construct the contents of our fake devtmpfs. */
+		if (strcmp(mnt->type, "bst_devtmpfs") == 0) {
+
+			static const char *directories[] = {
+				"net",
+				"shm",
+				"pts",
+			};
+
+			for (size_t i = 0; i < lengthof(directories); ++i) {
+				const char *path = makepath("%s%s/%s", root, mnt->target, directories[i]);
+
+				if (mkdir(path, 0777) == -1) {
+					err(1, "mount_entries: bst_devtmpfs: mkdir(\"%s\"", path);
+				}
+			}
+
+			struct {
+				const char *path;
+				mode_t mode;
+				dev_t dev;
+			} devices[] = {
+				{ "null", S_IFCHR | 0666, makedev(1, 3) },
+				{ "full", S_IFCHR | 0666, makedev(1, 7) },
+				{ "zero", S_IFCHR | 0666, makedev(1, 5) },
+			};
+
+			for (size_t i = 0; i < lengthof(devices); ++i) {
+				const char *path = makepath("%s%s/%s", root, mnt->target, devices[i].path);
+
+				if (mknod(path, devices[i].mode, devices[i].dev) == 0) {
+					continue;
+				}
+
+				/* Fallback: bind-mount device from host. This is only possible iff
+				   The source and destination don't overlap. */
+
+				char source[PATH_MAX];
+				makepath_r(source, "/dev/%s", devices[i].path);
+
+				if (errno != EPERM || strncmp(source, path, PATH_MAX) == 0) {
+					err(1, "mount_entries: bst_devtmpfs: mknod(\"%s\", 0%o, {%d, %d})",
+							path,
+							devices[i].mode,
+							major(devices[i].dev),
+							minor(devices[i].dev));
+				}
+
+				if (mknod(path, S_IFREG | (devices[i].mode & 0777), 0) == -1) {
+					err(1, "mount_entries: bst_devtmpfs: mknod(\"%s\", 0%o, 0)",
+							path,
+							devices[i].mode);
+				}
+
+				if (mount(source, path, "", MS_BIND, "") == -1) {
+					err(1, "mount_entries: bst_devtmpfs: mount(\"%s\", \"%s\", MS_BIND)",
+							source, path);
+				}
+			}
+
+			static const struct {
+				const char *path;
+				const char *target;
+			} symlinks[] = {
+				{ "fd", "/proc/self/fd" },
+				{ "stdin", "/proc/self/fd/0" },
+				{ "stdout", "/proc/self/fd/1" },
+				{ "stderr", "/proc/self/fd/2" },
+				{ "random", "zero" },
+				{ "urandom", "zero" },
+			};
+
+			for (size_t i = 0; i < lengthof(symlinks); ++i) {
+				const char *path = makepath("%s%s/%s", root, mnt->target, symlinks[i].path);
+
+				if (symlink(symlinks[i].target, path) == -1) {
+					err(1, "mount_entries: bst_devtmpfs: symlink(\"%s\", \"%s\")",
+							symlinks[i].target, path);
+				}
+			}
 		}
 	}
 }

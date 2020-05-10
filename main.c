@@ -31,6 +31,7 @@ enum {
 	OPTION_HOSTNAME,
 	OPTION_DOMAIN,
 	OPTION_TIME,
+	OPTION_NO_FAKE_DEVTMPFS,
 };
 
 /* Usage is generated from usage.txt. Note that the array is not null-terminated,
@@ -73,6 +74,9 @@ int main(int argc, char *argv[], char *envp[])
 		{ "hostname",   required_argument,  NULL,           OPTION_HOSTNAME },
 		{ "domainname", required_argument,  NULL,           OPTION_DOMAIN   },
 		{ "time",       required_argument,  NULL,           OPTION_TIME     },
+
+		/* Opt-out feature flags */
+		{ "no-fake-devtmpfs",   no_argument,    NULL,       OPTION_NO_FAKE_DEVTMPFS },
 
 		{ 0, 0, 0, 0 }
 	};
@@ -206,6 +210,10 @@ int main(int argc, char *argv[], char *envp[])
 				opts.clockspecs[clock] = ts;
 				break;
 			}
+
+			case OPTION_NO_FAKE_DEVTMPFS:
+				opts.no_fake_devtmpfs = 1;
+				break;
 
 			case 'r':
 				opts.root = optarg;

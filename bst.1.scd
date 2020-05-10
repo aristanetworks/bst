@@ -62,6 +62,9 @@ Users of bst may choose to opt-out of some of the isolation.
 	*<type>* is the filesystem type, or _none_ if ignored.
 	Consult _/proc/filesystems_ for a list of supported filesystem types.
 
+	Additionally, the following filesystem types are recognized by *bst*:
+	- *bst_devtmpfs* (see _--no-fake-devtmpfs_)
+
 	*<options>* are mount options. Recognized options are the same as with
 	*mount*(1).
 
@@ -116,6 +119,15 @@ Users of bst may choose to opt-out of some of the isolation.
 	Alternatively, the numerical clock IDs can be supplied.
 
 	You cannot use this option with _--share=time_.
+
+\--no-fake-devtmpfs
+	Do not replace devtmpfs mounts with a fake devtmpfs.
+
+	By default, *bst* constructs the contents of a fake devtmpfs with a minimal
+	set of devices and symlinks. In particular, because devtmpfses cannot be
+	mounted in user namespaces, this allows programs wishing to run in a user
+	namespace yet still have access to non-problematic devices like _/dev/null_
+	to pass in _--mount dev,/dev,devtmpfs_ and have this work out of the box.
 
 # SEE ALSO
 

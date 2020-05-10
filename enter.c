@@ -94,7 +94,7 @@ found:
 	return unshareflags;
 }
 
-int enter(const struct entry_settings *opts)
+int enter(struct entry_settings *opts)
 {
 	const char *root = opts->root ? opts->root : "/";
 
@@ -312,6 +312,14 @@ int enter(const struct entry_settings *opts)
 		   ones didn't?", or "how do I clean up things that I've (re)mounted?". */
 		if (!(unshareflags & BST_CLONE_NEWNS)) {
 			errx(1, "attempted to mount things on the host mount namespace.");
+		}
+
+		if (!opts->no_fake_devtmpfs) {
+			for (struct mount_entry *mnt = opts->mounts; mnt < opts->mounts + opts->nmounts; ++mnt) {
+				if (strcmp(mnt->type, "devtmpfs") == 0) {
+					mnt->type = "bst_devtmpfs";
+				}
+			}
 		}
 
 		mount_entries(root, opts->mounts, opts->nmounts);

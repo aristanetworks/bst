@@ -48,8 +48,10 @@ struct entry_settings {
 	struct timespec clockspecs[MAX_CLOCK + 1];
 
 	const char *arch;
+
+	int no_fake_devtmpfs;
 };
 
-int enter(const struct entry_settings *opts);
+int enter(struct entry_settings *opts);
 
 #endif /* !ENTER_H_ */
