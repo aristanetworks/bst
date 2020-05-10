@@ -129,6 +129,13 @@ Users of bst may choose to opt-out of some of the isolation.
 	namespace yet still have access to non-problematic devices like _/dev/null_
 	to pass in _--mount dev,/dev,devtmpfs_ and have this work out of the box.
 
+\--no-derandomize
+	Do not try to reduce sources of randomness.
+
+	By default, *bst* tries to run inner processes in a somewhat more deterministic
+	environment. So far, it does so by symlinking _/dev/random_ and _/dev/urandom_ to
+	_/dev/zero_, and by disabling ASLR for the inner process.
+
 # SEE ALSO
 
 *namespaces*(7), *mount*(1), *setarch*(1)

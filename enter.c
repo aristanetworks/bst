@@ -18,6 +18,7 @@
 #include <string.h>
 #include <sys/capability.h>
 #include <sys/mount.h>
+#include <sys/personality.h>
 #include <sys/prctl.h>
 #include <sys/syscall.h>
 #include <sys/wait.h>
@@ -175,6 +176,13 @@ int enter(struct entry_settings *opts)
 		setarch(opts->arch);
 	}
 
+	if (!opts->no_derandomize) {
+		unsigned long persona = personality(0xffffffff) | ADDR_NO_RANDOMIZE;
+		if (personality(persona) == -1) {
+			err(1, "personality(%lu)", persona);
+		}
+	}
+
 	if (unshareflags & BST_CLONE_NEWTIME) {
 		init_clocks(timens_offsets, opts->clockspecs, lengthof(opts->clockspecs));
 	}
@@ -322,7 +330,7 @@ int enter(struct entry_settings *opts)
 			}
 		}
 
-		mount_entries(root, opts->mounts, opts->nmounts);
+		mount_entries(root, opts->mounts, opts->nmounts, opts->no_derandomize);
 		mount_mutables(root, opts->mutables, opts->nmutables);
 	}
 

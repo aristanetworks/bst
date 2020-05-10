@@ -192,8 +192,10 @@ static char *makepath(char *fmt, ...) {
 	return buf;
 }
 
-void mount_entries(const char *root, const struct mount_entry *mounts, size_t nmounts)
+void mount_entries(const char *root, const struct mount_entry *mounts, size_t nmounts, int no_derandomize)
 {
+	mode_t old_mask = umask(0);
+
 	for (const struct mount_entry *mnt = mounts; mnt < mounts + nmounts; ++mnt) {
 		unsigned long flags = 0;
 		update_mount_flags_and_options(&flags, mnt->options);
@@ -233,16 +235,19 @@ void mount_entries(const char *root, const struct mount_entry *mounts, size_t nm
 		/* Construct the contents of our fake devtmpfs. */
 		if (strcmp(mnt->type, "bst_devtmpfs") == 0) {
 
-			static const char *directories[] = {
-				"net",
-				"shm",
-				"pts",
+			static struct {
+				const char *path;
+				mode_t mode;
+			} directories[] = {
+				{ "net", 0755 },
+				{ "shm", S_ISVTX | 0777 },
+				{ "pts", 0755 },
 			};
 
 			for (size_t i = 0; i < lengthof(directories); ++i) {
-				const char *path = makepath("%s%s/%s", root, mnt->target, directories[i]);
+				const char *path = makepath("%s%s/%s", root, mnt->target, directories[i].path);
 
-				if (mkdir(path, 0777) == -1) {
+				if (mkdir(path, directories[i].mode) == -1) {
 					err(1, "mount_entries: bst_devtmpfs: mkdir(\"%s\"", path);
 				}
 			}
@@ -252,12 +257,20 @@ void mount_entries(const char *root, const struct mount_entry *mounts, size_t nm
 				mode_t mode;
 				dev_t dev;
 			} devices[] = {
-				{ "null", S_IFCHR | 0666, makedev(1, 3) },
-				{ "full", S_IFCHR | 0666, makedev(1, 7) },
-				{ "zero", S_IFCHR | 0666, makedev(1, 5) },
+				{ "null",    S_IFCHR | 0666, makedev(1, 3) },
+				{ "full",    S_IFCHR | 0666, makedev(1, 7) },
+				{ "zero",    S_IFCHR | 0666, makedev(1, 5) },
+				{ "random",  S_IFCHR | 0666, makedev(1, 8) },
+				{ "urandom", S_IFCHR | 0666, makedev(1, 9) },
 			};
 
 			for (size_t i = 0; i < lengthof(devices); ++i) {
+
+				/* Skip random and urandom when derandomizing */
+				if (!no_derandomize && major(devices[i].dev) == 1 && (minor(devices[i].dev) == 8 || minor(devices[i].dev) == 9)) {
+					continue;
+				}
+
 				const char *path = makepath("%s%s/%s", root, mnt->target, devices[i].path);
 
 				if (mknod(path, devices[i].mode, devices[i].dev) == 0) {
@@ -305,13 +318,15 @@ void mount_entries(const char *root, const struct mount_entry *mounts, size_t nm
 			for (size_t i = 0; i < lengthof(symlinks); ++i) {
 				const char *path = makepath("%s%s/%s", root, mnt->target, symlinks[i].path);
 
-				if (symlink(symlinks[i].target, path) == -1) {
+				if (symlink(symlinks[i].target, path) == -1 && errno != EEXIST) {
 					err(1, "mount_entries: bst_devtmpfs: symlink(\"%s\", \"%s\")",
 							symlinks[i].target, path);
 				}
 			}
 		}
 	}
+
+	umask(old_mask);
 }
 
 void mount_mutables(const char *root, const char *const *mutables, size_t nmutables)

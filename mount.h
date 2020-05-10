@@ -14,7 +14,7 @@ struct mount_entry {
 	char *options;
 };
 
-void mount_entries(const char *root, const struct mount_entry *mounts, size_t nmounts);
+void mount_entries(const char *root, const struct mount_entry *mounts, size_t nmounts, int no_derandomize);
 void mount_mutables(const char *root, const char *const *mutables, size_t nmutables);
 
 #endif /* !MOUNT_H */

@@ -50,6 +50,7 @@ struct entry_settings {
 	const char *arch;
 
 	int no_fake_devtmpfs;
+	int no_derandomize;
 };
 
 int enter(struct entry_settings *opts);

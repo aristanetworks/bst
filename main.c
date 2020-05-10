@@ -32,6 +32,7 @@ enum {
 	OPTION_DOMAIN,
 	OPTION_TIME,
 	OPTION_NO_FAKE_DEVTMPFS,
+	OPTION_NO_DERANDOMIZE,
 };
 
 /* Usage is generated from usage.txt. Note that the array is not null-terminated,
@@ -77,6 +78,7 @@ int main(int argc, char *argv[], char *envp[])
 
 		/* Opt-out feature flags */
 		{ "no-fake-devtmpfs",   no_argument,    NULL,       OPTION_NO_FAKE_DEVTMPFS },
+		{ "no-derandomize",     no_argument,    NULL,       OPTION_NO_DERANDOMIZE   },
 
 		{ 0, 0, 0, 0 }
 	};
@@ -213,6 +215,10 @@ int main(int argc, char *argv[], char *envp[])
 
 			case OPTION_NO_FAKE_DEVTMPFS:
 				opts.no_fake_devtmpfs = 1;
+				break;
+
+			case OPTION_NO_DERANDOMIZE:
+				opts.no_derandomize = 1;
 				break;
 
 			case 'r':

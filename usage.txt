@@ -23,3 +23,4 @@ Options:
 	--time <name>=<s>[.ns]: Set the time of a specific clock.
 
 	--no-fake-devtmpfs:     Don't replace devtmpfs mounts with fake ones.
+	--no-derandomize:       Don't attempt to reduce randomness sources.
