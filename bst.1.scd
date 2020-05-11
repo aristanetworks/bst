@@ -136,6 +136,12 @@ Users of bst may choose to opt-out of some of the isolation.
 	environment. So far, it does so by symlinking _/dev/random_ and _/dev/urandom_ to
 	_/dev/zero_, and by disabling ASLR for the inner process.
 
+\--no-proc-remount
+	Do not remount the existing _/proc_ mount if in a mount and pid namespace.
+
+	By default, *bst* automatically tries to mount a new procfs on top of _/proc_
+	if it detects it to be on another filesystem than _/_.
+
 # SEE ALSO
 
 *namespaces*(7), *mount*(1), *setarch*(1)

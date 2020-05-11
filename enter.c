@@ -20,11 +20,13 @@
 #include <sys/mount.h>
 #include <sys/personality.h>
 #include <sys/prctl.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/wait.h>
 
 #include "enter.h"
 #include "mount.h"
+#include "path.h"
 #include "setarch.h"
 #include "userns.h"
 
@@ -234,6 +236,37 @@ int enter(struct entry_settings *opts)
 	if (unshareflags & BST_CLONE_NEWUSER) {
 		userns_helper_wait(&userns_helper);
 		userns_helper_close(&userns_helper);
+	}
+
+	/* Check whether or not <root>/proc is a mountpoint. If so, and we're in a PID namespace,
+	   mount a new /proc. */
+	if (!opts->no_proc_remount && unshareflags & (BST_CLONE_NEWNS | BST_CLONE_NEWPID)) {
+		int rootfd = open(root, O_PATH, 0);
+		if (rootfd == -1) {
+			err(1, "open(\"%s\")", root);
+		}
+
+		struct stat procst;
+		if (fstatat(rootfd, "proc", &procst, AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW) == -1) {
+			err(1, "fstatat(\"%s/proc\")", root);
+		}
+
+		struct stat rootst;
+		if (fstat(rootfd, &rootst) == -1) {
+			err(1, "fstat(\"%s\")", root);
+		}
+
+		close(rootfd);
+
+		/* <root>/proc is a mountpoint, remount it. And by remount, we mean mount over it,
+		   since the original mount is probably more privileged than us, or might not be a
+		   procfs one someone's oddball configuration. */
+		if (procst.st_dev != rootst.st_dev) {
+			const char *target = makepath("%s/proc", root);
+			if (mount("proc", target, "proc", 0, NULL) == -1) {
+				err(1, "mount(\"proc\", \"%s\", \"proc\", 0)", target);
+			}
+		}
 	}
 
 	/* Set the host and domain names only when in an UTS namespace. */

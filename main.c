@@ -33,6 +33,7 @@ enum {
 	OPTION_TIME,
 	OPTION_NO_FAKE_DEVTMPFS,
 	OPTION_NO_DERANDOMIZE,
+	OPTION_NO_PROC_REMOUNT,
 };
 
 /* Usage is generated from usage.txt. Note that the array is not null-terminated,
@@ -79,6 +80,7 @@ int main(int argc, char *argv[], char *envp[])
 		/* Opt-out feature flags */
 		{ "no-fake-devtmpfs",   no_argument,    NULL,       OPTION_NO_FAKE_DEVTMPFS },
 		{ "no-derandomize",     no_argument,    NULL,       OPTION_NO_DERANDOMIZE   },
+		{ "no-proc-remount",    no_argument,    NULL,       OPTION_NO_PROC_REMOUNT  },
 
 		{ 0, 0, 0, 0 }
 	};
@@ -219,6 +221,10 @@ int main(int argc, char *argv[], char *envp[])
 
 			case OPTION_NO_DERANDOMIZE:
 				opts.no_derandomize = 1;
+				break;
+
+			case OPTION_NO_PROC_REMOUNT:
+				opts.no_proc_remount = 1;
 				break;
 
 			case 'r':
