@@ -264,11 +264,7 @@ int main(int argc, char *argv[], char *envp[])
 	opts.argv = new_argv;
 	opts.envp = envp;
 
-	if (!opts.workdir || opts.workdir[0] == 0) {
-		/* We don't want to remain outside the chroot. */
-		opts.workdir = "/";
-	}
-	if (opts.workdir[0] != '/') {
+	if (opts.workdir && opts.workdir[0] != '\0' && opts.workdir[0] != '/') {
 		errx(1, "workdir must be an absolute path.");
 	}
 

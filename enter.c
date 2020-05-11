@@ -4,6 +4,7 @@
  * in the LICENSE file.
  */
 
+#include <assert.h>
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -131,6 +132,33 @@ int enter(struct entry_settings *opts)
 	/* Drop all privileges, or none if we're real uid 0. */
 	if (setuid(getuid()) == -1) {
 		err(1, "setuid");
+	}
+
+	char cwd[PATH_MAX];
+	char *workdir = opts->workdir;
+	if ((!workdir || workdir[0] == '\0')) {
+		if (getcwd(cwd, sizeof (cwd)) == NULL) {
+			err(1, "getcwd");
+		}
+
+		assert(cwd[0] == '/' && "cwd must be an absolute path");
+		assert(root[0] == '/' && "root must be an absolute path");
+
+		/* Pure textual prefixing -- if the root is a prefix of the cwd, we remove
+		   it. This must be done on two absolute paths.
+
+		   As an exception, if root is /, the prefix is not removed. */
+		size_t rootlen = strlen(root);
+		if (strcmp(root, "/") == 0) {
+			workdir = cwd;
+		} else if (strncmp(root, cwd, rootlen) == 0) {
+			workdir = cwd + rootlen;
+		}
+	}
+	/* Our tentative to use the cwd failed, or it worked and the cwd _is_ the
+	   new root. In both cases, the workdir must be /. */
+	if (!workdir || workdir[0] == '\0') {
+		workdir = "/";
 	}
 
 	/* Unshare all relevant namespaces. It's hard to check in advance which
@@ -410,8 +438,12 @@ int enter(struct entry_settings *opts)
 			}
 		}
 	}
-	if (chdir(opts->workdir) == -1) {
-		err(1, "chdir");
+	if (chdir(workdir) == -1) {
+		warn("chdir(\"%s\")", workdir);
+		warnx("falling back work directory to /.");
+		if (chdir("/") == -1) {
+			err(1, "chdir(\"/\")");
+		}
 	}
 
 	execvpe(opts->pathname, opts->argv, opts->envp);
