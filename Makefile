@@ -33,8 +33,11 @@ endif
 all: $(BINS) man
 
 generate: usage.txt
-	(echo "/* Copyright (c) 2020 Arista Networks, Inc.  All rights reserved."; \
-	 echo "   Arista Networks, Inc. Confidential and Proprietary. */"; \
+	(echo "/* Copyright © 2020 Arista Networks, Inc. All rights reserved."; \
+	 echo " *"; \
+	 echo " * Use of this source code is governed by the MIT license that can be found" ;\
+	 echo " * in the LICENSE file."; \
+	 echo " */"; \
 	 echo ""; \
 	 echo "/* This file is generated from usage.txt. Do not edit. */"; \
 	 xxd -i usage.txt) > usage.c
@@ -59,26 +62,5 @@ install: $(BINS) man
 check: export PATH := $(DESTDIR)$(BINDIR):${PATH}
 check: $(BINS)
 	./test/cram.sh test
-
-
-PACKAGES=rpm deb apk tgz
-NAME=bestie
-clean:
-	$(RM) $(BINS) $(OBJS) bst.1.gz $(PACKAGES:%=$(NAME).x86_64.%) $(PACKAGES:%=$(NAME).i686.%)
-FORCE:
-
-VERSION = $(shell git describe --long --dirty 2>/dev/null)
-ifeq ($(VERSION),)
-VERSION = v0.1.0
-endif
-FPM_OPTS=-n $(NAME) -v $(VERSION:v%=%) --iteration 1 \
-	 --url $(shell git remote get-url origin) --description "run executables in their own spacetime" \
-	 --after-install post_install.sh
-$(PACKAGES:%=$(NAME).x86_64.%):$(NAME).x86_64.%: FORCE
-	setarch x86_64 b5 fpm --image .%static -f -t $(@:$(NAME).x86_64.%=%) -p $@ -a x86_64 $(FPM_OPTS)
-$(PACKAGES:%=$(NAME).i686.%):$(NAME).i686.%: FORCE
-	setarch i686 b5 fpm --image .%static -f -t $(@:$(NAME).i686.%=%) -p $@ -a i686 $(FPM_OPTS)
-package: export PATH := $(DESTDIR)$(BINDIR):${PATH}
-package: $(filter-out %.tar,$(PACKAGES:%=$(NAME).x86_64.%) $(PACKAGES:%=$(NAME).i686.%))
 
 .PHONY: all clean install generate check man
