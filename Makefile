@@ -60,4 +60,7 @@ check: export PATH := $(DESTDIR)$(BINDIR):${PATH}
 check: $(BINS)
 	./test/cram.sh test
 
+clean:
+	$(RM) $(BINS) $(OBJS) bst.1.gz
+
 .PHONY: all clean install generate check man
