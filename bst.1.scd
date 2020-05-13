@@ -50,7 +50,7 @@ Users of bst may choose to opt-out of some of the isolation.
 \--root <dir>
 	Change the root directory for the inner process to *<dir>*.
 
-\--mount <source>,<target>,<type>,<options...>
+\--mount [source=]<source>,[target=]<target>,[type=]<type>,<options...>
 	Perform a mount in the inner process' mount namespace.
 
 	*<target>* must be an absolute path relative to the current root, or, if

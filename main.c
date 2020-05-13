@@ -17,6 +17,7 @@
 
 #include "enter.h"
 #include "sig.h"
+#include "kvlist.h"
 
 enum {
 	OPTION_MOUNT = 128,
@@ -104,15 +105,35 @@ int main(int argc, char *argv[], char *envp[])
 				break;
 
 			case OPTION_MOUNT:
+			{
 				if (opts.nmounts >= MAX_MOUNT) {
 					err(1, "can only mount a maximum of %d entries", MAX_MOUNT);
 				}
-				opts.mounts[opts.nmounts].source  = strtok(optarg, ",");
-				opts.mounts[opts.nmounts].target  = strtok(NULL, ",");
-				opts.mounts[opts.nmounts].type    = strtok(NULL, ",");
-				opts.mounts[opts.nmounts].options = strtok(NULL, "");
+				struct kvlist kvlist[3];
+				kvlist_parse(optarg, kvlist, 3, &opts.mounts[opts.nmounts].options);
+
+				if (kvlist[0].value == NULL)
+					opts.mounts[opts.nmounts].source = kvlist[0].key;
+				if (kvlist[1].value == NULL)
+					opts.mounts[opts.nmounts].target = kvlist[1].key;
+				if (kvlist[2].value == NULL)
+					opts.mounts[opts.nmounts].type = kvlist[2].key;
+
+				for (size_t i = 0; i < 3; ++i) {
+					if (kvlist[i].value == NULL) {
+						continue;
+					}
+					if (strcmp(kvlist[i].key, "source") == 0) {
+						opts.mounts[opts.nmounts].source = kvlist[i].value;
+					} else if (strcmp(kvlist[i].key, "target") == 0) {
+						opts.mounts[opts.nmounts].target = kvlist[i].value;
+					} else if (strcmp(kvlist[i].key, "type") == 0) {
+						opts.mounts[opts.nmounts].type = kvlist[i].value;
+					}
+				}
 				opts.nmounts++;
 				break;
+			}
 
 			case OPTION_MUTABLE:
 				if (opts.nmutables >= MAX_MOUNT) {

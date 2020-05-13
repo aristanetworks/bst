@@ -7,7 +7,7 @@ CFLAGS ?= -O2
 CFLAGS += -std=c99 -Wall -Wextra -Wno-unused-parameter -fno-strict-aliasing
 CPPFLAGS += -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
 
-SRCS := main.c enter.c userns.c mount.c cp.c setarch.c usage.c sig.c timens.c path.c
+SRCS := main.c enter.c userns.c mount.c cp.c setarch.c usage.c sig.c timens.c path.c kvlist.c
 OBJS := $(subst .c,.o,$(SRCS))
 BINS := bst
 
