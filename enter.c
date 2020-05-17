@@ -274,8 +274,8 @@ int enter(struct entry_settings *opts)
 			err(1, "open(\"%s\")", root);
 		}
 
-		struct stat procst;
-		if (fstatat(rootfd, "proc", &procst, AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW) == -1) {
+		struct stat procst = { .st_dev = 0 };
+		if (fstatat(rootfd, "proc", &procst, AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW) == -1 && errno != ENOENT) {
 			err(1, "fstatat(\"%s/proc\")", root);
 		}
 
@@ -289,7 +289,7 @@ int enter(struct entry_settings *opts)
 		/* <root>/proc is a mountpoint, remount it. And by remount, we mean mount over it,
 		   since the original mount is probably more privileged than us, or might not be a
 		   procfs one someone's oddball configuration. */
-		if (procst.st_dev != rootst.st_dev) {
+		if (procst.st_dev != 0 && procst.st_dev != rootst.st_dev) {
 			const char *target = makepath("%s/proc", root);
 			umount2(target, MNT_DETACH);
 
