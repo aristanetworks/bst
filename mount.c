@@ -142,6 +142,16 @@ void mount_entries(const char *root, const struct mount_entry *mounts, size_t nm
 			type = "tmpfs";
 		}
 
+		/* --mount options always override whatever default mounts we might have
+		   done prior to calling mount_entries. This is done to avoid EBUSY when
+		   mounting something with the same source and target as one of our
+		   default mounts. Right now, the only case where this applies is the
+		   automatic /proc remount. */
+		size_t targetlen = strlen(target);
+		if (strcmp(mnt->source, "proc") == 0 && strcmp(target + targetlen - 5, "/proc") == 0) {
+			umount2(target, MNT_DETACH);
+		}
+
 		if (mount(mnt->source, target, type, flags, mnt->options) == -1) {
 			err(1, "mount_entries: mount(\"%s\", \"%s\", \"%s\", %lu, \"%s\")",
 					mnt->source,

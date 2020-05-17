@@ -291,6 +291,8 @@ int enter(struct entry_settings *opts)
 		   procfs one someone's oddball configuration. */
 		if (procst.st_dev != rootst.st_dev) {
 			const char *target = makepath("%s/proc", root);
+			umount2(target, MNT_DETACH);
+
 			if (mount("proc", target, "proc", 0, NULL) == -1) {
 				err(1, "mount(\"proc\", \"%s\", \"proc\", 0)", target);
 			}
