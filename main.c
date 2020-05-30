@@ -107,7 +107,7 @@ int main(int argc, char *argv[], char *envp[])
 			case OPTION_MOUNT:
 			{
 				if (opts.nmounts >= MAX_MOUNT) {
-					err(1, "can only mount a maximum of %d entries", MAX_MOUNT);
+					errx(1, "can only mount a maximum of %d entries", MAX_MOUNT);
 				}
 				struct kvlist kvlist[3];
 				kvlist_parse(optarg, kvlist, 3, &opts.mounts[opts.nmounts].options);
@@ -131,13 +131,14 @@ int main(int argc, char *argv[], char *envp[])
 						opts.mounts[opts.nmounts].type = kvlist[i].value;
 					}
 				}
+
 				opts.nmounts++;
 				break;
 			}
 
 			case OPTION_MUTABLE:
 				if (opts.nmutables >= MAX_MOUNT) {
-					err(1, "can only mount a maximum of %d mutables", MAX_MOUNT);
+					errx(1, "can only mount a maximum of %d mutables", MAX_MOUNT);
 				}
 				opts.mutables[opts.nmutables] = optarg;
 				opts.nmutables++;
@@ -154,7 +155,7 @@ int main(int argc, char *argv[], char *envp[])
 			case OPTION_GROUPS:
 				for (char *grp = strtok(optarg, ","); grp; grp = strtok(NULL, ",")) {
 					if (opts.ngroups >= NGROUPS_MAX) {
-						err(1, "can only be part of a maximum of %d groups", NGROUPS_MAX);
+						errx(1, "can only be part of a maximum of %d groups", NGROUPS_MAX);
 					}
 					opts.groups[opts.ngroups++] = atoi(grp);
 				}
@@ -167,7 +168,7 @@ int main(int argc, char *argv[], char *envp[])
 			case OPTION_SHARE:
 				for (char *share = strtok(optarg, ","); share; share = strtok(NULL, ",")) {
 					if (opts.nshares >= MAX_SHARES) {
-						err(1, "can only share a maximum of %d namespaces", MAX_SHARES);
+						errx(1, "can only share a maximum of %d namespaces", MAX_SHARES);
 					}
 					opts.shares[opts.nshares++] = share;
 				}
