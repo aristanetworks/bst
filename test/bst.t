@@ -101,3 +101,12 @@ Testing hostname semantics
 	$ bst --share=uts --hostname foobar false
 	bst: attempted to set host or domain names on the host UTS namespace.
 	[1]
+
+Testing debug
+
+	$ echo 'echo $$ in shell' | bst false
+	[1]
+
+	$ echo 'echo $$ in shell' | bst --debug false
+	3 in shell
+	[1]

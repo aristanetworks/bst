@@ -32,6 +32,7 @@ enum {
 	OPTION_HOSTNAME,
 	OPTION_DOMAIN,
 	OPTION_TIME,
+	OPTION_DEBUG,
 	OPTION_NO_FAKE_DEVTMPFS,
 	OPTION_NO_DERANDOMIZE,
 	OPTION_NO_PROC_REMOUNT,
@@ -77,6 +78,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ "hostname",   required_argument,  NULL,           OPTION_HOSTNAME },
 		{ "domainname", required_argument,  NULL,           OPTION_DOMAIN   },
 		{ "time",       required_argument,  NULL,           OPTION_TIME     },
+		{ "debug",      no_argument,        NULL,           OPTION_DEBUG    },
 
 		/* Opt-out feature flags */
 		{ "no-fake-devtmpfs",   no_argument,    NULL,       OPTION_NO_FAKE_DEVTMPFS },
@@ -246,6 +248,10 @@ int main(int argc, char *argv[], char *envp[])
 
 			case OPTION_NO_PROC_REMOUNT:
 				opts.no_proc_remount = 1;
+				break;
+
+			case OPTION_DEBUG:
+				opts.debug = 1;
 				break;
 
 			case 'r':

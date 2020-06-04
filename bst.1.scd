@@ -120,6 +120,12 @@ Users of bst may choose to opt-out of some of the isolation.
 
 	You cannot use this option with _--share=time_.
 
+\--debug
+	Fork before starting the inner process.  If the inner process exits with
+	a non-zero exit status, then start a second inner process running _/bin/sh_.
+	In either case, the original inner process' exit status is relayed.  This
+	option is useful for debugging an inner process that is failing unexpectedly.
+
 \--no-fake-devtmpfs
 	Do not replace devtmpfs mounts with a fake devtmpfs.
 

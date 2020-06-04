@@ -448,6 +448,36 @@ int enter(struct entry_settings *opts)
 		}
 	}
 
+	if (opts->debug) {
+		int pid = fork();
+		if (pid == 0) {
+			execvpe(opts->pathname, opts->argv, opts->envp);
+			err(1, "execvpe");
+		}
+		int status;
+		if (waitpid(pid, &status, 0) == -1) {
+			err(1, "waitpid");
+		}
+		if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+			exit(0);
+		}
+
+		int pid2 = fork();
+		if (pid2 == 0) {
+			char *argv[] = {"/bin/sh", 0};
+			execvpe("/bin/sh", argv, opts->envp);
+			err(1, "execvpe");
+		}
+		int status2;
+		if (waitpid(pid2, &status2, 0) == -1) {
+			err(1, "waitpid");
+		}
+		if (WIFEXITED(status)) {
+			exit(WEXITSTATUS(status));
+		}
+		exit(WTERMSIG(status) | 1 << 7);
+	}
+
 	execvpe(opts->pathname, opts->argv, opts->envp);
 	err(1, "execvpe");
 }

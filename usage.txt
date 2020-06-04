@@ -21,6 +21,7 @@ Options:
 	--hostname <host>:      Set the host name.
 	--domainname <domain>:  Set the domain name.
 	--time <name>=<s>[.ns]: Set the time of a specific clock.
+	--debug:                Fork /bin/sh if argv exits with non-zero status.
 
 	--no-fake-devtmpfs:     Don't replace devtmpfs mounts with fake ones.
 	--no-derandomize:       Don't attempt to reduce randomness sources.
