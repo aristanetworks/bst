@@ -26,6 +26,7 @@
 #include <sys/wait.h>
 
 #include "enter.h"
+#include "init.h"
 #include "mount.h"
 #include "path.h"
 #include "setarch.h"
@@ -445,6 +446,17 @@ int enter(struct entry_settings *opts)
 		warnx("falling back work directory to /.");
 		if (chdir("/") == -1) {
 			err(1, "chdir(\"/\")");
+		}
+	}
+
+	if (unshareflags & BST_CLONE_NEWPID && !opts->no_init) {
+		pid_t child = fork();
+
+		if (child == -1) {
+			err(1, "fork");
+		} else if (child) {
+			init(child);
+			__builtin_unreachable();
 		}
 	}
 

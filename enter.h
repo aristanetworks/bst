@@ -52,6 +52,7 @@ struct entry_settings {
 	int no_fake_devtmpfs;
 	int no_derandomize;
 	int no_proc_remount;
+	int no_init;
 };
 
 int enter(struct entry_settings *opts);

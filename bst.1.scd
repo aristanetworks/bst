@@ -142,6 +142,15 @@ Users of bst may choose to opt-out of some of the isolation.
 	By default, *bst* automatically tries to mount a new procfs on top of _/proc_
 	if it detects it to be on another filesystem than _/_.
 
+\--no-init
+	Do not use *bst*'s minimal init process.
+
+	By default, *bst* automatically spawns a bare-bones init process in a PID
+	namespace, which only reaps zombies, and immediately terminates when the
+	spawned process of _<executable>_ exits.
+
+	This does nothing when used with _--share=pid_.
+
 # SEE ALSO
 
 *namespaces*(7), *mount*(1), *setarch*(1)
