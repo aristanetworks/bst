@@ -36,6 +36,7 @@ enum {
 	OPTION_NO_DERANDOMIZE,
 	OPTION_NO_PROC_REMOUNT,
 	OPTION_NO_INIT,
+	OPTION_NO_LOOPBACK_SETUP,
 };
 
 /* Usage is generated from usage.txt. Note that the array is not null-terminated,
@@ -80,10 +81,11 @@ int main(int argc, char *argv[], char *envp[])
 		{ "time",       required_argument,  NULL,           OPTION_TIME     },
 
 		/* Opt-out feature flags */
-		{ "no-fake-devtmpfs",   no_argument,    NULL,       OPTION_NO_FAKE_DEVTMPFS },
-		{ "no-derandomize",     no_argument,    NULL,       OPTION_NO_DERANDOMIZE   },
-		{ "no-proc-remount",    no_argument,    NULL,       OPTION_NO_PROC_REMOUNT  },
-		{ "no-init",            no_argument,    NULL,       OPTION_NO_INIT          },
+		{ "no-fake-devtmpfs",   no_argument,    NULL,       OPTION_NO_FAKE_DEVTMPFS  },
+		{ "no-derandomize",     no_argument,    NULL,       OPTION_NO_DERANDOMIZE    },
+		{ "no-proc-remount",    no_argument,    NULL,       OPTION_NO_PROC_REMOUNT   },
+		{ "no-init",            no_argument,    NULL,       OPTION_NO_INIT           },
+		{ "no-loopback-setup",  no_argument,    NULL,       OPTION_NO_LOOPBACK_SETUP },
 
 		{ 0, 0, 0, 0 }
 	};
@@ -253,6 +255,10 @@ int main(int argc, char *argv[], char *envp[])
 
 			case OPTION_NO_INIT:
 				opts.no_init = 1;
+				break;
+
+			case OPTION_NO_LOOPBACK_SETUP:
+				opts.no_loopback_setup = 1;
 				break;
 
 			case 'r':

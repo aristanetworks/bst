@@ -151,6 +151,14 @@ Users of bst may choose to opt-out of some of the isolation.
 
 	This does nothing when used with _--share=pid_.
 
+\--no-loopback-setup
+	Do not bring up the _lo_ interface.
+
+	By default, *bst* automatically brings up _lo_ and adds the address
+	127.0.0.1/8 to it when in a network namespace.
+
+	This does nothing when used with _--share=net_.
+
 # SEE ALSO
 
 *namespaces*(7), *mount*(1), *setarch*(1)
