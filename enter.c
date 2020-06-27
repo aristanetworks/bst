@@ -28,6 +28,7 @@
 #include "enter.h"
 #include "init.h"
 #include "mount.h"
+#include "net.h"
 #include "path.h"
 #include "setarch.h"
 #include "userns.h"
@@ -319,6 +320,13 @@ int enter(struct entry_settings *opts)
 	}
 	if (domainname && setdomainname(domainname, strlen(domainname)) == -1) {
 		err(1, "setdomainname");
+	}
+
+	int rtnl = init_rtnetlink_socket();
+
+	/* Setup localhost */
+	if (unshareflags & BST_CLONE_NEWNET && !opts->no_localhost_setup) {
+		net_if_up(rtnl, "lo");
 	}
 
 	/* The setuid will drop privileges. We ask to keep permitted capabilities

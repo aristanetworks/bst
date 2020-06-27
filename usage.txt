@@ -26,3 +26,4 @@ Options:
 	--no-derandomize:       Don't attempt to reduce randomness sources.
 	--no-proc-remount:      Don't remount the existing /proc in pid namespaces.
 	--no-init:              Don't use the builtin init process.
+	--no-loopback-setup:    Don't bring the lo interface up in network namespaces.
