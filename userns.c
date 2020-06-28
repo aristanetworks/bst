@@ -126,7 +126,7 @@ static void populate_id_map(char *map, size_t size,
 	while (fgets(line, sizeof (line), subids)) {
 		/* Note: entryname might not be null-terminated if the file
 		   contains an username of 32 characters. */
-		char entryname[ID_STR_MAX];
+		char entryname[ID_STR_MAX + 1];
 		int start;
 		int length;
 
