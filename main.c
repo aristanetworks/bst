@@ -283,11 +283,24 @@ int main(int argc, char *argv[], char *envp[])
 		}
 	}
 
-	if (optind + 1 > argc) {
-		return usage(1, argv[0]);
-	}
+	char *default_argv[] = {
+		"bst"
+		"sh",
+		NULL
+	};
 
+	if (optind + 1 > argc) {
+		char *shell = getenv("SHELL");
+		if (shell != NULL) {
+			default_argv[1] = shell;
+		}
+
+		optind = 1;
+		argc = 2;
+		argv = default_argv;
+	}
 	char *new_argv[argc - optind + 1];
+
 	new_argv[0] = argv0 ? argv0 : argv[optind];
 	for (int i = 1; i < argc - optind; ++i) {
 		new_argv[i] = argv[optind + i];

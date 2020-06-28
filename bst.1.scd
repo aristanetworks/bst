@@ -6,11 +6,12 @@ bst - run executables in their own spacetime.
 
 # SYNOPSIS
 
-bst [options] [--] <executable> [args...]
+bst [options] [--] [executable [args...]]
 
 # DESCRIPTION
 
-Runs *<executable>* in their own isolated environment.
+Runs _executable_ in its own isolated environment.  If _executable_ is not
+specified, then _${SHELL:-/bin/sh}_ is run.
 The meaning of isolated depends on the platform or the version of bst, but bst
 generally tries to unshare every available namespace and arrange the inner
 environment to be as deterministic as possible within these parameters.
@@ -25,8 +26,8 @@ Users of bst may choose to opt-out of some of the isolation.
 # OPTIONS
 
 \--argv0 <string>
-	Run *<executable>* with the specified value for _argv[0]_.
-	By default, _argv[0]_ is *<executable>* itself.
+	Run _executable_ with the specified value for _argv[0]_.
+	By default, _argv[0]_ is _executable_ itself.
 
 \--share <ns>[,ns]...
 	Share the specified namespaces with the host.
