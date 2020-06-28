@@ -132,8 +132,23 @@ int enter(struct entry_settings *opts)
 	}
 
 	/* Drop all privileges, or none if we're real uid 0. */
-	if (setuid(getuid()) == -1) {
+	uid_t uid = getuid();
+	if (setuid(uid) == -1) {
 		err(1, "setuid");
+	}
+	if (uid != 0) {
+		cap_t caps = cap_init();
+		if (caps == NULL) {
+			err(1, "cap_init");
+		}
+
+		if (cap_set_proc(caps) == -1) {
+			err(1, "caps_set_proc");
+		}
+
+		if (cap_free(caps) == -1) {
+			err(1, "cap_free");
+		}
 	}
 
 	char cwd[PATH_MAX];
