@@ -7,6 +7,7 @@
 #include <err.h>
 #include <errno.h>
 #include <linux/rtnetlink.h>
+#include <net/if.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
