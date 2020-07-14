@@ -41,6 +41,7 @@ enum {
 	OPTION_DOMAIN,
 	OPTION_TIME,
 	OPTION_PERSIST,
+	OPTION_UMASK,
 	OPTION_NO_FAKE_DEVTMPFS,
 	OPTION_NO_DERANDOMIZE,
 	OPTION_NO_PROC_REMOUNT,
@@ -95,8 +96,9 @@ int usage(int error, char *argv0)
 int main(int argc, char *argv[], char *envp[])
 {
 	static struct entry_settings opts = {
-		.uid = -1,
-		.gid = -1,
+		.uid   = -1,
+		.gid   = -1,
+		.umask = -1,
 	};
 
 	static struct option options[] = {
@@ -125,6 +127,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ "domainname",         required_argument, NULL, OPTION_DOMAIN          },
 		{ "time",               required_argument, NULL, OPTION_TIME            },
 		{ "persist",            required_argument, NULL, OPTION_PERSIST         },
+		{ "umask",              required_argument, NULL, OPTION_UMASK           },
 
 		/* Opt-out feature flags */
 		{ "no-fake-devtmpfs",   no_argument, NULL, OPTION_NO_FAKE_DEVTMPFS      },
@@ -316,6 +319,12 @@ int main(int argc, char *argv[], char *envp[])
 				opts.persist = optarg;
 				break;
 				
+			case OPTION_UMASK:
+				if (sscanf(optarg, "%o", &opts.umask) != 1) {
+					err(2, "%s is not a valid umask", optarg);
+				}
+				break;
+
 			case OPTION_NO_FAKE_DEVTMPFS:
 				opts.no_fake_devtmpfs = 1;
 				break;

@@ -63,6 +63,8 @@ struct entry_settings {
 
 	struct timespec clockspecs[MAX_CLOCK + 1];
 
+	mode_t umask;
+
 	const char *arch;
 
 	int no_fake_devtmpfs;

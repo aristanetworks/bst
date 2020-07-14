@@ -498,6 +498,10 @@ int enter(struct entry_settings *opts)
 		}
 	}
 
+	if (opts->umask != (mode_t) -1) {
+		umask(opts->umask);
+	}
+
 	execvpe(opts->pathname, opts->argv, opts->envp);
 	err(1, "execvpe");
 }

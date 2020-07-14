@@ -69,6 +69,14 @@ Testing mount semantics
 	bst: missing argument(s) to --mount
 	[1]
 
+Testing umask semantics
+
+	$ bst --umask 000 sh -c umask
+	0000
+
+	$ bst --umask 012 sh -c umask
+	0012
+
 Testing workdir semantics
 
 	$ [ "$(bst pwd)" = "$(pwd)" ]
