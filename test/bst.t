@@ -67,8 +67,7 @@ Testing mount semantics
 
 Testing workdir semantics
 
-	$ bst pwd
-	/
+	$ [ "$(bst pwd)" = "$(pwd)" ]
 
 	$ bst --workdir=/tmp pwd
 	/tmp
