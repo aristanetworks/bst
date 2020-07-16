@@ -283,9 +283,9 @@ int enter(struct entry_settings *opts)
 		userns_helper_close(&userns_helper);
 	}
 
-	/* Check whether or not <root>/proc is a mountpoint. If so, and we're in a PID namespace,
-	   mount a new /proc. */
-	if (!opts->no_proc_remount && unshareflags & (BST_CLONE_NEWNS | BST_CLONE_NEWPID)) {
+	/* Check whether or not <root>/proc is a mountpoint. If so,
+	   and we're in a PID + mount namespace, mount a new /proc. */
+	if (!opts->no_proc_remount && (unshareflags & BST_CLONE_NEWNS) && (unshareflags & BST_CLONE_NEWPID)) {
 		int rootfd = open(root, O_PATH, 0);
 		if (rootfd == -1) {
 			err(1, "open(\"%s\")", root);
