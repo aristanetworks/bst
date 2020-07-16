@@ -65,6 +65,10 @@ Testing mount semantics
 	bst: mount_entries: mount("tmp", "/tmp", "tmpfs", 0, "foo=bar"): Invalid argument
 	[1]
 
+	$ bst --mount foo
+	bst: missing argument(s) to --mount
+	[1]
+
 Testing workdir semantics
 
 	$ [ "$(bst pwd)" = "$(pwd)" ]

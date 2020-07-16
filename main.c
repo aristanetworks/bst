@@ -124,6 +124,9 @@ int main(int argc, char *argv[], char *envp[])
 					opts.mounts[opts.nmounts].type = kvlist[2].key;
 
 				for (size_t i = 0; i < 3; ++i) {
+					if (kvlist[i].key == NULL) {
+						errx(1, "missing argument(s) to --mount");
+					}
 					if (kvlist[i].value == NULL) {
 						continue;
 					}

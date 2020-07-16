@@ -14,6 +14,11 @@ void kvlist_parse(char *in, struct kvlist *out, size_t len, char **rest)
 	char *tok = strtok_r(in, ",", &save);
 
 	for (size_t i = 0; i < len; ++i) {
+		if (tok == NULL) {
+			out[i].key   = NULL;
+			out[i].value = NULL;
+			continue;
+		}
 		char *save2 = NULL;
 		out[i].key   = strtok_r(tok, "=", &save2);
 		out[i].value = strtok_r(NULL, "", &save2);
