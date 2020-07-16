@@ -31,7 +31,7 @@
 #include "net.h"
 #include "path.h"
 #include "setarch.h"
-#include "userns.h"
+#include "outer.h"
 
 #define lengthof(Arr) (sizeof (Arr) / sizeof (*Arr))
 
@@ -112,10 +112,10 @@ int enter(struct entry_settings *opts)
 
 	int unshareflags = opts_to_unshareflags(opts);
 
-	struct userns_helper userns_helper;
+	struct outer_helper outer_helper;
 
 	if (unshareflags & BST_CLONE_NEWUSER) {
-		userns_helper = userns_helper_spawn();
+		outer_helper = outer_helper_spawn();
 	}
 
 	int timens_offsets = -1;
@@ -256,8 +256,8 @@ int enter(struct entry_settings *opts)
 		int status;
 
 		if (unshareflags & BST_CLONE_NEWUSER) {
-			userns_helper_sendpid(&userns_helper, pid);
-			userns_helper_close(&userns_helper);
+			outer_helper_sendpid(&outer_helper, pid);
+			outer_helper_close(&outer_helper);
 		}
 
 		if (waitpid(pid, &status, 0) == -1) {
@@ -279,8 +279,8 @@ int enter(struct entry_settings *opts)
 	}
 
 	if (unshareflags & BST_CLONE_NEWUSER) {
-		userns_helper_wait(&userns_helper);
-		userns_helper_close(&userns_helper);
+		outer_helper_wait(&outer_helper);
+		outer_helper_close(&outer_helper);
 	}
 
 	/* Check whether or not <root>/proc is a mountpoint. If so,

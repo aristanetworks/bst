@@ -15,7 +15,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include "userns.h"
+#include "outer.h"
 
 enum {
 	ID_MAX     = 65535,
@@ -190,10 +190,10 @@ static char *itoa(int i) {
 	return buf;
 }
 
-/* userns_helper_spawn spawns a new process whose only purpose is to modify
+/* outer_helper_spawn spawns a new process whose only purpose is to modify
    the uid and gid mappings of our target process (TP).
 
-   The userns helper thus runs as a sibling of the TP, and provides some basic
+   The outer helper thus runs as a sibling of the TP, and provides some basic
    synchronization routines to make sure the TP waits for its sibling to complete
    before calling setgroups/setgid/setuid.
 
@@ -207,32 +207,32 @@ static char *itoa(int i) {
 
    The canonical way to do all of this on a modern Linux distribution is to
    call the newuidmap and newgidmap utilities, which are generic interfaces
-   that do exactly what bst--userns-helper does, which is writing to
+   that do exactly what bst--outer-helper does, which is writing to
    /proc/pid/[ug]id_map any id ranges that a user is allowed to map by looking
    allocated IDs for that user in /etc/sub[ug]id. We obviously don't want
    to rely on any external program that may or may not be installed on the
    host system, so we reimplement that functionality here. */
-struct userns_helper userns_helper_spawn(void)
+struct outer_helper outer_helper_spawn(void)
 {
 	int pipefds_in[2];
 	if (pipe(pipefds_in) == -1) {
-		err(1, "userns_helper: pipe");
+		err(1, "outer_helper: pipe");
 	}
 
 	int pipefds_out[2];
 	if (pipe(pipefds_out) == -1) {
-		err(1, "userns_helper: pipe");
+		err(1, "outer_helper: pipe");
 	}
 
 	pid_t pid = fork();
 	if (pid == -1) {
-		err(1, "userns_helper: fork");
+		err(1, "outer_helper: fork");
 	}
 
 	if (pid) {
 		close(pipefds_in[1]);
 		close(pipefds_out[0]);
-		return (struct userns_helper) {
+		return (struct outer_helper) {
 			.pid = pid,
 			.in = pipefds_in[0],
 			.out = pipefds_out[1],
@@ -245,7 +245,7 @@ struct userns_helper userns_helper_spawn(void)
 	pid_t child_pid;
 	ssize_t rdbytes = read(pipefds_out[0], &child_pid, sizeof (child_pid));
 	if (rdbytes == -1) {
-		err(1, "userns_helper: read child pid");
+		err(1, "outer_helper: read child pid");
 	}
 
 	/* This typically happens when the parent dies, e.g. Ctrl-C. Not worth
@@ -286,36 +286,36 @@ struct userns_helper userns_helper_spawn(void)
 	_exit(0);
 }
 
-void userns_helper_sendpid(const struct userns_helper *helper, pid_t pid)
+void outer_helper_sendpid(const struct outer_helper *helper, pid_t pid)
 {
 	/* Unblock the privileged helper to set our own [ug]id maps */
 	if (write(helper->out, &pid, sizeof (pid)) == -1) {
-		err(1, "userns_helper_sendpid: write");
+		err(1, "outer_helper_sendpid: write");
 	}
 
 	int status;
 	if (waitpid(helper->pid, &status, 0) == -1) {
-		err(1, "userns_helper_sendpid: waitpid");
+		err(1, "outer_helper_sendpid: waitpid");
 	}
 
 	if (WIFSIGNALED(status)) {
-		errx(1, "userns_helper_sendpid: process died with signal %d.", WTERMSIG(status));
+		errx(1, "outer_helper_sendpid: process died with signal %d.", WTERMSIG(status));
 	}
 
 	if (WIFEXITED(status) && WEXITSTATUS(status)) {
-		errx(1, "userns_helper_sendpid: process exited with nonzero exit status %d.", WEXITSTATUS(status));
+		errx(1, "outer_helper_sendpid: process exited with nonzero exit status %d.", WEXITSTATUS(status));
 	}
 }
 
-void userns_helper_wait(const struct userns_helper *helper)
+void outer_helper_wait(const struct outer_helper *helper)
 {
 	int ok;
 	if (read(helper->in, &ok, sizeof (ok)) == -1) {
-		err(1, "userns_helper_wait: read");
+		err(1, "outer_helper_wait: read");
 	}
 }
 
-void userns_helper_close(struct userns_helper *helper)
+void outer_helper_close(struct outer_helper *helper)
 {
 	close(helper->in);
 	close(helper->out);
