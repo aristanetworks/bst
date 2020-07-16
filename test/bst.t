@@ -40,8 +40,13 @@ Testing uid/gid/groups semantics
 
 Program must be init of its pid namespace
 
-	$ bst sh -c 'echo $$'
+	$ bst --no-init sh -c 'echo $$'
 	1
+
+Program must be a child of init of its pid namespace
+
+	$ bst sh -c 'echo $$'
+	2
 
 Testing mount semantics
 
