@@ -10,6 +10,7 @@ Options:
 
 	--argv0 <arg>:          Set argv[0] (defaults to <exe>).
 	--share <ns,ns,...>:    Share the specified namespaces with the host.
+	--persist <directory>:  Bind-mount process namespaces into <dir> for re-entry.
 	--workdir <directory>:  Set current work directory.
 	--mount <source,target,type,options>:
 	                        Mount source over target before executing the program.

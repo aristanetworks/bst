@@ -26,6 +26,7 @@
 #include <sys/wait.h>
 
 #include "enter.h"
+#include "flags.h"
 #include "init.h"
 #include "mount.h"
 #include "net.h"
@@ -38,47 +39,23 @@
 struct cloneflag {
 	const char *name;
 	int flag;
+	const char *proc_ns_name;
 };
 
-enum {
-
-	/* To ensure backward and forward compatibility for the ability of
-	   unsharing the maximum of namespaces, we re-define these constants. */
-	BST_CLONE_NEWNET    = 0x40000000,
-	BST_CLONE_NEWUTS    = 0x04000000,
-	BST_CLONE_NEWCGROUP = 0x02000000,
-	BST_CLONE_NEWNS     = 0x00020000,
-	BST_CLONE_NEWPID    = 0x20000000,
-	BST_CLONE_NEWUSER   = 0x10000000,
-	BST_CLONE_NEWIPC    = 0x08000000,
-	BST_CLONE_NEWTIME   = 0x00000080,
-
-	ALL_NAMESPACES = 0
-		| BST_CLONE_NEWCGROUP
-		| BST_CLONE_NEWIPC
-		| BST_CLONE_NEWNS
-		| BST_CLONE_NEWNET
-		| BST_CLONE_NEWPID
-		| BST_CLONE_NEWUSER
-		| BST_CLONE_NEWUTS
-		| BST_CLONE_NEWTIME
-		,
+static struct cloneflag flags[] = {
+	{ "cgroup",  BST_CLONE_NEWCGROUP, "cgroup" },
+	{ "ipc",     BST_CLONE_NEWIPC,    "ipc",   },
+	{ "mount",   BST_CLONE_NEWNS,     "mnt"    },
+	{ "network", BST_CLONE_NEWNET,    "net"    },
+	{ "pid",     BST_CLONE_NEWPID,    "pid"    },
+	{ "time",    BST_CLONE_NEWTIME,   "time"   },
+	{ "user",    BST_CLONE_NEWUSER,   "user"   },
+	{ "uts",     BST_CLONE_NEWUTS,    "uts"    },
+	{ "all",     ALL_NAMESPACES,      NULL     },
 };
 
 static int opts_to_unshareflags(const struct entry_settings *opts)
 {
-	static struct cloneflag flags[] = {
-		{ "cgroup",  BST_CLONE_NEWCGROUP },
-		{ "ipc",     BST_CLONE_NEWIPC },
-		{ "mount",   BST_CLONE_NEWNS },
-		{ "network", BST_CLONE_NEWNET },
-		{ "pid",     BST_CLONE_NEWPID },
-		{ "time",    BST_CLONE_NEWTIME },
-		{ "user",    BST_CLONE_NEWUSER },
-		{ "uts",     BST_CLONE_NEWUTS },
-		{ "all",     ALL_NAMESPACES },
-	};
-
 	int unshareflags = ALL_NAMESPACES;
 	for (const char *const *s = opts->shares; s < opts->shares + opts->nshares; ++s) {
 		struct cloneflag *f;
@@ -113,10 +90,9 @@ int enter(struct entry_settings *opts)
 	int unshareflags = opts_to_unshareflags(opts);
 
 	struct outer_helper outer_helper;
-
-	if (unshareflags & BST_CLONE_NEWUSER) {
-		outer_helper = outer_helper_spawn();
-	}
+	outer_helper.persist = opts->persist;
+	outer_helper.unshareflags = unshareflags;
+	outer_helper_spawn(&outer_helper);
 
 	int timens_offsets = -1;
 	if (unshareflags & BST_CLONE_NEWTIME) {
@@ -125,7 +101,7 @@ int enter(struct entry_settings *opts)
 			if (errno != ENOENT) {
 				err(1, "open(\"/proc/self/timens_offsets\")");
 			}
-			/* The kernel evidently don't support time namespaces yet. No need
+			/* The kernel evidently doesn't support time namespaces yet. No need
 			   to try below. */
 			unshareflags &= ~BST_CLONE_NEWTIME;
 		}
@@ -253,13 +229,10 @@ int enter(struct entry_settings *opts)
 	}
 
 	if (pid) {
+		outer_helper_sendpid_and_wait(&outer_helper, pid);
+		outer_helper_close(&outer_helper);
+
 		int status;
-
-		if (unshareflags & BST_CLONE_NEWUSER) {
-			outer_helper_sendpid(&outer_helper, pid);
-			outer_helper_close(&outer_helper);
-		}
-
 		if (waitpid(pid, &status, 0) == -1) {
 			err(1, "waitpid");
 		}
@@ -278,10 +251,8 @@ int enter(struct entry_settings *opts)
 		err(1, "prctl(PR_SET_PDEATHSIG)");
 	}
 
-	if (unshareflags & BST_CLONE_NEWUSER) {
-		outer_helper_wait(&outer_helper);
-		outer_helper_close(&outer_helper);
-	}
+	outer_helper_sync(&outer_helper);
+	outer_helper_close(&outer_helper);
 
 	/* Check whether or not <root>/proc is a mountpoint. If so,
 	   and we're in a PID + mount namespace, mount a new /proc. */

@@ -109,3 +109,7 @@ Testing hostname semantics
 	$ bst --share=uts --hostname foobar false
 	bst: attempted to set host or domain names on the host UTS namespace.
 	[1]
+
+Testing persistence
+
+	$ [ ! -d foo ] && [ ! -d bar ] && mkdir -p foo bar && bst --persist=foo sh -c 'mount -t tmpfs none bar && echo hello > bar/greeting' && [ ! -f bar/greeting ] && sudo nsenter --mount=foo/mnt bash -c '[ "$(cat '"$PWD"'/bar/greeting)" == "hello" ]' && sudo umount foo/* && [ -d foo ] && rm -rf foo bar && [ ! -d foo ] && [ ! -d bar ]

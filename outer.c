@@ -13,10 +13,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mount.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "flags.h"
 #include "outer.h"
+
+#define lengthof(Arr) (sizeof (Arr) / sizeof (*Arr))
 
 enum {
 	ID_MAX     = 65535,
@@ -191,6 +197,9 @@ static char *itoa(int i) {
 	return buf;
 }
 
+static void burn_uidmap_gidmap(int child_pid);
+static void persist_ns_files(int pid, const char *persist);
+
 /* outer_helper_spawn spawns a new process whose only purpose is to modify
    the uid and gid mappings of our target process (TP).
 
@@ -213,7 +222,7 @@ static char *itoa(int i) {
    allocated IDs for that user in /etc/sub[ug]id. We obviously don't want
    to rely on any external program that may or may not be installed on the
    host system, so we reimplement that functionality here. */
-struct outer_helper outer_helper_spawn(void)
+void outer_helper_spawn(struct outer_helper *helper)
 {
 	int pipefds_in[2];
 	if (pipe(pipefds_in) == -1) {
@@ -233,11 +242,10 @@ struct outer_helper outer_helper_spawn(void)
 	if (pid) {
 		close(pipefds_in[1]);
 		close(pipefds_out[0]);
-		return (struct outer_helper) {
-			.pid = pid,
-			.in = pipefds_in[0],
-			.out = pipefds_out[1],
-		};
+		helper->pid = pid;
+		helper->in = pipefds_in[0];
+		helper->out = pipefds_out[1];
+		return;
 	}
 
 	close(pipefds_in[0]);
@@ -255,14 +263,31 @@ struct outer_helper outer_helper_spawn(void)
 		_exit(1);
 	}
 
+	if (helper->unshareflags & BST_CLONE_NEWUSER) {
+		burn_uidmap_gidmap(child_pid);
+	}
+
+	if (helper->persist) {
+		persist_ns_files(child_pid, helper->persist);
+	}
+	
+	/* Notify sibling that we're done persisting their proc files
+	   and/or changing their [ug]id map */
+	int ok = 1;
+	write(pipefds_in[1], &ok, sizeof (ok));
+
+	_exit(0);
+}
+
+static void burn_uidmap_gidmap(int child_pid) {
 	char procpath[PATH_MAX];
 	if ((size_t) snprintf(procpath, PATH_MAX, "/proc/%d", child_pid) >= sizeof (procpath)) {
 		errx(1, "/proc/%d takes more than PATH_MAX bytes.", child_pid);
 	}
 
-	int procfd = open(procpath, O_DIRECTORY);
+	int procfd = open(procpath, O_DIRECTORY | O_PATH);
 	if (procfd == -1) {
-		err(1, "open(\"%s\", O_DIRECTORY)", procpath);
+		err(1, "open(\"%s\")", procpath);
 	}
 
 	char map[ID_MAP_MAX];
@@ -279,36 +304,88 @@ struct outer_helper outer_helper_spawn(void)
 	id_str = itoa(gid);
 	populate_id_map(map, sizeof (map), "/etc/subgid", id_str, group ? group->gr_name : id_str);
 	burn(procfd, "gid_map", map);
-
-	/* Notify sibling that we're done changing their [ug]id map */
-	int ok = 1;
-	write(pipefds_in[1], &ok, sizeof (ok));
-
-	_exit(0);
 }
 
-void outer_helper_sendpid(const struct outer_helper *helper, pid_t pid)
+struct persistflag {
+	int flag;
+	const char *proc_ns_name;
+};
+
+static struct persistflag pflags[] = {
+	{ BST_CLONE_NEWCGROUP, "cgroup" },
+	{ BST_CLONE_NEWIPC,    "ipc",   },
+	{ BST_CLONE_NEWNS,     "mnt"    },
+	{ BST_CLONE_NEWNET,    "net"    },
+	{ BST_CLONE_NEWPID,    "pid"    },
+	{ BST_CLONE_NEWTIME,   "time"   },
+	{ BST_CLONE_NEWUSER,   "user"   },
+	{ BST_CLONE_NEWUTS,    "uts"    },
+};
+
+static void persist_ns_files(int pid, const char *persist) {
+	char procname[PATH_MAX];
+	snprintf(procname, sizeof(procname), "/proc/%d/ns", pid);
+	int procnsdir = open(procname, O_DIRECTORY | O_PATH);
+	if (procnsdir < 0) {
+		err(1, "open(\"%s\")", procname);
+	}
+	int persistdir = open(persist, O_DIRECTORY | O_PATH);
+	if (persistdir < 0) {
+		err(1, "open(\"%s\")", persist);
+	}
+	for (struct persistflag *f = pflags; f < pflags + lengthof(pflags); f++) {
+		// Need permission check here?
+		int nsfd = openat(persistdir, f->proc_ns_name, O_CREAT | O_WRONLY | O_EXCL, 0666);
+		if (nsfd < 0) {
+			if (errno != EEXIST) {
+				err(1, "creat(\"%s/%s\")", persist, f->proc_ns_name);
+			}
+		} else {
+			close(nsfd);
+		}
+		// Where is mountat()?  Thankfully, we can still name the persist directory.
+		char procname1[PATH_MAX];
+		snprintf(procname1, sizeof(procname1), "/proc/%d/ns/%s", pid, f->proc_ns_name);
+		procname1[sizeof(procname1) - 1] = 0;
+		char persistname[PATH_MAX];
+		snprintf(persistname, sizeof(persistname), "%s/%s", persist, f->proc_ns_name);
+		persistname[sizeof(persistname) - 1] = 0;
+		int rc = mount(procname1, persistname, "", MS_BIND, "");
+		if (rc == -1) {
+			if (errno == ENOENT) {
+				/* Kernel does not support this namespace type.  Remove the mountpoint. */
+				unlinkat(persistdir, f->proc_ns_name, 0);
+			} else {
+				err(1, "mount(\"%s\",\"%s\",MS_BIND)", procname1, persistname);
+			}
+		}
+	}
+	close(persistdir);
+	close(procnsdir);
+}
+
+void outer_helper_sendpid_and_wait(const struct outer_helper *helper, pid_t pid)
 {
 	/* Unblock the privileged helper to set our own [ug]id maps */
 	if (write(helper->out, &pid, sizeof (pid)) == -1) {
-		err(1, "outer_helper_sendpid: write");
+		err(1, "outer_helper_sendpid_and_wait: write");
 	}
 
 	int status;
 	if (waitpid(helper->pid, &status, 0) == -1) {
-		err(1, "outer_helper_sendpid: waitpid");
+		err(1, "outer_helper_sendpid_and_wait: waitpid");
 	}
 
 	if (WIFSIGNALED(status)) {
-		errx(1, "outer_helper_sendpid: process died with signal %d.", WTERMSIG(status));
+		errx(1, "outer_helper_sendpid_and_wait: helper died with signal %d", WTERMSIG(status));
 	}
 
 	if (WIFEXITED(status) && WEXITSTATUS(status)) {
-		errx(1, "outer_helper_sendpid: process exited with nonzero exit status %d.", WEXITSTATUS(status));
+		errx(1, "outer_helper_sendpid_and_wait: helper exit status %d", WEXITSTATUS(status));
 	}
 }
 
-void outer_helper_wait(const struct outer_helper *helper)
+void outer_helper_sync(const struct outer_helper *helper)
 {
 	int ok;
 	int n = read(helper->in, &ok, sizeof (ok));

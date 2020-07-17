@@ -54,6 +54,8 @@ struct entry_settings {
 	int no_proc_remount;
 	int no_init;
 	int no_loopback_setup;
+
+	const char *persist;
 };
 
 int enter(struct entry_settings *opts);
