@@ -41,7 +41,7 @@ generate: usage.txt
 
 bst: $(OBJS)
 	$(LINK.o) -o $@ $^ -lcap
-	$(SETCAP) cap_setuid,cap_setgid,cap_dac_override,cap_sys_admin,cap_sys_ptrace+ep $@ \
+	$(SETCAP) cap_setuid,cap_setgid,cap_dac_override,cap_sys_admin,cap_sys_ptrace,cap_sys_chroot+ep $@ \
 		|| ($(CHOWN) root $@ && $(CHMOD) u+s $@)
 
 %.gz: %.scd
@@ -52,7 +52,7 @@ man: bst.1.gz
 install: BST_INSTALLPATH = $(DESTDIR)$(BINDIR)/bst
 install: $(BINS) man
 	install -m 755 -D bst $(BST_INSTALLPATH)
-	$(SETCAP) cap_setuid,cap_setgid,cap_dac_override,cap_sys_admin,cap_sys_ptrace+ep $(BST_INSTALLPATH) \
+	$(SETCAP) cap_setuid,cap_setgid,cap_dac_override,cap_sys_admin,cap_sys_ptrace,cap_sys_chroot+ep $(BST_INSTALLPATH) \
 		|| ($(CHOWN) root $(BST_INSTALLPATH) && $(CHMOD) u+s $(BST_INSTALLPATH))
 	install -m 644 -D bst.1.gz $(DESTDIR)$(MANDIR)/man1/bst.1.gz
 

@@ -17,21 +17,21 @@ Testing that we are in our own namespaces by default
 
 Testing namespace sharing
 
-	$ [ "$(bst --share=all readlink /proc/self/ns/user)" = "$(readlink /proc/self/ns/user)" ]
-	$ [ "$(bst --share=cgroup readlink /proc/self/ns/cgroup)" = "$(readlink /proc/self/ns/cgroup)" ]
-	$ [ "$(bst --share=ipc readlink /proc/self/ns/ipc)" = "$(readlink /proc/self/ns/ipc)" ]
-	$ [ "$(bst --share=mount readlink /proc/self/ns/mnt)" = "$(readlink /proc/self/ns/mnt)" ]
-	$ [ "$(bst --share=network readlink /proc/self/ns/net)" = "$(readlink /proc/self/ns/net)" ]
-	$ [ "$(bst --share=uts readlink /proc/self/ns/uts)" = "$(readlink /proc/self/ns/uts)" ]
-	$ [ "$(bst --share=pid readlink /proc/self/ns/pid)" = "$(readlink /proc/self/ns/pid)" ]
-	$ [ "$(bst --share=pid,cgroup,ipc,user,mount,network,uts ls -l)" = "$(bst --share=all ls -l)" ]
+	$ [ "$(bst --share-all readlink /proc/self/ns/user)" = "$(readlink /proc/self/ns/user)" ]
+	$ [ "$(bst --share-cgroup readlink /proc/self/ns/cgroup)" = "$(readlink /proc/self/ns/cgroup)" ]
+	$ [ "$(bst --share-ipc readlink /proc/self/ns/ipc)" = "$(readlink /proc/self/ns/ipc)" ]
+	$ [ "$(bst --share-mnt readlink /proc/self/ns/mnt)" = "$(readlink /proc/self/ns/mnt)" ]
+	$ [ "$(bst --share-net readlink /proc/self/ns/net)" = "$(readlink /proc/self/ns/net)" ]
+	$ [ "$(bst --share-uts readlink /proc/self/ns/uts)" = "$(readlink /proc/self/ns/uts)" ]
+	$ [ "$(bst --share-pid readlink /proc/self/ns/pid)" = "$(readlink /proc/self/ns/pid)" ]
+	$ [ "$(bst --share-pid --share-cgroup --share-ipc --share-user --share-mnt --share-net --share-uts ls -l /proc/self/ns)" = "$(bst --share-all ls -l /proc/self/ns)" ]
 
 Testing uid/gid/groups semantics
 
 	$ bst id
 	uid=0(root) gid=0(root) groups=0(root)
 
-	$ [ "$(bst --share=all id)" = "$(id)" ]
+	$ [ "$(bst --share-all id)" = "$(id)" ]
 
 	$ bst --uid=1 --gid=2 --groups=3,4 sh -c 'id -u; id -g; id -G'
 	1
@@ -87,7 +87,7 @@ Testing exit code handling
 	$ bst sh -c "exit 17"
 	[17]
 
-	$ bst --share=pid sh -c 'kill -9 $$'
+	$ bst --share-pid sh -c 'kill -9 $$'
 	[137]
 
 Testing --argv0
@@ -106,7 +106,7 @@ Testing hostname semantics
 	$ bst --hostname foobar uname -n
 	foobar
 
-	$ bst --share=uts --hostname foobar false
+	$ bst --share-uts --hostname foobar false
 	bst: attempted to set host or domain names on the host UTS namespace.
 	[1]
 

@@ -29,18 +29,36 @@ Users of bst may choose to opt-out of some of the isolation.
 	Run _executable_ with the specified value for _argv[0]_.
 	By default, _argv[0]_ is _executable_ itself.
 
-\--share <ns>[,ns]...
-	Share the specified namespaces with the host.
+\--share-<ns>[=<file>]
+	Share the specified namespaces with the namespace anchored by
+	*<file>*, which can be a file like /proc/[pid]/ns/mnt,
+	or a bind-mount of that file, or a file created by
+	_bst --persist=_*<dir>*.  If no *=<file>* is given, then share the
+	given namespace with the process invoking bst.
 
 	Available namespaces are:
 	- *cgroup* (since Linux 4.6)
 	- *ipc* (since Linux 2.6.19)
-	- *mount*
-	- *network* (since Linux 2.6.24)
+	- *mnt*
+	- *net* (since Linux 2.6.24)
 	- *pid* (since Linux 3.8)
 	- *time* (since Linux 5.6)
 	- *uts* (since Linux 2.6.19)
 	- *user* (since Linux 3.8)
+
+	All namespaces are unshared by default; _e.g.,_ if _--share-mnt_
+	is not given, then the child process runs in a new (unshared)
+	mount namespace intialized as a copy of bst's parent's mount
+	namespace.
+
+\--persist <dir>
+	Bind-mount all namespaces of the new process into files in the
+	given directory.  The files are named the same as the
+	namespace files in /proc/[pid]/ns.  This option is equivalent
+	to bind-mounting /proc/[pid]/ns/\* into *<dir>*/\* after invoking
+	bst, except avoiding a race where the child exits before the
+	bind-mounts complete.  Note that the persist directory must
+	be on a private mount or bind-mounting fails with EINVAL.
 
 \--workdir <dir>
 	Change the current work directory for the inner process to *<dir>*.

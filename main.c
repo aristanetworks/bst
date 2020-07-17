@@ -27,7 +27,15 @@ enum {
 	OPTION_GROUPS,
 	OPTION_WORKDIR,
 	OPTION_ARCH,
-	OPTION_SHARE,
+	OPTION_SHARE_CGROUP,
+	OPTION_SHARE_IPC,
+	OPTION_SHARE_MNT,
+	OPTION_SHARE_NET,
+	OPTION_SHARE_PID,
+	OPTION_SHARE_TIME,
+	OPTION_SHARE_USER,
+	OPTION_SHARE_UTS,
+	OPTION_SHARE_ALL,
 	OPTION_ARGV0,
 	OPTION_HOSTNAME,
 	OPTION_DOMAIN,
@@ -38,6 +46,7 @@ enum {
 	OPTION_NO_PROC_REMOUNT,
 	OPTION_NO_INIT,
 	OPTION_NO_LOOPBACK_SETUP,
+	OPTION_SHARE_DEPRECATED,
 };
 
 /* Usage is generated from usage.txt. Note that the array is not null-terminated,
@@ -46,6 +55,33 @@ enum {
    from the usage function. */
 extern unsigned char usage_txt[];
 extern unsigned int usage_txt_len;
+
+static void process_share_deprecated(struct entry_settings *opts, const char *optarg) {
+	for (const char *share = strtok((char *) optarg, ","); share; share = strtok(NULL, ",")) {
+		int found = 0;
+		if (!strcmp(share, "network")) {
+			share = "net";
+		}
+		if (!strcmp(share, "mount")) {
+			share = "mnt";
+		}
+		for (int ns = 0; ns < MAX_SHARES; ns++) {
+			if (!strcmp(share, nsname(ns))) {
+				opts->shares[ns] = share_with_parent;
+				found = 1;
+			}
+		}
+		if (!found) {
+			fprintf(stderr, "namespace `%s` does not exist.\n", share);
+			fprintf(stderr, "valid namespaces are: ");
+			for (int ns = 0; ns < MAX_SHARES; ns++) {
+				fprintf(stderr, "%s%s", ns == 0 ? "" : ", ", nsname(ns));
+			}
+			fprintf(stderr, ".\n");
+			exit(1);
+		}
+	}
+}
 
 int usage(int error, char *argv0)
 {
@@ -68,27 +104,38 @@ int main(int argc, char *argv[], char *envp[])
 		{ "root",       required_argument,  NULL,           'r' },
 
 		/* long options without shorthand */
-		{ "workdir",    required_argument,  NULL,           OPTION_WORKDIR  },
-		{ "mount",      required_argument,  NULL,           OPTION_MOUNT    },
-		{ "mutable",    required_argument,  NULL,           OPTION_MUTABLE  },
-		{ "uid",        required_argument,  NULL,           OPTION_UID      },
-		{ "gid",        required_argument,  NULL,           OPTION_GID      },
-		{ "groups",     required_argument,  NULL,           OPTION_GROUPS   },
-		{ "arch",       required_argument,  NULL,           OPTION_ARCH     },
-		{ "share",      required_argument,  NULL,           OPTION_SHARE    },
-		{ "argv0",      required_argument,  NULL,           OPTION_ARGV0    },
-		{ "hostname",   required_argument,  NULL,           OPTION_HOSTNAME },
-		{ "domainname", required_argument,  NULL,           OPTION_DOMAIN   },
-		{ "time",       required_argument,  NULL,           OPTION_TIME     },
-		{ "persist",    required_argument,  NULL,           OPTION_PERSIST  },
+		{ "workdir",            required_argument, NULL, OPTION_WORKDIR         },
+		{ "mount",              required_argument, NULL, OPTION_MOUNT           },
+		{ "mutable",            required_argument, NULL, OPTION_MUTABLE         },
+		{ "uid",                required_argument, NULL, OPTION_UID             },
+		{ "gid",                required_argument, NULL, OPTION_GID             },
+		{ "groups",             required_argument, NULL, OPTION_GROUPS          },
+		{ "arch",               required_argument, NULL, OPTION_ARCH            },
+		{ "share-cgroup",       optional_argument, NULL, OPTION_SHARE_CGROUP    },
+		{ "share-ipc",          optional_argument, NULL, OPTION_SHARE_IPC       },
+		{ "share-mnt",          optional_argument, NULL, OPTION_SHARE_MNT       },
+		{ "share-net",          optional_argument, NULL, OPTION_SHARE_NET       },
+		{ "share-pid",          optional_argument, NULL, OPTION_SHARE_PID       },
+		{ "share-time",         optional_argument, NULL, OPTION_SHARE_TIME      },
+		{ "share-user",         optional_argument, NULL, OPTION_SHARE_USER      },
+		{ "share-uts",          optional_argument, NULL, OPTION_SHARE_UTS       },
+		{ "share-all",          optional_argument, NULL, OPTION_SHARE_ALL       },
+		{ "argv0",              required_argument, NULL, OPTION_ARGV0           },
+		{ "hostname",           required_argument, NULL, OPTION_HOSTNAME        },
+		{ "domainname",         required_argument, NULL, OPTION_DOMAIN          },
+		{ "time",               required_argument, NULL, OPTION_TIME            },
+		{ "persist",            required_argument, NULL, OPTION_PERSIST         },
 
 		/* Opt-out feature flags */
-		{ "no-fake-devtmpfs",   no_argument,    NULL,       OPTION_NO_FAKE_DEVTMPFS  },
-		{ "no-derandomize",     no_argument,    NULL,       OPTION_NO_DERANDOMIZE    },
-		{ "no-proc-remount",    no_argument,    NULL,       OPTION_NO_PROC_REMOUNT   },
-		{ "no-init",            no_argument,    NULL,       OPTION_NO_INIT           },
-		{ "no-loopback-setup",  no_argument,    NULL,       OPTION_NO_LOOPBACK_SETUP },
+		{ "no-fake-devtmpfs",   no_argument, NULL, OPTION_NO_FAKE_DEVTMPFS      },
+		{ "no-derandomize",     no_argument, NULL, OPTION_NO_DERANDOMIZE        },
+		{ "no-proc-remount",    no_argument, NULL, OPTION_NO_PROC_REMOUNT       },
+		{ "no-init",            no_argument, NULL, OPTION_NO_INIT               },
+		{ "no-loopback-setup",  no_argument, NULL, OPTION_NO_LOOPBACK_SETUP     },
 
+		/* Deprecated flags */
+		{ "share",      required_argument, NULL, OPTION_SHARE_DEPRECATED        },
+		
 		{ 0, 0, 0, 0 }
 	};
 
@@ -174,15 +221,34 @@ int main(int argc, char *argv[], char *envp[])
 				opts.arch = optarg;
 				break;
 
-			case OPTION_SHARE:
-				for (char *share = strtok(optarg, ","); share; share = strtok(NULL, ",")) {
-					if (opts.nshares >= MAX_SHARES) {
-						errx(1, "can only share a maximum of %d namespaces", MAX_SHARES);
+			case OPTION_SHARE_CGROUP:
+			case OPTION_SHARE_IPC:
+			case OPTION_SHARE_MNT:
+			case OPTION_SHARE_NET:
+			case OPTION_SHARE_PID:
+			case OPTION_SHARE_TIME:
+			case OPTION_SHARE_USER:
+			case OPTION_SHARE_UTS:
+				opts.shares[c - OPTION_SHARE_CGROUP] = optarg ? : share_with_parent;
+				break;
+
+			case OPTION_SHARE_ALL:
+				for (int i = 0; i < MAX_SHARES; i++) {
+					char buf[PATH_MAX];
+					if (optarg) {
+						snprintf(buf, sizeof(buf), "%s/%s", optarg, nsname(i));
+						buf[sizeof(buf) - 1] = 0;
+						opts.shares[i] = strdup(buf);
+					} else {
+						opts.shares[i] = share_with_parent;
 					}
-					opts.shares[opts.nshares++] = share;
 				}
 				break;
 
+			case OPTION_SHARE_DEPRECATED:
+				process_share_deprecated(&opts, optarg);
+				break;
+					
 			case OPTION_ARGV0:
 				argv0 = optarg;
 				break;

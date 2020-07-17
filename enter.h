@@ -16,15 +16,31 @@
 enum {
 	MAX_MOUNT = 4096,
 
-	/* this is a very generous upper bound for the number of supported
-	   namespaces. unshare(2) takes an int for its CLONE_* flags, so we can
-	   use the number of bits in an int as upper bound. */
-	MAX_SHARES = CHAR_BIT * sizeof (int),
+	SHARE_CGROUP = 0,
+	SHARE_IPC,
+	SHARE_MNT,
+	SHARE_NET,
+	SHARE_PID,
+	SHARE_TIME,
+	SHARE_USER,
+	SHARE_UTS,
+	MAX_SHARES,
+
+	/* Maximum length of a share flag. */
+	MAX_FLAG = 16,
 };
 
+const char *nsname(int);
+
+/* share_with_parent is a special value for entry_settings.shares[ns]. */
+char share_with_parent[0];
+
 struct entry_settings {
-	const char *shares[MAX_SHARES];
-	size_t nshares;
+	/* shares[] is indexed by SHARE_CGROUP, etc.  Legal values are:
+		NULL: unshare.
+		share_with_parent: special marker meaning don't unshare or setns.
+                filename: setns to the given namespace file. */
+	const char *shares[MAX_SHARES]; 
 
 	const char *pathname;
 	char *const *argv;

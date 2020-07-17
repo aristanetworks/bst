@@ -19,6 +19,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "enter.h"
 #include "flags.h"
 #include "outer.h"
 
@@ -263,7 +264,7 @@ void outer_helper_spawn(struct outer_helper *helper)
 		_exit(1);
 	}
 
-	if (helper->unshareflags & BST_CLONE_NEWUSER) {
+	if (helper->unshare_user) {
 		burn_uidmap_gidmap(child_pid);
 	}
 
@@ -312,14 +313,14 @@ struct persistflag {
 };
 
 static struct persistflag pflags[] = {
-	{ BST_CLONE_NEWCGROUP, "cgroup" },
-	{ BST_CLONE_NEWIPC,    "ipc",   },
-	{ BST_CLONE_NEWNS,     "mnt"    },
-	{ BST_CLONE_NEWNET,    "net"    },
-	{ BST_CLONE_NEWPID,    "pid"    },
-	{ BST_CLONE_NEWTIME,   "time"   },
-	{ BST_CLONE_NEWUSER,   "user"   },
-	{ BST_CLONE_NEWUTS,    "uts"    },
+	[ SHARE_CGROUP ]   = { BST_CLONE_NEWCGROUP,   "cgroup"   },
+	[ SHARE_IPC ]      = { BST_CLONE_NEWIPC,      "ipc",     },
+	[ SHARE_MNT ]      = { BST_CLONE_NEWNS,       "mnt"      },
+	[ SHARE_NET ]      = { BST_CLONE_NEWNET,      "net"      },
+	[ SHARE_PID ]      = { BST_CLONE_NEWPID,      "pid"      },
+	[ SHARE_TIME ]     = { BST_CLONE_NEWTIME,     "time"     },
+	[ SHARE_USER ]     = { BST_CLONE_NEWUSER,     "user"     },
+	[ SHARE_UTS ]      = { BST_CLONE_NEWUTS,      "uts"      },
 };
 
 static void persist_ns_files(int pid, const char *persist) {
@@ -344,19 +345,18 @@ static void persist_ns_files(int pid, const char *persist) {
 			close(nsfd);
 		}
 		// Where is mountat()?  Thankfully, we can still name the persist directory.
-		char procname1[PATH_MAX];
-		snprintf(procname1, sizeof(procname1), "/proc/%d/ns/%s", pid, f->proc_ns_name);
-		procname1[sizeof(procname1) - 1] = 0;
+		snprintf(procname, sizeof(procname), "/proc/%d/ns/%s", pid, f->proc_ns_name);
+		procname[sizeof(procname) - 1] = 0;
 		char persistname[PATH_MAX];
 		snprintf(persistname, sizeof(persistname), "%s/%s", persist, f->proc_ns_name);
 		persistname[sizeof(persistname) - 1] = 0;
-		int rc = mount(procname1, persistname, "", MS_BIND, "");
+		int rc = mount(procname, persistname, "", MS_BIND, "");
 		if (rc == -1) {
 			if (errno == ENOENT) {
 				/* Kernel does not support this namespace type.  Remove the mountpoint. */
 				unlinkat(persistdir, f->proc_ns_name, 0);
 			} else {
-				err(1, "mount(\"%s\",\"%s\",MS_BIND)", procname1, persistname);
+				err(1, "mount(\"%s\",\"%s\",MS_BIND)", procname, persistname);
 			}
 		}
 	}

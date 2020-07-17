@@ -37,44 +37,59 @@
 #define lengthof(Arr) (sizeof (Arr) / sizeof (*Arr))
 
 struct cloneflag {
-	const char *name;
 	int flag;
 	const char *proc_ns_name;
 };
 
 static struct cloneflag flags[] = {
-	{ "cgroup",  BST_CLONE_NEWCGROUP, "cgroup" },
-	{ "ipc",     BST_CLONE_NEWIPC,    "ipc",   },
-	{ "mount",   BST_CLONE_NEWNS,     "mnt"    },
-	{ "network", BST_CLONE_NEWNET,    "net"    },
-	{ "pid",     BST_CLONE_NEWPID,    "pid"    },
-	{ "time",    BST_CLONE_NEWTIME,   "time"   },
-	{ "user",    BST_CLONE_NEWUSER,   "user"   },
-	{ "uts",     BST_CLONE_NEWUTS,    "uts"    },
-	{ "all",     ALL_NAMESPACES,      NULL     },
+	[ SHARE_CGROUP ] = { BST_CLONE_NEWCGROUP, "cgroup" },
+	[ SHARE_IPC ]    = { BST_CLONE_NEWIPC,    "ipc",   },
+	[ SHARE_MNT ]    = { BST_CLONE_NEWNS,     "mnt"    },
+	[ SHARE_NET ]    = { BST_CLONE_NEWNET,    "net"    },
+	[ SHARE_PID ]    = { BST_CLONE_NEWPID,    "pid"    },
+	[ SHARE_TIME ]   = { BST_CLONE_NEWTIME,   "time"   },
+	[ SHARE_USER ]   = { BST_CLONE_NEWUSER,   "user"   },
+	[ SHARE_UTS ]    = { BST_CLONE_NEWUTS,    "uts"    },
 };
 
-static int opts_to_unshareflags(const struct entry_settings *opts)
+const char *nsname(int ns)
 {
-	int unshareflags = ALL_NAMESPACES;
-	for (const char *const *s = opts->shares; s < opts->shares + opts->nshares; ++s) {
-		struct cloneflag *f;
-		for (f = flags; f < flags + lengthof(flags); ++f) {
-			if (strcmp(f->name, *s) == 0) {
-				goto found;
+	return flags[ns].proc_ns_name;
+}
+	
+
+struct nsaction {
+	/* Which namespace is being unshared or entered */
+	int flag;
+
+	/* Legal values for enter_fd are:
+	     >= 0: a file descriptor for an existing namespace that we will enter;
+	     NSACTION_SHARE_WITH_PARENT: inherit from parent (don't unshare or setns);
+	     NSACTION_UNSHARE: unshare this namespace. */
+	int enter_fd;
+};
+
+enum {
+      NSACTION_SHARE_WITH_PARENT = -1,
+      NSACTION_UNSHARE = -2,
+};
+
+static void opts_to_nsactions(const struct entry_settings *opts, int *nsactions)
+{
+	for (int i = 0; i < MAX_SHARES; i++) {
+		const char *share = opts->shares[i];
+		if (share == NULL) {
+			nsactions[i] = NSACTION_UNSHARE;
+		} else if (share == share_with_parent) {
+			nsactions[i] = NSACTION_SHARE_WITH_PARENT;
+		} else {
+			int fd = open(share, O_RDONLY);
+			if (fd < 0) {
+				err(1, "open %s", share);
 			}
+			nsactions[i] = fd;
 		}
-		fprintf(stderr, "namespace `%s` does not exist.\n", *s);
-		fprintf(stderr, "valid namespaces are: ");
-		for (f = flags; f < flags + lengthof(flags) - 1; ++f) {
-			fprintf(stderr, "%s, ", f->name);
-		}
-		fprintf(stderr, "%s.\n", f->name);
-		exit(1);
-found:
-		unshareflags &= ~f->flag;
 	}
-	return unshareflags;
 }
 
 int enter(struct entry_settings *opts)
@@ -87,25 +102,27 @@ int enter(struct entry_settings *opts)
 	}
 	root = resolved_root;
 
-	int unshareflags = opts_to_unshareflags(opts);
-
-	struct outer_helper outer_helper;
-	outer_helper.persist = opts->persist;
-	outer_helper.unshareflags = unshareflags;
-	outer_helper_spawn(&outer_helper);
-
 	int timens_offsets = -1;
-	if (unshareflags & BST_CLONE_NEWTIME) {
+	if (opts->shares[SHARE_TIME] != share_with_parent) {
 		timens_offsets = open("/proc/self/timens_offsets", O_WRONLY);
 		if (timens_offsets == -1) {
 			if (errno != ENOENT) {
 				err(1, "open(\"/proc/self/timens_offsets\")");
 			}
-			/* The kernel evidently doesn't support time namespaces yet. No need
-			   to try below. */
-			unshareflags &= ~BST_CLONE_NEWTIME;
+			/* The kernel evidently doesn't support time namespaces yet.
+			   Don't try to open the time namespace file with --share-all=<dir>,
+			   or try to unshare or setns the time namespace below. */
+			opts->shares[SHARE_TIME] = share_with_parent;
 		}
 	}
+	
+	int nsactions[MAX_SHARES];
+	opts_to_nsactions(opts, nsactions);
+
+	struct outer_helper outer_helper;
+	outer_helper.persist = opts->persist;
+	outer_helper.unshare_user = nsactions[SHARE_USER] == NSACTION_UNSHARE;
+	outer_helper_spawn(&outer_helper);
 
 	/* Drop all privileges, or none if we're real uid 0. */
 	uid_t uid = getuid();
@@ -127,6 +144,30 @@ int enter(struct entry_settings *opts)
 		}
 	}
 
+	int nsenterables[] = {
+		SHARE_USER,
+		SHARE_NET,
+		SHARE_MNT,
+		SHARE_IPC,
+		SHARE_PID,
+		SHARE_CGROUP,
+		SHARE_UTS,
+		SHARE_TIME,
+		-1,
+	};
+
+	for (int *ns = &nsenterables[0]; *ns != -1; ++ns) {
+		int action = nsactions[*ns];
+		if (action < 0) {
+			continue;
+		}
+		int rc = setns(action, flags[*ns].flag);
+		if (rc == -1) {
+			err(1, "setns(%s)", flags[*ns].proc_ns_name);
+		}
+		close(action);
+	}
+	
 	char cwd[PATH_MAX];
 	char *workdir = opts->workdir;
 	if ((!workdir || workdir[0] == '\0')) {
@@ -159,39 +200,42 @@ int enter(struct entry_settings *opts)
 
 	int unshareables[] = {
 		/* User namespace must be unshared first and foremost. */
-		BST_CLONE_NEWUSER,
-		BST_CLONE_NEWNS,
-		BST_CLONE_NEWUTS,
-		BST_CLONE_NEWPID,
-		BST_CLONE_NEWNET,
-		BST_CLONE_NEWIPC,
-		BST_CLONE_NEWCGROUP,
-		BST_CLONE_NEWTIME,
-		0,
+		SHARE_USER,
+		SHARE_MNT,
+		SHARE_UTS,
+		SHARE_PID,
+		SHARE_NET,
+		SHARE_IPC,
+		SHARE_CGROUP,
+		SHARE_TIME,
+		-1,
 	};
 
-	for (int *flag = &unshareables[0]; *flag != 0; ++flag) {
-		if (!(unshareflags & *flag)) {
+	for (int *ns = &unshareables[0]; *ns != -1; ++ns) {
+		int action = nsactions[*ns];
+		if (action != NSACTION_UNSHARE) {
 			continue;
 		}
-
-		int rc = unshare(*flag);
+		int rc = unshare(flags[*ns].flag);
 		if (rc == -1 && errno == EINVAL) {
 			/* We realized that the namespace isn't supported -- remove it
 			   from the unshare set. */
-			unshareflags &= ~*flag;
-			continue;
-		}
-		if (rc == -1) {
-			err(1, "unshare");
+			nsactions[*ns] = NSACTION_SHARE_WITH_PARENT;
+		} else if (rc == -1) {
+			err(1, "unshare(%s)", flags[*ns].proc_ns_name);
 		}
 	}
+	int mnt_unshare  = nsactions[SHARE_MNT]  == NSACTION_UNSHARE;
+	int uts_unshare  = nsactions[SHARE_UTS]  == NSACTION_UNSHARE;
+	int pid_unshare  = nsactions[SHARE_PID]  == NSACTION_UNSHARE;
+	int net_unshare  = nsactions[SHARE_NET]  == NSACTION_UNSHARE;
+	int time_unshare = nsactions[SHARE_TIME] == NSACTION_UNSHARE;
 
 	/* Just unsharing the mount namespace is not sufficient -- if we don't make
 	   every mount entry private, any change we make will be applied to the
 	   parent mount namespace if it happens to have MS_SHARED propagation. We
 	   don't like coin flips. */
-	if (unshareflags & BST_CLONE_NEWNS && mount("none", "/", "", MS_REC | MS_PRIVATE, "") == -1) {
+	if (mnt_unshare && mount("none", "/", "", MS_REC | MS_PRIVATE, "") == -1) {
 		err(1, "could not make / private: mount");
 	}
 
@@ -206,7 +250,7 @@ int enter(struct entry_settings *opts)
 		}
 	}
 
-	if (unshareflags & BST_CLONE_NEWTIME) {
+	if (time_unshare) {
 		init_clocks(timens_offsets, opts->clockspecs, lengthof(opts->clockspecs));
 	}
 
@@ -256,7 +300,7 @@ int enter(struct entry_settings *opts)
 
 	/* Check whether or not <root>/proc is a mountpoint. If so,
 	   and we're in a PID + mount namespace, mount a new /proc. */
-	if (!opts->no_proc_remount && (unshareflags & BST_CLONE_NEWNS) && (unshareflags & BST_CLONE_NEWPID)) {
+	if (!opts->no_proc_remount && mnt_unshare && pid_unshare) {
 		int rootfd = open(root, O_PATH, 0);
 		if (rootfd == -1) {
 			err(1, "open(\"%s\")", root);
@@ -288,12 +332,12 @@ int enter(struct entry_settings *opts)
 	}
 
 	/* Set the host and domain names only when in an UTS namespace. */
-	if ((opts->hostname || opts->domainname) && !(unshareflags & BST_CLONE_NEWUTS)) {
+	if ((opts->hostname || opts->domainname) && !uts_unshare) {
 		errx(1, "attempted to set host or domain names on the host UTS namespace.");
 	}
 
 	const char *hostname = opts->hostname;
-	if (!hostname && (unshareflags & BST_CLONE_NEWUTS)) {
+	if (!hostname && uts_unshare) {
 		hostname = "localhost";
 	}
 	if (hostname && sethostname(hostname, strlen(hostname)) == -1) {
@@ -301,7 +345,7 @@ int enter(struct entry_settings *opts)
 	}
 
 	const char *domainname = opts->domainname;
-	if (!domainname && (unshareflags & BST_CLONE_NEWUTS)) {
+	if (!domainname && uts_unshare) {
 		domainname = "localdomain";
 	}
 	if (domainname && setdomainname(domainname, strlen(domainname)) == -1) {
@@ -311,7 +355,7 @@ int enter(struct entry_settings *opts)
 	int rtnl = init_rtnetlink_socket();
 
 	/* Setup localhost */
-	if (unshareflags & BST_CLONE_NEWNET && !opts->no_loopback_setup) {
+	if (net_unshare && !opts->no_loopback_setup) {
 		net_if_up(rtnl, "lo");
 	}
 
@@ -361,7 +405,7 @@ int enter(struct entry_settings *opts)
 
 	/* We have a special case for pivot_root: the syscall wants the
 	   new root to be a mount point, so we indulge. */
-	if (unshareflags & BST_CLONE_NEWNS && strcmp(root, "/") != 0) {
+	if (mnt_unshare && strcmp(root, "/") != 0) {
 		if (mount(root, root, "none", MS_BIND|MS_REC, "") == -1) {
 			err(1, "mount(\"/\", \"/\", MS_BIND|MS_REC)");
 		}
@@ -376,8 +420,8 @@ int enter(struct entry_settings *opts)
 		   it's a terrible idea due to the sheer amount of things that can go
 		   wrong, like "what do I do if one of the mounts failed but the previous
 		   ones didn't?", or "how do I clean up things that I've (re)mounted?". */
-		if (!(unshareflags & BST_CLONE_NEWNS)) {
-			errx(1, "attempted to mount things on the host mount namespace.");
+		if (!mnt_unshare) {
+			errx(1, "attempted to mount things in an existing mount namespace.");
 		}
 
 		if (!opts->no_fake_devtmpfs) {
@@ -407,7 +451,7 @@ int enter(struct entry_settings *opts)
 		   must be done in a mount namespace, because otherwise pivot_root
 		   will burn your house, invoke dragons, and eat your children. */
 
-		if (!(unshareflags & BST_CLONE_NEWNS)) {
+		if (!mnt_unshare) {
 			if (chroot(root) == -1) {
 				err(1, "chroot");
 			}
@@ -443,7 +487,7 @@ int enter(struct entry_settings *opts)
 		}
 	}
 
-	if (unshareflags & BST_CLONE_NEWPID && !opts->no_init) {
+	if (pid_unshare && !opts->no_init) {
 		pid_t child = fork();
 
 		if (child == -1) {

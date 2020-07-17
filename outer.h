@@ -10,7 +10,7 @@
 # include <unistd.h>
 
 struct outer_helper {
-	int unshareflags;
+	int unshare_user;
 	const char *persist;
 
 	pid_t pid;
