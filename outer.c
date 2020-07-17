@@ -11,6 +11,7 @@
 #include <limits.h>
 #include <pwd.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -310,8 +311,13 @@ void outer_helper_sendpid(const struct outer_helper *helper, pid_t pid)
 void outer_helper_wait(const struct outer_helper *helper)
 {
 	int ok;
-	if (read(helper->in, &ok, sizeof (ok)) == -1) {
+	int n = read(helper->in, &ok, sizeof (ok));
+	switch (n) {
+	case -1:
 		err(1, "outer_helper_wait: read");
+	case 0:
+		/* Outer helper died before setting all of our attributes. */
+		exit(1);
 	}
 }
 
