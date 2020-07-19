@@ -495,6 +495,18 @@ int enter(struct entry_settings *opts)
 		if (child == -1) {
 			err(1, "fork");
 		} else if (child) {
+
+			/* bst is effectively a setuid binary. This means that by default,
+			   it has its dumpability set to the value of
+			   /proc/sys/fs/suid_dumpable, which likely changes the ownership
+			   of its own /proc/pid/ directory. This means that we can't use
+			   nsenter and friends to probe this init's /proc/pid/ns.
+
+			   Setting the dumpable flag fixes this. */
+			if (prctl(PR_SET_DUMPABLE, 1) == -1) {
+				err(1, "prctl(PR_SET_DUMPABLE)");
+			}
+
 			init(child);
 			__builtin_unreachable();
 		}
