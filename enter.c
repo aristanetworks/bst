@@ -74,6 +74,8 @@ enum {
       NSACTION_UNSHARE = -2,
 };
 
+char share_with_parent[0];
+
 static void opts_to_nsactions(const struct entry_settings *opts, int *nsactions)
 {
 	for (int i = 0; i < MAX_SHARES; i++) {

@@ -33,7 +33,7 @@ enum {
 const char *nsname(int);
 
 /* share_with_parent is a special value for entry_settings.shares[ns]. */
-char share_with_parent[0];
+extern char share_with_parent[0];
 
 struct entry_settings {
 	/* shares[] is indexed by SHARE_CGROUP, etc.  Legal values are:
