@@ -24,11 +24,11 @@ Testing namespace sharing
 	$ [ "$(bst --share-net readlink /proc/self/ns/net)" = "$(readlink /proc/self/ns/net)" ]
 	$ [ "$(bst --share-uts readlink /proc/self/ns/uts)" = "$(readlink /proc/self/ns/uts)" ]
 	$ [ "$(bst --share-pid readlink /proc/self/ns/pid)" = "$(readlink /proc/self/ns/pid)" ]
-	$ [ "$(bst --share-pid --share-cgroup --share-ipc --share-user --share-mnt --share-net --share-uts ls -l /proc/self/ns)" = "$(bst --share-all ls -l /proc/self/ns)" ]
+	$ [ "$(bst --share-all ls -l /proc/self/ns)" = "$(ls -l /proc/self/ns)" ]
 
 Testing uid/gid/groups semantics
 
-	$ bst id
+	$ bst id | sed -e 's/,65534(nobody)//'
 	uid=0(root) gid=0(root) groups=0(root)
 
 	$ [ "$(bst --share-all id)" = "$(id)" ]
