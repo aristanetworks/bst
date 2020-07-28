@@ -12,28 +12,14 @@
 #include <limits.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <sys/capability.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
 #include <unistd.h>
 
+#include "capable.h"
+
 #define NSFS_DEV (makedev(0, 4))
-
-static bool capable(cap_value_t cap)
-{
-	static cap_t caps;
-
-	if (!caps) {
-		caps = cap_get_proc();
-	}
-
-	cap_flag_value_t set;
-	if (cap_get_flag(caps, cap, CAP_EFFECTIVE, &set) == -1) {
-		err(1, "cap_get_flag");
-	}
-	return set;
-}
 
 static gid_t *get_groups(size_t *ngroups)
 {
@@ -145,9 +131,13 @@ static int unpersistat(int dirfd, const char *pathname, int flags)
 	   trust the path itself, we have to rely on the kernel magic link resolution
 	   to do this for us by unmounting /proc/self/fd/<fd>. */
 
+	make_capable(CAP_SYS_ADMIN);
+
 	if (umount2(selfpath, MNT_DETACH) == -1) {
 		goto error;
 	}
+
+	reset_capabilities();
 
 	/* The file descriptor is now useless since it refers to our now-defunct
 	   nsfs file. We have to use the original path for removal, but it's fine,

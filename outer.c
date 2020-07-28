@@ -19,6 +19,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "capable.h"
 #include "enter.h"
 #include "flags.h"
 #include "outer.h"
@@ -291,20 +292,28 @@ static void burn_uidmap_gidmap(int child_pid) {
 		err(1, "open(\"%s\")", procpath);
 	}
 
-	char map[ID_MAP_MAX];
+	char uid_map[ID_MAP_MAX];
+	char gid_map[ID_MAP_MAX];
 	const char *id_str;
 
 	uid_t uid = getuid();
 	struct passwd *passwd = getpwuid(uid);
 	id_str = itoa(uid);
-	populate_id_map(map, sizeof (map), "/etc/subuid", id_str, passwd ? passwd->pw_name : id_str);
-	burn(procfd, "uid_map", map);
+	populate_id_map(uid_map, sizeof (uid_map), "/etc/subuid", id_str, passwd ? passwd->pw_name : id_str);
 
 	gid_t gid = getgid();
 	struct group *group = getgrgid(gid);
 	id_str = itoa(gid);
-	populate_id_map(map, sizeof (map), "/etc/subgid", id_str, group ? group->gr_name : id_str);
-	burn(procfd, "gid_map", map);
+	populate_id_map(gid_map, sizeof (gid_map), "/etc/subgid", id_str, group ? group->gr_name : id_str);
+
+	make_capable(CAP_SETUID);
+	make_capable(CAP_SETGID);
+	make_capable(CAP_DAC_OVERRIDE);
+
+	burn(procfd, "uid_map", uid_map);
+	burn(procfd, "gid_map", gid_map);
+
+	reset_capabilities();
 }
 
 struct persistflag {
@@ -335,7 +344,6 @@ static void persist_ns_files(int pid, const char *persist) {
 		err(1, "open(\"%s\")", persist);
 	}
 	for (struct persistflag *f = pflags; f < pflags + lengthof(pflags); f++) {
-		// Need permission check here?
 		int nsfd = openat(persistdir, f->proc_ns_name, O_CREAT | O_WRONLY | O_EXCL, 0666);
 		if (nsfd < 0) {
 			if (errno != EEXIST) {
@@ -344,13 +352,22 @@ static void persist_ns_files(int pid, const char *persist) {
 		} else {
 			close(nsfd);
 		}
+
 		// Where is mountat()?  Thankfully, we can still name the persist directory.
 		snprintf(procname, sizeof(procname), "/proc/%d/ns/%s", pid, f->proc_ns_name);
 		procname[sizeof(procname) - 1] = 0;
+
 		char persistname[PATH_MAX];
 		snprintf(persistname, sizeof(persistname), "%s/%s", persist, f->proc_ns_name);
 		persistname[sizeof(persistname) - 1] = 0;
+
+		make_capable(CAP_SYS_ADMIN);
+		make_capable(CAP_SYS_PTRACE);
+
 		int rc = mount(procname, persistname, "", MS_BIND, "");
+
+		reset_capabilities();
+
 		if (rc == -1) {
 			if (errno == ENOENT) {
 				/* Kernel does not support this namespace type.  Remove the mountpoint. */

@@ -33,7 +33,7 @@ Testing uid/gid/groups semantics
 
 	$ [ "$(bst --share-all id)" = "$(id)" ]
 
-	$ bst --uid=1 --gid=2 --groups=3,4 sh -c 'id -u; id -g; id -G'
+	$ bst --workdir=/ --uid=1 --gid=2 --groups=3,4 sh -c 'id -u; id -g; id -G'
 	1
 	2
 	2 3 4

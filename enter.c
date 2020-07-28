@@ -25,14 +25,15 @@
 #include <sys/syscall.h>
 #include <sys/wait.h>
 
+#include "capable.h"
 #include "enter.h"
 #include "flags.h"
 #include "init.h"
 #include "mount.h"
 #include "net.h"
+#include "outer.h"
 #include "path.h"
 #include "setarch.h"
-#include "outer.h"
 
 #define lengthof(Arr) (sizeof (Arr) / sizeof (*Arr))
 
@@ -106,6 +107,13 @@ int enter(struct entry_settings *opts)
 
 	int timens_offsets = -1;
 	if (opts->shares[SHARE_TIME] != share_with_parent) {
+
+		/* Because this process is privileged, /proc/self/timens_offsets
+		   is unfortunately owned by root and not ourselves, so we have
+		   to give ourselves the capability to read our own file. Geez. */
+
+		make_capable(CAP_DAC_OVERRIDE);
+
 		timens_offsets = open("/proc/self/timens_offsets", O_WRONLY);
 		if (timens_offsets == -1) {
 			if (errno != ENOENT) {
@@ -116,6 +124,8 @@ int enter(struct entry_settings *opts)
 			   or try to unshare or setns the time namespace below. */
 			opts->shares[SHARE_TIME] = share_with_parent;
 		}
+
+		reset_capabilities();
 	}
 	
 	int nsactions[MAX_SHARES];
@@ -125,26 +135,6 @@ int enter(struct entry_settings *opts)
 	outer_helper.persist = opts->persist;
 	outer_helper.unshare_user = nsactions[SHARE_USER] == NSACTION_UNSHARE;
 	outer_helper_spawn(&outer_helper);
-
-	/* Drop all privileges, or none if we're real uid 0. */
-	uid_t uid = getuid();
-	if (setuid(uid) == -1) {
-		err(1, "setuid");
-	}
-	if (uid != 0) {
-		cap_t caps = cap_init();
-		if (caps == NULL) {
-			err(1, "cap_init");
-		}
-
-		if (cap_set_proc(caps) == -1) {
-			err(1, "caps_set_proc");
-		}
-
-		if (cap_free(caps) == -1) {
-			err(1, "cap_free");
-		}
-	}
 
 	int nsenterables[] = {
 		SHARE_USER,
@@ -169,7 +159,13 @@ int enter(struct entry_settings *opts)
 		}
 		close(action);
 	}
-	
+
+	if (nsactions[SHARE_USER] >= 0) {
+		/* Reinitialize recorded capability set, given it changed when
+		   entering the userns. */
+		init_capabilities();
+	}
+
 	char cwd[PATH_MAX];
 	char *workdir = opts->workdir;
 	if ((!workdir || workdir[0] == '\0')) {
@@ -227,11 +223,19 @@ int enter(struct entry_settings *opts)
 			err(1, "unshare(%s)", flags[*ns].proc_ns_name);
 		}
 	}
+
 	int mnt_unshare  = nsactions[SHARE_MNT]  == NSACTION_UNSHARE;
 	int uts_unshare  = nsactions[SHARE_UTS]  == NSACTION_UNSHARE;
 	int pid_unshare  = nsactions[SHARE_PID]  == NSACTION_UNSHARE;
 	int net_unshare  = nsactions[SHARE_NET]  == NSACTION_UNSHARE;
 	int time_unshare = nsactions[SHARE_TIME] == NSACTION_UNSHARE;
+	int user_unshare = nsactions[SHARE_USER] == NSACTION_UNSHARE;
+
+	if (user_unshare) {
+		/* Reinitialize recorded capability set, given it changed when
+		   unsharing the userns. */
+		init_capabilities();
+	}
 
 	/* Just unsharing the mount namespace is not sufficient -- if we don't make
 	   every mount entry private, any change we make will be applied to the
@@ -375,42 +379,18 @@ int enter(struct entry_settings *opts)
 		err(1, "setreuid");
 	}
 
-	/* give ourselves back CAP_SYS_CHROOT if we need to chroot, and
-	   CAP_SYS_ADMIN if we want to mount. */
-
-	cap_value_t cap_list[2];
-
-	size_t ncaps = 0;
-	if (strcmp(root, "/") != 0) {
-		cap_list[ncaps++] = CAP_SYS_CHROOT;
-	}
-	if (opts->nmounts > 0 || opts->nmutables > 0) {
-		cap_list[ncaps++] = CAP_SYS_ADMIN;
-	}
-
-	cap_t caps = cap_get_proc();
-	if (caps == NULL) {
-		err(1, "cap_get_proc");
-	}
-
-	if (ncaps > 0 && cap_set_flag(caps, CAP_EFFECTIVE, ncaps, cap_list, CAP_SET) == -1) {
-		err(1, "cap_set_flag");
-	}
-
-	if (cap_set_proc(caps) == -1) {
-		err(1, "caps_set_proc");
-	}
-
-	if (cap_free(caps) == -1) {
-		err(1, "cap_free");
-	}
+	init_capabilities();
 
 	/* We have a special case for pivot_root: the syscall wants the
 	   new root to be a mount point, so we indulge. */
 	if (mnt_unshare && strcmp(root, "/") != 0) {
+		make_capable(CAP_SYS_ADMIN);
+
 		if (mount(root, root, "none", MS_BIND|MS_REC, "") == -1) {
 			err(1, "mount(\"/\", \"/\", MS_BIND|MS_REC)");
 		}
+
+		reset_capabilities();
 	}
 
 	/* We have to do this after setuid/setgid/setgroups since mounting
@@ -434,8 +414,12 @@ int enter(struct entry_settings *opts)
 			}
 		}
 
+		make_capable(CAP_SYS_ADMIN);
+
 		mount_entries(root, opts->mounts, opts->nmounts, opts->no_derandomize);
 		mount_mutables(root, opts->mutables, opts->nmutables);
+
+		reset_capabilities();
 	}
 
 	/* Don't chroot if root is "/". This is a better default since it
@@ -454,13 +438,20 @@ int enter(struct entry_settings *opts)
 		   will burn your house, invoke dragons, and eat your children. */
 
 		if (!mnt_unshare) {
+			make_capable(CAP_SYS_CHROOT);
+
 			if (chroot(root) == -1) {
 				err(1, "chroot");
 			}
+
+			reset_capabilities();
 		} else {
 			if (chdir(root) == -1) {
 				err(1, "pivot_root: pre chdir");
 			}
+
+			make_capable(CAP_SYS_ADMIN);
+
 			/* Pivot the root to `root` (new_root) and mount the old root
 			   (old_dir) on top of it. Then, unmount "." to get rid of the
 			   old root.
@@ -479,6 +470,8 @@ int enter(struct entry_settings *opts)
 			if (chdir("/") == -1) {
 				err(1, "pivot_root: post chdir");
 			}
+
+			reset_capabilities();
 		}
 	}
 	if (chdir(workdir) == -1) {
