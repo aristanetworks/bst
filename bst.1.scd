@@ -52,13 +52,19 @@ Users of bst may choose to opt-out of some of the isolation.
 	namespace.
 
 \--persist <dir>
-	Bind-mount all namespaces of the new process into files in the
-	given directory.  The files are named the same as the
-	namespace files in /proc/[pid]/ns.  This option is equivalent
-	to bind-mounting /proc/[pid]/ns/\* into *<dir>*/\* after invoking
-	bst, except avoiding a race where the child exits before the
-	bind-mounts complete.  Note that the persist directory must
-	be on a private mount or bind-mounting fails with EINVAL.
+	Persist all namespaces of the new process into files in the
+	given directory, allowing re-entry via _--share-\*=<dir>_ even after bst
+	exits (but note that pid namespaces whose init died cannot be re-entered).
+
+	The files are named the same as the namespace files in /proc/[pid]/ns.
+	This option is equivalent to bind-mounting /proc/[pid]/ns/\* into
+	*<dir>*/\* after invoking bst, except avoiding a race where the child
+	exits before the bind-mounts complete.  Note that in order to persist the
+	mount namespace, the persist directory must be on a private mount subtree
+	(for more information, see *mount_namespaces*(7)).
+
+	See *bst-unpersist*(1) for more details about how to release persisted
+	namespace files.
 
 \--workdir <dir>
 	Change the current work directory for the inner process to *<dir>*.
@@ -180,4 +186,4 @@ Users of bst may choose to opt-out of some of the isolation.
 
 # SEE ALSO
 
-*namespaces*(7), *mount*(1), *setarch*(1)
+*bst-unpersist*(1), *namespaces*(7), *mount*(1), *setarch*(1)

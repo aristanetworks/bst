@@ -1,7 +1,5 @@
 *.o
+*.gz
+*.t.err
 bst
-/bestie.*.apk
-/bestie.*.deb
-/bestie.*.rpm
-/bestie.*.tgz
-/bst.1.gz
+bst-unpersist

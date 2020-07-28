@@ -120,4 +120,4 @@ Testing hostname semantics
 
 Testing persistence
 
-	$ [ ! -d foo ] && [ ! -d bar ] && mkdir -p foo bar && bst --persist=foo sh -c 'mount -t tmpfs none bar && echo hello > bar/greeting' && [ ! -f bar/greeting ] && sudo nsenter --mount=foo/mnt bash -c '[ "$(cat '"$PWD"'/bar/greeting)" == "hello" ]' && sudo umount foo/* && [ -d foo ] && rm -rf foo bar && [ ! -d foo ] && [ ! -d bar ]
+	$ mkdir -p foo bar; trap 'bst-unpersist foo && rmdir foo bar' EXIT; bst --persist=foo sh -c 'mount -t tmpfs none bar && echo hello > bar/greeting' && [ ! -f bar/greeting ] && bst --share-mnt=foo/mnt --share-user=foo/user sh -c '[ "$(cat '"$PWD"'/bar/greeting)" = "hello" ]'

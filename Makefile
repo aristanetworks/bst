@@ -9,7 +9,7 @@ CPPFLAGS += -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
 
 SRCS := main.c enter.c outer.c mount.c cp.c setarch.c usage.c sig.c timens.c path.c kvlist.c init.c net.c
 OBJS := $(subst .c,.o,$(SRCS))
-BINS := bst
+BINS := bst bst-unpersist
 
 ifeq ($(shell id -u),0)
 SUDO =
@@ -44,17 +44,26 @@ bst: $(OBJS)
 	$(SETCAP) cap_setuid,cap_setgid,cap_dac_override,cap_sys_admin,cap_sys_ptrace,cap_sys_chroot+ep $@ \
 		|| ($(CHOWN) root $@ && $(CHMOD) u+s $@)
 
+bst-unpersist: unpersist.o
+	$(LINK.o) -o $@ $^ -lcap
+	$(SETCAP) cap_sys_admin+ep $@ \
+		|| ($(CHOWN) root $@ && $(CHMOD) u+s $@)
+
 %.gz: %.scd
 	scdoc <$< | gzip -c >$@
 
-man: bst.1.gz
+man: bst.1.gz bst-unpersist.1.gz
 
 install: BST_INSTALLPATH = $(DESTDIR)$(BINDIR)/bst
 install: $(BINS) man
 	install -m 755 -D bst $(BST_INSTALLPATH)
 	$(SETCAP) cap_setuid,cap_setgid,cap_dac_override,cap_sys_admin,cap_sys_ptrace,cap_sys_chroot+ep $(BST_INSTALLPATH) \
 		|| ($(CHOWN) root $(BST_INSTALLPATH) && $(CHMOD) u+s $(BST_INSTALLPATH))
+	install -m 755 -D bst-unpersist $(BST_INSTALLPATH)-unpersist
+	$(SETCAP) cap_sys_admin+ep $(BST_INSTALLPATH)-unpersist \
+		|| ($(CHOWN) root $(BST_INSTALLPATH)-unpersist && $(CHMOD) u+s $(BST_INSTALLPATH)-unpersist)
 	install -m 644 -D bst.1.gz $(DESTDIR)$(MANDIR)/man1/bst.1.gz
+	install -m 644 -D bst-unpersist.1.gz $(DESTDIR)$(MANDIR)/man1/bst-unpersist.1.gz
 
 check: export PATH := $(DESTDIR)$(BINDIR):${PATH}
 check: $(BINS)
