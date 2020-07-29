@@ -9,6 +9,7 @@
 
 # include <limits.h>
 # include <time.h>
+# include <sys/stat.h>
 # include <unistd.h>
 # include "mount.h"
 # include "timens.h"
