@@ -1,0 +1,28 @@
+name: Build
+on: [push]
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    strategy:
+      # this lets us run the job against all images to completion
+      fail-fast: false
+      matrix:
+        image:
+        - snaipe/ci-meson:gcc-debian-10
+        - snaipe/ci-meson:gcc-alpine-3.10
+        - snaipe/ci-meson:gcc-fedora-31
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+      - name: make
+        run: |
+          set -xeu
+          command -v apk && apk add --no-cache libcap-dev scdoc
+          command -v apt && apt-get update && apt-get install -y libcap-dev scdoc
+          command -v dnf && dnf install -y libcap-devel scdoc
+          make
+
