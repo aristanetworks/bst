@@ -171,6 +171,14 @@ Users of bst may choose to opt-out of some of the isolation.
 
 	You cannot use this option with _--share-user_.
 
+\--nic [name=]<name>,[type=]<type>[,[options]]
+	Create a network interface in the inner process' network namespace.
+
+	You cannot use this option with _--share=net_.
+
+	Supported interface types and valid options are described in more detail
+	in the *NETWORKING* section.
+
 \--no-fake-devtmpfs
 	Do not replace devtmpfs mounts with a fake devtmpfs.
 
@@ -244,6 +252,38 @@ The following environment variables are accessible to the setup program:
 
 *EXECUTABLE*
 	Set to the executable name that will be executed after the setup is done.
+
+# NETWORKING
+
+This section describes the supported interface types and options that can
+be used with _--nic_ in a network namespace.
+
+Supported interface types are:
+- *dummy*
+- *macvlan*
+- *ipvlan*
+
+## Options
+
+*macvlan*
+	*link=<host-interface>*: attach the MACVLAN interface to the specified
+	host interface.
+
+	*mode=<mode>*: MACVLAN mode. Supported values are:
+	- *private* (default)
+	- *vepa*
+	- *bridge*
+	- *passthru*
+	- *source*
+
+*ipvlan*
+	*link=<host-interface>*: attach the IPVLAN interface to the specified
+	host interface.
+
+	*mode=<mode>*: IPVLAN mode. Supported values are:
+	- *l2* (default)
+	- *l3*
+	- *l3s*
 
 # SEE ALSO
 

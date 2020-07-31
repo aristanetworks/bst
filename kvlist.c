@@ -25,15 +25,17 @@ void kvlist_parse(char *in, struct kvlist *out, size_t len, char **rest)
 		tok = strtok_r(NULL, ",", &save);
 	}
 
-	/* There might be more tokens after that, but we don't have enough space
-	   to store them. Re-join the last token with the tail if necessary, and
-	   populate *rest with that. */
-	if (tok != NULL) {
-		size_t toklen = strlen(tok);
-		if (tok + toklen != end) {
-			tok[toklen] = ',';
+	if (rest != NULL) {
+		/* There might be more tokens after that, but we don't have enough space
+		   to store them. Re-join the last token with the tail if necessary, and
+		   populate *rest with that. */
+		if (tok != NULL) {
+			size_t toklen = strlen(tok);
+			if (tok + toklen != end) {
+				tok[toklen] = ',';
+			}
 		}
-	}
 
-	*rest = tok;
+		*rest = tok;
+	}
 }

@@ -34,6 +34,8 @@ Options:
 	--setup-exe=<path>:     Run the specified setup executable.
 	--uid-map=<map>:        Use the specified uid map for the user namespace mapping.
 	--gid-map=<map>:        Use the specified gid map for the user namespace mapping.
+	--nic <name,type,options>:
+	                        Create network interface in namespace.
 
 	--no-fake-devtmpfs:     Don't replace devtmpfs mounts with fake ones.
 	--no-derandomize:       Don't attempt to reduce randomness sources.

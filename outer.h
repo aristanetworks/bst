@@ -10,12 +10,16 @@
 # include <unistd.h>
 
 # include "userns.h"
+# include "net.h"
 
 struct outer_helper {
 	int unshare_user;
+	int unshare_net;
 	const char *persist;
 	id_map uid_desired;
 	id_map gid_desired;
+	struct nic_options *nics;
+	size_t nnics;
 
 	pid_t pid;
 	int in;

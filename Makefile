@@ -43,7 +43,7 @@ generate: usage.txt
 
 bst: $(OBJS)
 	$(LINK.o) -o $@ $^
-	$(SETCAP) cap_setuid,cap_setgid,cap_dac_override,cap_sys_admin,cap_sys_ptrace,cap_sys_chroot+p $@ \
+	$(SETCAP) cap_setuid,cap_setgid,cap_dac_override,cap_sys_admin,cap_sys_ptrace,cap_sys_chroot,cap_net_admin+p $@ \
 		|| ($(CHOWN) root $@ && $(CHMOD) u+s $@)
 
 bst-init: init.o sig.o
@@ -67,7 +67,7 @@ install: $(BINS) man
 	install -m 644 -D bst.1.gz $(DESTDIR)$(MANDIR)/man1/bst.1.gz
 	install -m 644 -D bst-unpersist.1.gz $(DESTDIR)$(MANDIR)/man1/bst-unpersist.1.gz
 	install -m 644 -D bst-init.1.gz $(DESTDIR)$(MANDIR)/man1/bst-init.1.gz
-	$(SETCAP) cap_setuid,cap_setgid,cap_dac_override,cap_sys_admin,cap_sys_ptrace,cap_sys_chroot+p $(BST_INSTALLPATH) \
+	$(SETCAP) cap_setuid,cap_setgid,cap_dac_override,cap_sys_admin,cap_sys_ptrace,cap_sys_chroot,cap_net_admin+p $(BST_INSTALLPATH) \
 		|| ($(CHOWN) root $(BST_INSTALLPATH) && $(CHMOD) u+s $(BST_INSTALLPATH))
 	$(SETCAP) cap_sys_admin+p $(BST_INSTALLPATH)-unpersist \
 		|| ($(CHOWN) root $(BST_INSTALLPATH)-unpersist && $(CHMOD) u+s $(BST_INSTALLPATH)-unpersist)

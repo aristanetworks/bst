@@ -12,11 +12,13 @@
 # include <sys/stat.h>
 # include <unistd.h>
 # include "mount.h"
+# include "net.h"
 # include "timens.h"
 # include "userns.h"
 
 enum {
 	MAX_MOUNT = 4096,
+	MAX_NICS = 4096,
 
 	SHARE_CGROUP = 0,
 	SHARE_IPC,
@@ -67,6 +69,9 @@ struct entry_settings {
 	size_t nmutables;
 
 	struct timespec clockspecs[MAX_CLOCK + 1];
+
+	struct nic_options nics[MAX_NICS];
+	size_t nnics;
 
 	mode_t umask;
 
