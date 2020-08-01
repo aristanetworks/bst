@@ -28,7 +28,7 @@ Testing namespace sharing
 
 Testing uid/gid/groups semantics
 
-	$ bst id | sed -e 's/,65534(nobody)//'
+	$ bst id | sed -e 's/,65534([^)]*)//'
 	uid=0(root) gid=0(root) groups=0(root)
 
 	$ [ "$(bst --share-all id)" = "$(id)" ]
