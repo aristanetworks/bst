@@ -19,8 +19,6 @@
 
 #include "capable.h"
 
-#define NSFS_DEV (makedev(0, 4))
-
 static gid_t *get_groups(size_t *ngroups)
 {
 	static gid_t groups[NGROUPS_MAX];
@@ -93,7 +91,14 @@ static int unpersistat(int dirfd, const char *pathname, int flags)
 		goto error;
 	}
 
-	if (stat.st_dev != NSFS_DEV) {
+	/* This check is flawed, but should be a good enough heuristic for
+	   determining if an arbitrary file is an nsfs mount without having to
+	   parse /proc/mountinfo.
+
+	   Worst case scenario, we'd be unmounting a mountpoint that exists in
+	   a directory that the user controls.  Not great, but not the end of
+	   the world either. */
+	if ((stat.st_mode & S_IFMT) != S_IFREG || major(stat.st_dev) != 0) {
 		errno = EPERM;
 		goto error;
 	}
