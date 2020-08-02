@@ -18,6 +18,8 @@ static struct __user_cap_header_struct hdr = {
 	.version = _LINUX_CAPABILITY_VERSION_3,
 };
 
+int deny_new_capabilities = 0;
+
 /* Normally, using cap(get|set) isn't really advisable, as it's a linux-specific
    interface. But the matter of fact is that bst is already linux-specific, that
    libcap adds a lot of unneeded complexity, and that it operates on dynamic
@@ -39,6 +41,9 @@ bool capable(uint64_t cap)
 
 void make_capable(uint64_t cap)
 {
+	if (deny_new_capabilities) {
+		errx(1, "called make_capable in no-new-capabilities code");
+	}
 	current[0].effective |= (__u32) (cap & (__u32) -1);
 	current[1].effective |= (__u32) (cap >> 32);
 	if (capset(&hdr, current) == -1) {

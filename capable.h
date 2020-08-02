@@ -20,6 +20,8 @@
 # define BST_CAP_SETGID         ((uint64_t) 1 << CAP_SETGID)
 # define BST_CAP_SYS_CHROOT     ((uint64_t) 1 << CAP_SYS_CHROOT)
 
+extern int deny_new_capabilities;
+
 void init_capabilities(void);
 bool capable(uint64_t cap);
 void make_capable(uint64_t cap);
