@@ -120,7 +120,7 @@ static int unpersistat(int dirfd, const char *pathname, int flags)
 		goto error;
 	}
 
-	if (!capable(CAP_DAC_OVERRIDE) && !checkperm(&stat)) {
+	if (!capable(BST_CAP_DAC_OVERRIDE) && !checkperm(&stat)) {
 		errno = EACCES;
 		goto error;
 	}
@@ -131,7 +131,7 @@ static int unpersistat(int dirfd, const char *pathname, int flags)
 	   trust the path itself, we have to rely on the kernel magic link resolution
 	   to do this for us by unmounting /proc/self/fd/<fd>. */
 
-	make_capable(CAP_SYS_ADMIN);
+	make_capable(BST_CAP_SYS_ADMIN);
 
 	if (umount2(selfpath, MNT_DETACH) == -1) {
 		goto error;

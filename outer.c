@@ -306,9 +306,7 @@ static void burn_uidmap_gidmap(int child_pid) {
 	id_str = itoa(gid);
 	populate_id_map(gid_map, sizeof (gid_map), "/etc/subgid", id_str, group ? group->gr_name : id_str);
 
-	make_capable(CAP_SETUID);
-	make_capable(CAP_SETGID);
-	make_capable(CAP_DAC_OVERRIDE);
+	make_capable(BST_CAP_SETUID | BST_CAP_SETGID | BST_CAP_DAC_OVERRIDE);
 
 	burn(procfd, "uid_map", uid_map);
 	burn(procfd, "gid_map", gid_map);
@@ -361,8 +359,7 @@ static void persist_ns_files(int pid, const char *persist) {
 		snprintf(persistname, sizeof(persistname), "%s/%s", persist, f->proc_ns_name);
 		persistname[sizeof(persistname) - 1] = 0;
 
-		make_capable(CAP_SYS_ADMIN);
-		make_capable(CAP_SYS_PTRACE);
+		make_capable(BST_CAP_SYS_ADMIN | BST_CAP_SYS_PTRACE);
 
 		int rc = mount(procname, persistname, "", MS_BIND, "");
 

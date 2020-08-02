@@ -16,6 +16,7 @@
 #include <unistd.h>
 
 #include "enter.h"
+#include "capable.h"
 #include "sig.h"
 #include "kvlist.h"
 
@@ -95,6 +96,8 @@ int usage(int error, char *argv0)
 
 int main(int argc, char *argv[], char *envp[])
 {
+	init_capabilities();
+
 	static struct entry_settings opts = {
 		.uid   = -1,
 		.gid   = -1,
