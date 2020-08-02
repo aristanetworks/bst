@@ -365,32 +365,12 @@ int enter(struct entry_settings *opts)
 		net_if_up(rtnl, "lo");
 	}
 
-	/* The setuid will drop privileges. We ask to keep permitted capabilities
-	   in order to restore them for the rest of the program. */
-	prctl(PR_SET_KEEPCAPS, 1);
-
-	if (opts->ngroups != 0 && setgroups(opts->ngroups, opts->groups) == -1) {
-		err(1, "setgroups");
-	}
-	if (setregid(opts->gid, opts->gid) == -1) {
-		err(1, "setregid");
-	}
-	if (setreuid(opts->uid, opts->uid) == -1) {
-		err(1, "setreuid");
-	}
-
-	init_capabilities();
-
 	/* We have a special case for pivot_root: the syscall wants the
 	   new root to be a mount point, so we indulge. */
 	if (mnt_unshare && strcmp(root, "/") != 0) {
-		make_capable(BST_CAP_SYS_ADMIN);
-
 		if (mount(root, root, "none", MS_BIND|MS_REC, "") == -1) {
 			err(1, "mount(\"/\", \"/\", MS_BIND|MS_REC)");
 		}
-
-		reset_capabilities();
 	}
 
 	/* We have to do this after setuid/setgid/setgroups since mounting
@@ -414,12 +394,8 @@ int enter(struct entry_settings *opts)
 			}
 		}
 
-		make_capable(BST_CAP_SYS_ADMIN);
-
 		mount_entries(root, opts->mounts, opts->nmounts, opts->no_derandomize);
 		mount_mutables(root, opts->mutables, opts->nmutables);
-
-		reset_capabilities();
 	}
 
 	/* Don't chroot if root is "/". This is a better default since it
@@ -438,19 +414,13 @@ int enter(struct entry_settings *opts)
 		   will burn your house, invoke dragons, and eat your children. */
 
 		if (!mnt_unshare) {
-			make_capable(BST_CAP_SYS_CHROOT);
-
 			if (chroot(root) == -1) {
 				err(1, "chroot");
 			}
-
-			reset_capabilities();
 		} else {
 			if (chdir(root) == -1) {
 				err(1, "pivot_root: pre chdir");
 			}
-
-			make_capable(BST_CAP_SYS_ADMIN);
 
 			/* Pivot the root to `root` (new_root) and mount the old root
 			   (old_dir) on top of it. Then, unmount "." to get rid of the
@@ -467,19 +437,15 @@ int enter(struct entry_settings *opts)
 			if (umount2(".", MNT_DETACH)) {
 				err(1, "pivot_root: umount2");
 			}
-			if (chdir("/") == -1) {
-				err(1, "pivot_root: post chdir");
-			}
+		}
 
-			reset_capabilities();
+		if (chdir("/") == -1) {
+			err(1, "post-root chdir");
 		}
 	}
-	if (chdir(workdir) == -1) {
-		warn("chdir(\"%s\")", workdir);
-		warnx("falling back work directory to /.");
-		if (chdir("/") == -1) {
-			err(1, "chdir(\"/\")");
-		}
+
+	if (opts->umask != (mode_t) -1) {
+		umask(opts->umask);
 	}
 
 	if (pid_unshare && !opts->no_init) {
@@ -505,8 +471,24 @@ int enter(struct entry_settings *opts)
 		}
 	}
 
-	if (opts->umask != (mode_t) -1) {
-		umask(opts->umask);
+	/* Beyond this point, all capabilities are dropped by the uid/gid change.
+	   Only operations that make sense to be privileged in the context of
+	   the specified credentials (and not the userns root) should be placed
+	   below. */
+
+	if (opts->ngroups != 0 && setgroups(opts->ngroups, opts->groups) == -1) {
+		err(1, "setgroups");
+	}
+	if (setregid(opts->gid, opts->gid) == -1) {
+		err(1, "setregid");
+	}
+	if (setreuid(opts->uid, opts->uid) == -1) {
+		err(1, "setreuid");
+	}
+
+	if (chdir(workdir) == -1) {
+		warn("chdir(\"%s\")", workdir);
+		warnx("falling back work directory to /.");
 	}
 
 	execvpe(opts->pathname, opts->argv, opts->envp);
