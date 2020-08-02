@@ -112,7 +112,7 @@ int enter(struct entry_settings *opts)
 		   is unfortunately owned by root and not ourselves, so we have
 		   to give ourselves the capability to read our own file. Geez. */
 
-		make_capable(CAP_DAC_OVERRIDE);
+		make_capable(BST_CAP_DAC_OVERRIDE);
 
 		timens_offsets = open("/proc/self/timens_offsets", O_WRONLY);
 		if (timens_offsets == -1) {
@@ -384,7 +384,7 @@ int enter(struct entry_settings *opts)
 	/* We have a special case for pivot_root: the syscall wants the
 	   new root to be a mount point, so we indulge. */
 	if (mnt_unshare && strcmp(root, "/") != 0) {
-		make_capable(CAP_SYS_ADMIN);
+		make_capable(BST_CAP_SYS_ADMIN);
 
 		if (mount(root, root, "none", MS_BIND|MS_REC, "") == -1) {
 			err(1, "mount(\"/\", \"/\", MS_BIND|MS_REC)");
@@ -414,7 +414,7 @@ int enter(struct entry_settings *opts)
 			}
 		}
 
-		make_capable(CAP_SYS_ADMIN);
+		make_capable(BST_CAP_SYS_ADMIN);
 
 		mount_entries(root, opts->mounts, opts->nmounts, opts->no_derandomize);
 		mount_mutables(root, opts->mutables, opts->nmutables);
@@ -438,7 +438,7 @@ int enter(struct entry_settings *opts)
 		   will burn your house, invoke dragons, and eat your children. */
 
 		if (!mnt_unshare) {
-			make_capable(CAP_SYS_CHROOT);
+			make_capable(BST_CAP_SYS_CHROOT);
 
 			if (chroot(root) == -1) {
 				err(1, "chroot");
@@ -450,7 +450,7 @@ int enter(struct entry_settings *opts)
 				err(1, "pivot_root: pre chdir");
 			}
 
-			make_capable(CAP_SYS_ADMIN);
+			make_capable(BST_CAP_SYS_ADMIN);
 
 			/* Pivot the root to `root` (new_root) and mount the old root
 			   (old_dir) on top of it. Then, unmount "." to get rid of the

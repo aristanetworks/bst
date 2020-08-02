@@ -7,65 +7,49 @@
 #include <err.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <string.h>
 
 #include "capable.h"
 
-static cap_t original;
-static cap_t current;
+static struct __user_cap_data_struct original[2];
+static struct __user_cap_data_struct current[2];
+
+static struct __user_cap_header_struct hdr = {
+	.version = _LINUX_CAPABILITY_VERSION_3,
+};
+
+/* Normally, using cap(get|set) isn't really advisable, as it's a linux-specific
+   interface. But the matter of fact is that bst is already linux-specific, that
+   libcap adds a lot of unneeded complexity, and that it operates on dynamic
+   memory. What's the point of flagellating ourselves? */
 
 void init_capabilities(void)
 {
-	if (current && cap_free(current) == -1) {
-		err(1, "cap_free");
+	if (capget(&hdr, current) == -1) {
+		err(1, "capget");
 	}
-	if ((current = cap_get_proc()) == NULL) {
-		err(1, "cap_get_proc");
-	}
-	if (original && cap_free(original) == -1) {
-		err(1, "cap_free");
-	}
-	if ((original = cap_dup(current)) == NULL) {
-		err(1, "cap_dup");
-	}
+	memcpy(original, current, sizeof (original));
 }
 
-bool capable(cap_value_t cap)
+bool capable(uint64_t cap)
 {
-	if (!original) {
-		init_capabilities();
-	}
-
-	cap_flag_value_t set;
-	if (cap_get_flag(current, cap, CAP_EFFECTIVE, &set) == -1) {
-		err(1, "cap_get_flag");
-	}
-	return set;
+	uint64_t caps = (uint64_t) current[1].effective << 32 | current[0].effective;
+	return caps & (1 << cap);
 }
 
-void make_capable(cap_value_t cap)
+void make_capable(uint64_t cap)
 {
-	if (!original) {
-		init_capabilities();
-	}
-
-	if (cap_set_flag(current, CAP_EFFECTIVE, 1, &cap, CAP_SET) == -1) {
-		err(1, "cap_set_flag");
-	}
-
-	if (cap_set_proc(current) == -1) {
-		err(1, "caps_set_proc");
+	current[0].effective |= (__u32) (cap & (__u32) -1);
+	current[1].effective |= (__u32) (cap >> 32);
+	if (capset(&hdr, current) == -1) {
+		err(1, "capset");
 	}
 }
 
 void reset_capabilities(void)
 {
-	if (cap_set_proc(original) == -1) {
-		err(1, "caps_set_proc");
+	if (capset(&hdr, original) == -1) {
+		err(1, "capset");
 	}
-	if (cap_free(current) == -1) {
-		err(1, "cap_free");
-	}
-	if ((current = cap_dup(original)) == NULL) {
-		err(1, "cap_dup");
-	}
+	memcpy(current, original, sizeof (current));
 }
