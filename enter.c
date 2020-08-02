@@ -97,14 +97,6 @@ static void opts_to_nsactions(const struct entry_settings *opts, int *nsactions)
 
 int enter(struct entry_settings *opts)
 {
-	const char *root = opts->root ? opts->root : "/";
-
-	char resolved_root[PATH_MAX];
-	if (realpath(root, resolved_root) == NULL) {
-		err(1, "realpath(\"%s\")", root);
-	}
-	root = resolved_root;
-
 	int timens_offsets = -1;
 	if (opts->shares[SHARE_TIME] != share_with_parent) {
 
@@ -136,35 +128,22 @@ int enter(struct entry_settings *opts)
 	outer_helper.unshare_user = nsactions[SHARE_USER] == NSACTION_UNSHARE;
 	outer_helper_spawn(&outer_helper);
 
-	int nsenterables[] = {
-		SHARE_USER,
-		SHARE_NET,
-		SHARE_MNT,
-		SHARE_IPC,
-		SHARE_PID,
-		SHARE_CGROUP,
-		SHARE_UTS,
-		SHARE_TIME,
-		-1,
-	};
+	/* After this point, we must operate with the privilege set of the caller
+	   -- no suid bit, no calling make_capable. */
 
-	for (int *ns = &nsenterables[0]; *ns != -1; ++ns) {
-		int action = nsactions[*ns];
-		if (action < 0) {
-			continue;
-		}
-		int rc = setns(action, flags[*ns].flag);
-		if (rc == -1) {
-			err(1, "setns(%s)", flags[*ns].proc_ns_name);
-		}
-		close(action);
+	/* This drops capabilities if we're being run as a setuid binary. */
+	if (setuid(getuid()) == -1) {
+		err(1, "setuid");
 	}
+	deny_new_capabilities = 1;
 
-	if (nsactions[SHARE_USER] >= 0) {
-		/* Reinitialize recorded capability set, given it changed when
-		   entering the userns. */
-		init_capabilities();
+	const char *root = opts->root ? opts->root : "/";
+
+	char resolved_root[PATH_MAX];
+	if (realpath(root, resolved_root) == NULL) {
+		err(1, "realpath(\"%s\")", root);
 	}
+	root = resolved_root;
 
 	char cwd[PATH_MAX];
 	char *workdir = opts->workdir;
@@ -191,6 +170,30 @@ int enter(struct entry_settings *opts)
 	   new root. In both cases, the workdir must be /. */
 	if (!workdir || workdir[0] == '\0') {
 		workdir = "/";
+	}
+
+	int nsenterables[] = {
+		SHARE_USER,
+		SHARE_NET,
+		SHARE_MNT,
+		SHARE_IPC,
+		SHARE_PID,
+		SHARE_CGROUP,
+		SHARE_UTS,
+		SHARE_TIME,
+		-1,
+	};
+
+	for (int *ns = &nsenterables[0]; *ns != -1; ++ns) {
+		int action = nsactions[*ns];
+		if (action < 0) {
+			continue;
+		}
+		int rc = setns(action, flags[*ns].flag);
+		if (rc == -1) {
+			err(1, "setns(%s)", flags[*ns].proc_ns_name);
+		}
+		close(action);
 	}
 
 	/* Unshare all relevant namespaces. It's hard to check in advance which
@@ -229,13 +232,6 @@ int enter(struct entry_settings *opts)
 	int pid_unshare  = nsactions[SHARE_PID]  == NSACTION_UNSHARE;
 	int net_unshare  = nsactions[SHARE_NET]  == NSACTION_UNSHARE;
 	int time_unshare = nsactions[SHARE_TIME] == NSACTION_UNSHARE;
-	int user_unshare = nsactions[SHARE_USER] == NSACTION_UNSHARE;
-
-	if (user_unshare) {
-		/* Reinitialize recorded capability set, given it changed when
-		   unsharing the userns. */
-		init_capabilities();
-	}
 
 	/* Just unsharing the mount namespace is not sufficient -- if we don't make
 	   every mount entry private, any change we make will be applied to the
