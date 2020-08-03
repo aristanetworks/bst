@@ -8,7 +8,7 @@ CFLAGS ?= -O2
 CFLAGS += -std=c99 -Wall -Wextra -Wno-unused-parameter -fno-strict-aliasing
 CPPFLAGS += -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -DLIBEXECDIR=\"$(LIBEXECDIR)\"
 
-SRCS := main.c enter.c outer.c mount.c cp.c setarch.c usage.c sig.c timens.c path.c kvlist.c net.c capable.c
+SRCS := main.c enter.c outer.c mount.c cp.c setarch.c usage.c sig.c timens.c path.c kvlist.c net.c capable.c userns.c
 OBJS := $(subst .c,.o,$(SRCS))
 BINS := bst bst-unpersist bst-init
 
