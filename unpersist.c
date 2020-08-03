@@ -190,6 +190,8 @@ int main(int argc, char *argv[])
 		int unpersistat_flags;
 	} settings;
 
+	init_capabilities();
+
 	int error = 0;
 	int c;
 	while ((c = getopt_long(argc, argv, "h", options, NULL)) != -1) {
