@@ -408,12 +408,6 @@ int enter(struct entry_settings *opts)
 
 	int initfd = -1;
 	if (opts->init_argv != NULL && opts->init_argv[0] != NULL) {
-		if (nsactions[SHARE_PID] >= 0) {
-			errx(1, "cannot specify init process when entering an arbitrary pid namespace");
-		}
-		if (!pid_unshare) {
-			errx(1, "cannot specify init process when not in a pid namespace");
-		}
 		initfd = open(opts->init_argv[0], O_PATH);
 		if (initfd == -1) {
 			err(1, "open %s", opts->init_argv[0]);
@@ -491,6 +485,11 @@ int enter(struct entry_settings *opts)
 	}
 
 	if (initfd != -1) {
+
+		if (!pid_unshare && prctl(PR_SET_CHILD_SUBREAPER, 1) == -1) {
+			err(1, "prctl: could not set init as child subreaper");
+		}
+
 		/* This size estimation is an overkill upper bound, but oh well... */
 		char *argv[ARG_MAX];
 		size_t argc = 0;
