@@ -8,6 +8,8 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <string.h>
+#include <syscall.h>
+#include <unistd.h>
 
 #include "capable.h"
 
@@ -25,9 +27,19 @@ int deny_new_capabilities = 0;
    libcap adds a lot of unneeded complexity, and that it operates on dynamic
    memory. What's the point of flagellating ourselves? */
 
+static int bst_capset(cap_user_header_t header, const cap_user_data_t data)
+{
+	return syscall(SYS_capset, header, data);
+}
+
+static int bst_capget(cap_user_header_t header, cap_user_data_t data)
+{
+	return syscall(SYS_capget, header, data);
+}
+
 void init_capabilities(void)
 {
-	if (capget(&hdr, current) == -1) {
+	if (bst_capget(&hdr, current) == -1) {
 		err(1, "capget");
 	}
 	memcpy(original, current, sizeof (original));
@@ -46,14 +58,14 @@ void make_capable(uint64_t cap)
 	}
 	current[0].effective |= (__u32) (cap & (__u32) -1);
 	current[1].effective |= (__u32) (cap >> 32);
-	if (capset(&hdr, current) == -1) {
+	if (bst_capset(&hdr, current) == -1) {
 		err(1, "capset");
 	}
 }
 
 void reset_capabilities(void)
 {
-	if (capset(&hdr, original) == -1) {
+	if (bst_capset(&hdr, original) == -1) {
 		err(1, "capset");
 	}
 	memcpy(current, original, sizeof (current));

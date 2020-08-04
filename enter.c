@@ -17,7 +17,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/capability.h>
 #include <sys/mount.h>
 #include <sys/personality.h>
 #include <sys/prctl.h>

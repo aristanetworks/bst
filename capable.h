@@ -8,7 +8,8 @@
 # define CAPABLE_H_
 
 # include <stdbool.h>
-# include <sys/capability.h>
+# include <stdint.h>
+# include <linux/capability.h>
 
 /* Define more useful capability constants */
 # define BST_CAP_SYS_ADMIN      ((uint64_t) 1 << CAP_SYS_ADMIN)
