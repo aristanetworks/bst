@@ -145,6 +145,18 @@ Users of bst may choose to opt-out of some of the isolation.
 
 	You cannot use this option with _--share=time_.
 
+\--init <argv>
+	Set the init process to be used as parent of *<executable>*. *<argv>* is
+	a space-delimited argv array, and _argv[0]_ must be an absolute path to a
+	valid executable in the current filesystem root (in other words, the init
+	executable does not need to exist in the root specified by _--root_).
+
+	If an empty *<argv>* is passed to _--init_, no init process will be
+	spawed by bst, and *<executable>* will be executed directly.
+
+	If bst unshares the pid namespace and no _--init_ is specified, it uses
+	by default *bst-init*(1).
+
 \--no-fake-devtmpfs
 	Do not replace devtmpfs mounts with a fake devtmpfs.
 
@@ -167,15 +179,6 @@ Users of bst may choose to opt-out of some of the isolation.
 	By default, *bst* automatically tries to mount a new procfs on top of _/proc_
 	if it detects it to be on another filesystem than _/_.
 
-\--no-init
-	Do not use *bst*'s minimal init process.
-
-	By default, *bst* automatically spawns a bare-bones init process in a PID
-	namespace, which only reaps zombies, and immediately terminates when the
-	spawned process of _<executable>_ exits.
-
-	This does nothing when used with _--share=pid_.
-
 \--no-loopback-setup
 	Do not bring up the _lo_ interface.
 
@@ -186,4 +189,4 @@ Users of bst may choose to opt-out of some of the isolation.
 
 # SEE ALSO
 
-*bst-unpersist*(1), *namespaces*(7), *mount*(1), *setarch*(1)
+*bst-unpersist*(1), *bst-init*(1), *namespaces*(7), *mount*(1), *setarch*(1)

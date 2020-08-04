@@ -43,10 +43,10 @@ enum {
 	OPTION_TIME,
 	OPTION_PERSIST,
 	OPTION_UMASK,
+	OPTION_INIT,
 	OPTION_NO_FAKE_DEVTMPFS,
 	OPTION_NO_DERANDOMIZE,
 	OPTION_NO_PROC_REMOUNT,
-	OPTION_NO_INIT,
 	OPTION_NO_LOOPBACK_SETUP,
 	OPTION_SHARE_DEPRECATED,
 };
@@ -131,12 +131,12 @@ int main(int argc, char *argv[], char *envp[])
 		{ "time",               required_argument, NULL, OPTION_TIME            },
 		{ "persist",            required_argument, NULL, OPTION_PERSIST         },
 		{ "umask",              required_argument, NULL, OPTION_UMASK           },
+		{ "init",               required_argument, NULL, OPTION_INIT            },
 
 		/* Opt-out feature flags */
 		{ "no-fake-devtmpfs",   no_argument, NULL, OPTION_NO_FAKE_DEVTMPFS      },
 		{ "no-derandomize",     no_argument, NULL, OPTION_NO_DERANDOMIZE        },
 		{ "no-proc-remount",    no_argument, NULL, OPTION_NO_PROC_REMOUNT       },
-		{ "no-init",            no_argument, NULL, OPTION_NO_INIT               },
 		{ "no-loopback-setup",  no_argument, NULL, OPTION_NO_LOOPBACK_SETUP     },
 
 		/* Deprecated flags */
@@ -149,6 +149,9 @@ int main(int argc, char *argv[], char *envp[])
 		[CLOCK_MONOTONIC] = "monotonic",
 		[CLOCK_BOOTTIME]  = "boottime",
 	};
+
+	char *init[512];
+	size_t init_argc = 0;
 
 	char *argv0 = NULL;
 
@@ -340,8 +343,15 @@ int main(int argc, char *argv[], char *envp[])
 				opts.no_proc_remount = 1;
 				break;
 
-			case OPTION_NO_INIT:
-				opts.no_init = 1;
+			case OPTION_INIT:
+				for (char *arg = strtok(optarg, " "); arg; arg = strtok(NULL, " ")) {
+					size_t max_args = sizeof (init) / sizeof (*init);
+					if (init_argc >= max_args-1) {
+						errx(1, "max number of arguments in --init is %zu", max_args);
+					}
+					init[init_argc++] = arg;
+				}
+				init[init_argc++] = NULL;
 				break;
 
 			case OPTION_NO_LOOPBACK_SETUP:
@@ -368,6 +378,19 @@ int main(int argc, char *argv[], char *envp[])
 					}
 				}
 		}
+	}
+
+	static char *default_init[] = {
+		LIBEXECDIR "/bst-init",
+		NULL,
+	};
+
+	/* Use our own default init if we unshare the pid namespace, and no
+	   --init has been specified. */
+	if (opts.shares[SHARE_PID] == NULL && init_argc == 0) {
+		opts.init_argv = default_init;
+	} else {
+		opts.init_argv = init;
 	}
 
 	char *default_argv[] = {

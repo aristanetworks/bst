@@ -3,3 +3,4 @@
 *.t.err
 bst
 bst-unpersist
+bst-init

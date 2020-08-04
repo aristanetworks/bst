@@ -7,15 +7,32 @@
 #include <err.h>
 #include <errno.h>
 #include <signal.h>
+#include <stdio.h>
+#include <sys/prctl.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 #include "init.h"
 
-noreturn void init(pid_t main_child_pid)
+int main(int argc, char *argv[], char *envp[])
 {
-	for (int sig = 1; sig <= SIGRTMAX; ++sig) {
-		signal(sig, SIG_DFL);
+	if (argc == 1) {
+		printf("usage: %s <program> [args...]\n", argv[0]);
+		return 2;
+	}
+
+	if (prctl(PR_SET_NAME, "bst-init") == -1) {
+		err(1, "prctl(PR_SET_NAME)");
+	}
+
+	pid_t main_child_pid = fork();
+	if (main_child_pid == -1) {
+		err(1, "fork");
+	}
+
+	if (!main_child_pid) {
+		execvpe(argv[1], argv + 1, envp);
+		err(1, "execvpe");
 	}
 
 	for (;;) {
