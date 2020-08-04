@@ -95,6 +95,19 @@ static void opts_to_nsactions(const struct entry_settings *opts, int *nsactions)
 	}
 }
 
+#ifndef ARG_MAX
+# define ARG_MAX 4096
+#endif
+
+static inline size_t append_argv(char **argv, size_t argc, char *arg)
+{
+	if (argc >= ARG_MAX) {
+		errx(1, "argv too large, a maximum of %zu arguments is supported", (size_t) ARG_MAX);
+	}
+	argv[argc] = arg;
+	return argc + 1;
+}
+
 int enter(struct entry_settings *opts)
 {
 	int timens_offsets = -1;
@@ -394,6 +407,20 @@ int enter(struct entry_settings *opts)
 		mount_mutables(root, opts->mutables, opts->nmutables);
 	}
 
+	int initfd = -1;
+	if (opts->init_argv != NULL && opts->init_argv[0] != NULL) {
+		if (nsactions[SHARE_PID] >= 0) {
+			errx(1, "cannot specify init process when entering an arbitrary pid namespace");
+		}
+		if (!pid_unshare) {
+			errx(1, "cannot specify init process when not in a pid namespace");
+		}
+		initfd = open(opts->init_argv[0], O_PATH);
+		if (initfd == -1) {
+			err(1, "open %s", opts->init_argv[0]);
+		}
+	}
+
 	/* Don't chroot if root is "/". This is a better default since it
 	   allows us to run commands that unshare nothing unprivileged. */
 	if (strcmp(root, "/") != 0) {
@@ -444,29 +471,6 @@ int enter(struct entry_settings *opts)
 		umask(opts->umask);
 	}
 
-	if (pid_unshare && !opts->no_init) {
-		pid_t child = fork();
-
-		if (child == -1) {
-			err(1, "fork");
-		} else if (child) {
-
-			/* bst is effectively a setuid binary. This means that by default,
-			   it has its dumpability set to the value of
-			   /proc/sys/fs/suid_dumpable, which likely changes the ownership
-			   of its own /proc/pid/ directory. This means that we can't use
-			   nsenter and friends to probe this init's /proc/pid/ns.
-
-			   Setting the dumpable flag fixes this. */
-			if (prctl(PR_SET_DUMPABLE, 1) == -1) {
-				err(1, "prctl(PR_SET_DUMPABLE)");
-			}
-
-			init(child);
-			__builtin_unreachable();
-		}
-	}
-
 	/* Beyond this point, all capabilities are dropped by the uid/gid change.
 	   Only operations that make sense to be privileged in the context of
 	   the specified credentials (and not the userns root) should be placed
@@ -487,6 +491,31 @@ int enter(struct entry_settings *opts)
 		warnx("falling back work directory to /.");
 	}
 
-	execvpe(opts->pathname, opts->argv, opts->envp);
-	err(1, "execvpe");
+	if (initfd != -1) {
+		/* This size estimation is an overkill upper bound, but oh well... */
+		char *argv[ARG_MAX];
+		size_t argc = 0;
+
+		char *argv0 = opts->init_argv[0] + strlen(opts->init_argv[0]);
+		for (; argv0 != opts->init_argv[0] && *argv0 != '/'; --argv0) {
+			continue;
+		}
+		++argv0;
+
+		argc = append_argv(argv, argc, argv0);
+		for (char *const *arg = opts->init_argv + 1; *arg; ++arg) {
+			argc = append_argv(argv, argc, *arg);
+		}
+		argc = append_argv(argv, argc, (char *) opts->pathname);
+		for (char *const *arg = opts->argv + 1; *arg; ++arg) {
+			argc = append_argv(argv, argc, *arg);
+		}
+		append_argv(argv, argc, NULL);
+
+		syscall(SYS_execveat, initfd, "", argv, opts->envp, AT_EMPTY_PATH);
+		err(1, "execveat");
+	} else {
+		execvpe(opts->pathname, opts->argv, opts->envp);
+		err(1, "execvpe");
+	}
 }

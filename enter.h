@@ -46,6 +46,7 @@ struct entry_settings {
 	const char *pathname;
 	char *const *argv;
 	char *const *envp;
+	char *const *init_argv;
 	char *root;
 	char *workdir;
 

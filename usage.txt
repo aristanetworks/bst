@@ -30,9 +30,9 @@ Options:
 	--hostname <host>:      Set the host name.
 	--domainname <domain>:  Set the domain name.
 	--time <name>=<s>[.ns]: Set the time of a specific clock.
+	--init=<init-argv>:     Use the specified outer path as init process.
 
 	--no-fake-devtmpfs:     Don't replace devtmpfs mounts with fake ones.
 	--no-derandomize:       Don't attempt to reduce randomness sources.
 	--no-proc-remount:      Don't remount the existing /proc in pid namespaces.
-	--no-init:              Don't use the builtin init process.
 	--no-loopback-setup:    Don't bring the lo interface up in network namespaces.
