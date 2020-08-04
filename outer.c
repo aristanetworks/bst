@@ -149,7 +149,7 @@ static void populate_id_map(char *map, size_t size,
 			continue;
 		}
 
-		if (strncmp(entryname, name, sizeof (entryname) != 0)
+		if (strncmp(entryname, name, sizeof (entryname)) != 0
 				&& strncmp(entryname, id, sizeof (entryname)) != 0) {
 			continue;
 		}
