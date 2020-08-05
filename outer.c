@@ -46,15 +46,15 @@ static void burn(int dirfd, char *path, char *data)
 {
 	int fd = openat(dirfd, path, O_WRONLY, 0);
 	if (fd == -1) {
-		err(1, "burn(%s): open", path);
+		err(1, "burn %s: open", path);
 	}
 
 	if (write(fd, data, strlen(data)) == -1) {
-		err(1, "burn(%s): write", path);
+		err(1, "burn %s: write", path);
 	}
 
 	if (close(fd) == -1) {
-		err(1, "burn(%s): close", path);
+		err(1, "burn %s: close", path);
 	}
 }
 
@@ -67,7 +67,7 @@ static void burn_uidmap_gidmap(pid_t child_pid)
 
 	int procfd = open(procpath, O_DIRECTORY | O_PATH);
 	if (procfd == -1) {
-		err(1, "open(\"%s\")", procpath);
+		err(1, "open %s", procpath);
 	}
 
 	id_map cur_uid_map;
@@ -212,17 +212,17 @@ static void persist_ns_files(int pid, const char *persist) {
 	snprintf(procname, sizeof(procname), "/proc/%d/ns", pid);
 	int procnsdir = open(procname, O_DIRECTORY | O_PATH);
 	if (procnsdir < 0) {
-		err(1, "open(\"%s\")", procname);
+		err(1, "open %s", procname);
 	}
 	int persistdir = open(persist, O_DIRECTORY | O_PATH);
 	if (persistdir < 0) {
-		err(1, "open(\"%s\")", persist);
+		err(1, "open %s", persist);
 	}
 	for (struct persistflag *f = pflags; f < pflags + lengthof(pflags); f++) {
 		int nsfd = openat(persistdir, f->proc_ns_name, O_CREAT | O_WRONLY | O_EXCL, 0666);
 		if (nsfd < 0) {
 			if (errno != EEXIST) {
-				err(1, "creat(\"%s/%s\")", persist, f->proc_ns_name);
+				err(1, "creat %s/%s", persist, f->proc_ns_name);
 			}
 		} else {
 			close(nsfd);
@@ -247,7 +247,7 @@ static void persist_ns_files(int pid, const char *persist) {
 				/* Kernel does not support this namespace type.  Remove the mountpoint. */
 				unlinkat(persistdir, f->proc_ns_name, 0);
 			} else {
-				err(1, "mount(\"%s\",\"%s\",MS_BIND)", procname, persistname);
+				err(1, "bind-mount %s to %s", procname, persistname);
 			}
 		}
 	}

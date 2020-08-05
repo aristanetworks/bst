@@ -167,9 +167,7 @@ void mount_entries(const char *root, const struct mount_entry *mounts, size_t nm
 		int ro_bind = (flags & (MS_BIND | MS_RDONLY)) == (MS_BIND | MS_RDONLY)
 				&& !(flags & MS_REMOUNT);
 		if (ro_bind && mount("none", target, NULL, flags | MS_REMOUNT, NULL) == -1) {
-			err(1, "mount_entries: mount(\"none\", \"%s\", NULL, %lu | MS_REMOUNT, NULL)",
-					mnt->target,
-					flags);
+			err(1, "mount_entries: read-only remount of %s", mnt->target);
 		}
 
 		/* Construct the contents of our fake devtmpfs. */
@@ -188,7 +186,7 @@ void mount_entries(const char *root, const struct mount_entry *mounts, size_t nm
 				const char *path = makepath("%s%s/%s", root, mnt->target, directories[i].path);
 
 				if (mkdir(path, directories[i].mode) == -1) {
-					err(1, "mount_entries: bst_devtmpfs: mkdir(\"%s\"", path);
+					err(1, "mount_entries: bst_devtmpfs: mkdir %s", path);
 				}
 			}
 
@@ -224,7 +222,7 @@ void mount_entries(const char *root, const struct mount_entry *mounts, size_t nm
 				makepath_r(source, "/dev/%s", devices[i].path);
 
 				if (errno != EPERM || strncmp(source, path, PATH_MAX) == 0) {
-					err(1, "mount_entries: bst_devtmpfs: mknod(\"%s\", 0%o, {%d, %d})",
+					err(1, "mount_entries: bst_devtmpfs: mknod %s mode 0%o dev {%d, %d})",
 							path,
 							devices[i].mode,
 							major(devices[i].dev),
@@ -232,13 +230,13 @@ void mount_entries(const char *root, const struct mount_entry *mounts, size_t nm
 				}
 
 				if (mknod(path, S_IFREG | (devices[i].mode & 0777), 0) == -1) {
-					err(1, "mount_entries: bst_devtmpfs: mknod(\"%s\", 0%o, 0)",
+					err(1, "mount_entries: bst_devtmpfs: mknod %s mode 0%o",
 							path,
 							devices[i].mode);
 				}
 
 				if (mount(source, path, "", MS_BIND, "") == -1) {
-					err(1, "mount_entries: bst_devtmpfs: mount(\"%s\", \"%s\", MS_BIND)",
+					err(1, "mount_entries: bst_devtmpfs: bind-mount %s to %s",
 							source, path);
 				}
 			}
@@ -259,7 +257,7 @@ void mount_entries(const char *root, const struct mount_entry *mounts, size_t nm
 				const char *path = makepath("%s%s/%s", root, mnt->target, symlinks[i].path);
 
 				if (symlink(symlinks[i].target, path) == -1 && errno != EEXIST) {
-					err(1, "mount_entries: bst_devtmpfs: symlink(\"%s\", \"%s\")",
+					err(1, "mount_entries: bst_devtmpfs: symlink %s -> %s",
 							symlinks[i].target, path);
 				}
 			}
@@ -287,7 +285,7 @@ void mount_mutables(const char *root, const char *const *mutables, size_t nmutab
 
 		struct stat info;
 		if (stat(mutpath, &info) == -1) {
-			err(1, "mount_mutables: stat(\"%s\")", mutpath);
+			err(1, "mount_mutables: stat %s", mutpath);
 		}
 
 		char tmpdir[PATH_MAX] = "/tmp/bst.XXXXXX";
@@ -296,7 +294,7 @@ void mount_mutables(const char *root, const char *const *mutables, size_t nmutab
 		}
 
 		if (mount("none", tmpdir, "tmpfs", 0, "") == -1) {
-			err(1, "mount_mutables: mount(\"none\", \"%s\", \"tmpfs\")", tmpdir);
+			err(1, "mount_mutables: mount tmpfs %s", tmpdir);
 		}
 
 		const char *mnt_source = tmpdir;
@@ -308,7 +306,7 @@ void mount_mutables(const char *root, const char *const *mutables, size_t nmutab
 		copy(mnt_source, mutpath, &info);
 
 		if (mount(mnt_source, mnt_target, "", MS_BIND, "") == -1) {
-			err(1, "mount_mutables: mount(\"%s\", \"%s\", MS_BIND)", mnt_source, mnt_target);
+			err(1, "mount_mutables: bind-mount %s to %s", mnt_source, mnt_target);
 		}
 
 		if (umount(tmpdir) == -1) {

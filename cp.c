@@ -24,16 +24,16 @@ static int copyfile(const char *target, const char *source, const struct stat *s
 	case S_IFLNK:
 		linksz = readlink(source, realpath, PATH_MAX - 1);
 		if (linksz == -1) {
-			err(1, "copyfile: readlink(\"%s\")", source);
+			err(1, "copyfile: readlink %s", source);
 		}
 		realpath[linksz] = 0;
 		if (symlink(realpath, target) == -1) {
-			err(1, "copyfile: symlink(\"%s\", \"%s\")", target, realpath);
+			err(1, "copyfile: symlink %s -> %s", target, realpath);
 		}
 		return 0;
 	case S_IFDIR:
 		if (mkdir(target, srcinfo->st_mode & 07777) == -1 && errno != EEXIST) {
-			err(1, "copyfile: mkdir(\"%s\", %o)", target, srcinfo->st_mode);
+			err(1, "copyfile: mkdir %s mode %o", target, srcinfo->st_mode);
 		}
 		return 0;
 	case S_IFREG:
@@ -41,7 +41,7 @@ static int copyfile(const char *target, const char *source, const struct stat *s
 		break;
 	default:
 		if (mknod(target, srcinfo->st_mode, srcinfo->st_dev) == -1) {
-			err(1, "copyfile: mknod(\"%s\", %o, %lu)", target, srcinfo->st_mode, srcinfo->st_dev);
+			err(1, "copyfile: mknod %s mode %o dev %lu)", target, srcinfo->st_mode, srcinfo->st_dev);
 		}
 		return 0;
 	}
@@ -49,11 +49,11 @@ static int copyfile(const char *target, const char *source, const struct stat *s
 	int from, to;
 
 	if ((from = open(source, O_RDONLY)) == -1) {
-		err(1, "copyfile: open(\"%s\", O_RDONLY)", source);
+		err(1, "copyfile: open %s", source);
 	}
 
 	if ((to = open(target, O_WRONLY | O_CREAT | O_EXCL, 0777)) == -1) {
-		err(1, "copyfile: open(\"%s\", O_WRONLY | O_CREAT)", target);
+		err(1, "copyfile: creat %s", target);
 	}
 
 	size_t remain = srcinfo->st_size;
@@ -66,7 +66,7 @@ static int copyfile(const char *target, const char *source, const struct stat *s
 	} while (remain > 0);
 
 	if (close(to) == -1) {
-		err(1, "copyfile: close(\"%s\")", target);
+		err(1, "copyfile: close %s", target);
 	}
 
 	close(from);
@@ -95,7 +95,7 @@ int copy(const char *target, const char *source, const struct stat *srcinfo)
 		source_prefix_len = strlen(source);
 
 		if (nftw(source, copydir, 512, FTW_PHYS) == -1) {
-			err(1, "copy: nftw(\"%s\")", source);
+			err(1, "copy: nftw %s", source);
 		}
 		return 0;
 	} else {

@@ -121,7 +121,7 @@ int enter(struct entry_settings *opts)
 		timens_offsets = open("/proc/self/timens_offsets", O_WRONLY);
 		if (timens_offsets == -1) {
 			if (errno != ENOENT) {
-				err(1, "open(\"/proc/self/timens_offsets\")");
+				err(1, "open /proc/self/timens_offsets");
 			}
 			/* The kernel evidently doesn't support time namespaces yet.
 			   Don't try to open the time namespace file with --share-all=<dir>,
@@ -153,7 +153,7 @@ int enter(struct entry_settings *opts)
 
 	char resolved_root[PATH_MAX];
 	if (realpath(root, resolved_root) == NULL) {
-		err(1, "realpath(\"%s\")", root);
+		err(1, "realpath %s", root);
 	}
 	root = resolved_root;
 
@@ -203,7 +203,7 @@ int enter(struct entry_settings *opts)
 		}
 		int rc = setns(action, flags[*ns].flag);
 		if (rc == -1) {
-			err(1, "setns(%s)", flags[*ns].proc_ns_name);
+			err(1, "setns %s", flags[*ns].proc_ns_name);
 		}
 		close(action);
 	}
@@ -235,7 +235,7 @@ int enter(struct entry_settings *opts)
 			   from the unshare set. */
 			nsactions[*ns] = NSACTION_SHARE_WITH_PARENT;
 		} else if (rc == -1) {
-			err(1, "unshare(%s)", flags[*ns].proc_ns_name);
+			err(1, "unshare %s", flags[*ns].proc_ns_name);
 		}
 	}
 
@@ -260,7 +260,7 @@ int enter(struct entry_settings *opts)
 	if (!opts->no_derandomize) {
 		unsigned long persona = personality(0xffffffff) | ADDR_NO_RANDOMIZE;
 		if (personality(persona) == -1) {
-			err(1, "personality(%lu)", persona);
+			err(1, "personality %lu", persona);
 		}
 	}
 
@@ -269,7 +269,7 @@ int enter(struct entry_settings *opts)
 	}
 
 	if (timens_offsets != -1 && close(timens_offsets) == -1) {
-		err(1, "close(timens_offsets)");
+		err(1, "close timens_offsets");
 	}
 
 	/* You can't "really" unshare the PID namespace of a running process
@@ -306,7 +306,7 @@ int enter(struct entry_settings *opts)
 	   leaky by default which isn't great, and the obvious workaround to
 	   daemonize the process tree is to just nohup bst. */
 	if (prctl(PR_SET_PDEATHSIG, SIGKILL) == -1) {
-		err(1, "prctl(PR_SET_PDEATHSIG)");
+		err(1, "prctl PR_SET_PDEATHSIG");
 	}
 
 	outer_helper_sync(&outer_helper);
@@ -317,17 +317,17 @@ int enter(struct entry_settings *opts)
 	if (!opts->no_proc_remount && mnt_unshare && pid_unshare) {
 		int rootfd = open(root, O_PATH, 0);
 		if (rootfd == -1) {
-			err(1, "open(\"%s\")", root);
+			err(1, "open %s", root);
 		}
 
 		struct stat procst = { .st_dev = 0 };
 		if (fstatat(rootfd, "proc", &procst, AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW) == -1 && errno != ENOENT) {
-			err(1, "fstatat(\"%s/proc\")", root);
+			err(1, "fstatat %s/proc", root);
 		}
 
 		struct stat rootst;
 		if (fstat(rootfd, &rootst) == -1) {
-			err(1, "fstat(\"%s\")", root);
+			err(1, "fstat %s", root);
 		}
 
 		close(rootfd);
@@ -340,7 +340,7 @@ int enter(struct entry_settings *opts)
 			umount2(target, MNT_DETACH);
 
 			if (mount("proc", target, "proc", 0, NULL) == -1) {
-				err(1, "mount(\"proc\", \"%s\", \"proc\", 0)", target);
+				err(1, "mount: %s remount", target);
 			}
 		}
 	}
@@ -479,7 +479,7 @@ int enter(struct entry_settings *opts)
 	}
 
 	if (chdir(workdir) == -1) {
-		warn("chdir(\"%s\")", workdir);
+		warn("chdir %s", workdir);
 		warnx("falling back work directory to /.");
 		if (chdir("/") == -1) {
 			err(1, "chdir /");
@@ -513,9 +513,9 @@ int enter(struct entry_settings *opts)
 		append_argv(argv, argc, NULL);
 
 		syscall(SYS_execveat, initfd, "", argv, opts->envp, AT_EMPTY_PATH);
-		err(1, "execveat");
+		err(1, "execveat %s", opts->init_argv[0]);
 	} else {
 		execvpe(opts->pathname, opts->argv, opts->envp);
-		err(1, "execvpe");
+		err(1, "execvpe %s", opts->pathname);
 	}
 }
