@@ -9,6 +9,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <sys/prctl.h>
+#include <sys/ptrace.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -56,6 +57,20 @@ int main(int argc, char *argv[], char *envp[])
 				exitcode = WTERMSIG(status) | 1 << 7;
 			}
 			_exit(exitcode);
+		}
+		if (WIFSTOPPED(status)) {
+			/*
+			 * Empirically, if a traced process's parent exits, the
+			 * init process inherits the tracing of that process.
+			 * If we notice an inherited child has stopped without
+			 * explicitly asking for that notification, detach from
+			 * it, forwarding WSTOPSIG.
+			 */
+			long rc = ptrace(PTRACE_DETACH, pid, 0, WSTOPSIG(status));
+			if (rc != 0) {
+				warn("failed to detach from traced child %d, "
+					"status %d", pid, status);
+			}
 		}
 	}
 }
