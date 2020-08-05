@@ -38,9 +38,9 @@ Testing uid/gid/groups semantics
 	2
 	2 3 4
 
-Program must be init of its pid namespace
+Program must be init of its pid namespace if no init is specified
 
-	$ bst --no-init sh -c 'echo $$'
+	$ bst --init='' sh -c 'echo $$'
 	1
 
 Program must be a child of init of its pid namespace
@@ -103,7 +103,7 @@ Testing --argv0
 	$ bst sh -c 'echo $0'
 	sh
 
-	$ bst --argv0 ash sh -c 'echo $0'
+	$ bst --init='' --argv0 ash sh -c 'echo $0'
 	ash
 
 Testing hostname semantics
