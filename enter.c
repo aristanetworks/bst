@@ -453,10 +453,9 @@ int enter(struct entry_settings *opts)
 			if (umount2(".", MNT_DETACH)) {
 				err(1, "pivot_root: umount2");
 			}
-		}
-
-		if (chdir("/") == -1) {
-			err(1, "post-root chdir");
+			if (chdir("/") == -1) {
+				err(1, "pivot_root: post chdir");
+			}
 		}
 	}
 
@@ -482,6 +481,9 @@ int enter(struct entry_settings *opts)
 	if (chdir(workdir) == -1) {
 		warn("chdir(\"%s\")", workdir);
 		warnx("falling back work directory to /.");
+		if (chdir("/") == -1) {
+			err(1, "chdir /");
+		}
 	}
 
 	if (initfd != -1) {
