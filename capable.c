@@ -29,12 +29,12 @@ int deny_new_capabilities = 0;
 
 static int bst_capset(cap_user_header_t header, const cap_user_data_t data)
 {
-	return syscall(SYS_capset, header, data);
+	return (int) syscall(SYS_capset, header, data);
 }
 
 static int bst_capget(cap_user_header_t header, cap_user_data_t data)
 {
-	return syscall(SYS_capget, header, data);
+	return (int) syscall(SYS_capget, header, data);
 }
 
 void init_capabilities(void)

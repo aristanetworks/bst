@@ -5,7 +5,9 @@
  */
 
 #include <err.h>
+#include <inttypes.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -34,7 +36,7 @@ static inline size_t id_map_append(id_map map, size_t nrange, uint32_t inner, ui
 	return nrange;
 }
 
-static char *itoa(int i)
+static char *itoa(uint32_t i)
 {
 	static char buf[ID_STR_MAX + 1];
 
@@ -103,11 +105,11 @@ void id_map_load_subids(id_map map, const char *subid_path, uint32_t id, const c
 		char entryname[ID_STR_MAX + 1];
 		entryname[ID_STR_MAX] = 0;
 
-		int start;
-		int length;
+		uint32_t start;
+		uint32_t length;
 
 		_Static_assert(ID_STR_MAX == 32, "scanf width must be equal to ID_STR_MAX");
-		int items = sscanf(line, "%32[^:]:%d:%d\n",
+		int items = sscanf(line, "%32[^:]:%" PRIu32 ":%" PRIu32 "u\n",
 				entryname,
 				&start,
 				&length);
@@ -168,7 +170,7 @@ void id_map_load_procids(id_map map, const char *procid_path)
 	while (fgets(line, sizeof (line), subids)) {
 		uint32_t inner, outer, len;
 
-		int items = sscanf(line, "%d%d%d\n", &inner, &outer, &len);
+		int items = sscanf(line, "%" PRIu32 "%" PRIu32 "%" PRIu32 "\n", &inner, &outer, &len);
 		if (items != 3) {
 			err(1, "load_current_maps: invalid uid map format");
 		}
@@ -259,7 +261,7 @@ void id_map_project(id_map map, id_map onto, id_map out)
 		}
 
 		if (onto_range.inner > range.outer) {
-			size_t skip = onto_range.inner - range.outer;
+			uint32_t skip = onto_range.inner - range.outer;
 			if (skip > range.length) {
 				skip = range.length;
 			}
@@ -270,7 +272,7 @@ void id_map_project(id_map map, id_map onto, id_map out)
 		}
 
 		if (onto_range.inner < range.outer) {
-			size_t skip = range.outer - onto_range.inner;
+			uint32_t skip = range.outer - onto_range.inner;
 			if (skip > onto_range.length) {
 				skip = onto_range.length;
 			}
@@ -316,10 +318,18 @@ void id_map_format(id_map map, char *out, size_t size)
 		if ((size_t) written >= size - 1) {
 			errx(1, "format_id_map: could not append to id map: buffer too small.");
 		}
-		out += written;
-		size -= written;
+		out += (size_t) written;
+		size -= (size_t) written;
 		*out = 0;
 	}
+}
+
+static inline int cmp_uint32(uint32_t lhs, uint32_t rhs)
+{
+	if (lhs == rhs) {
+		return 0;
+	}
+	return lhs < rhs ? -1 : 1;
 }
 
 static int cmp_range(const struct id_range *lhs, const struct id_range *rhs, bool inner)
@@ -332,9 +342,9 @@ static int cmp_range(const struct id_range *lhs, const struct id_range *rhs, boo
 	}
 
 	if (inner) {
-		return lhs->inner - rhs->inner;
+		return cmp_uint32(lhs->inner, rhs->inner);
 	} else {
-		return lhs->outer - rhs->outer;
+		return cmp_uint32(lhs->outer, rhs->outer);
 	}
 }
 

@@ -74,15 +74,13 @@ enum {
       NSACTION_UNSHARE = -2,
 };
 
-char share_with_parent[0];
-
 static void opts_to_nsactions(const struct entry_settings *opts, int *nsactions)
 {
 	for (int i = 0; i < MAX_SHARES; i++) {
 		const char *share = opts->shares[i];
 		if (share == NULL) {
 			nsactions[i] = NSACTION_UNSHARE;
-		} else if (share == share_with_parent) {
+		} else if (share == SHARE_WITH_PARENT) {
 			nsactions[i] = NSACTION_SHARE_WITH_PARENT;
 		} else {
 			int fd = open(share, O_RDONLY);
@@ -110,7 +108,7 @@ static inline size_t append_argv(char **argv, size_t argc, char *arg)
 int enter(struct entry_settings *opts)
 {
 	int timens_offsets = -1;
-	if (opts->shares[SHARE_TIME] != share_with_parent) {
+	if (opts->shares[SHARE_TIME] != SHARE_WITH_PARENT) {
 
 		/* Because this process is privileged, /proc/self/timens_offsets
 		   is unfortunately owned by root and not ourselves, so we have
@@ -126,7 +124,7 @@ int enter(struct entry_settings *opts)
 			/* The kernel evidently doesn't support time namespaces yet.
 			   Don't try to open the time namespace file with --share-all=<dir>,
 			   or try to unshare or setns the time namespace below. */
-			opts->shares[SHARE_TIME] = share_with_parent;
+			opts->shares[SHARE_TIME] = SHARE_WITH_PARENT;
 		}
 
 		reset_capabilities();
@@ -258,7 +256,7 @@ int enter(struct entry_settings *opts)
 	}
 
 	if (!opts->no_derandomize) {
-		unsigned long persona = personality(0xffffffff) | ADDR_NO_RANDOMIZE;
+		unsigned long persona = (unsigned long) personality(0xffffffff) | ADDR_NO_RANDOMIZE;
 		if (personality(persona) == -1) {
 			err(1, "personality %lu", persona);
 		}

@@ -77,6 +77,10 @@ void net_if_up(int sockfd, const char *name)
 	};
 	hdr.nlmsg_len += sizeof (ifinfo);
 
+	if (ifinfo.ifi_index == 0) {
+		err(1, "if_up %s: if_nametoindex", name);
+	}
+
 	struct iovec iov[] = {
 		{ .iov_base = &hdr,    .iov_len = sizeof (hdr) },
 		{ .iov_base = &ifinfo, .iov_len = sizeof (ifinfo) },

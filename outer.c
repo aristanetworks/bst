@@ -279,8 +279,7 @@ void outer_helper_sendpid_and_wait(const struct outer_helper *helper, pid_t pid)
 void outer_helper_sync(const struct outer_helper *helper)
 {
 	int ok;
-	int n = read(helper->in, &ok, sizeof (ok));
-	switch (n) {
+	switch (read(helper->in, &ok, sizeof (ok))) {
 	case -1:
 		err(1, "outer_helper_wait: read");
 	case 0:

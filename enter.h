@@ -33,14 +33,14 @@ enum {
 
 const char *nsname(int);
 
-/* share_with_parent is a special value for entry_settings.shares[ns]. */
-extern char share_with_parent[0];
+/* SHARE_WITH_PARENT is a special value for entry_settings.shares[ns]. */
+# define SHARE_WITH_PARENT ((char *) -1)
 
 struct entry_settings {
 	/* shares[] is indexed by SHARE_CGROUP, etc.  Legal values are:
-		NULL: unshare.
-		share_with_parent: special marker meaning don't unshare or setns.
-                filename: setns to the given namespace file. */
+	   NULL: unshare.
+	   SHARE_WITH_PARENT: special marker meaning don't unshare or setns.
+	   filename: setns to the given namespace file. */
 	const char *shares[MAX_SHARES]; 
 
 	const char *pathname;

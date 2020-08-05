@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <ftw.h>
 #include <limits.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/sendfile.h>
@@ -56,9 +57,15 @@ static int copyfile(const char *target, const char *source, const struct stat *s
 		err(1, "copyfile: creat %s", target);
 	}
 
-	size_t remain = srcinfo->st_size;
+	uint64_t remain = (uint64_t) srcinfo->st_size;
 	do {
-		ssize_t written = sendfile(to, from, NULL, remain);
+		size_t sz = (size_t) remain;
+#if UINT64_MAX > SIZE_MAX
+		if (remain > SIZE_MAX) {
+			sz = SIZE_MAX;
+		}
+#endif
+		ssize_t written = sendfile(to, from, NULL, sz);
 		if (written == -1) {
 			err(1, "copyfile: sendfile(\"%s\", \"%s\", \"%zu\")", target, source, remain);
 		}

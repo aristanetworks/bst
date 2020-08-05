@@ -69,7 +69,7 @@ static void process_share_deprecated(struct entry_settings *opts, const char *op
 		}
 		for (int ns = 0; ns < MAX_SHARES; ns++) {
 			if (!strcmp(share, nsname(ns))) {
-				opts->shares[ns] = share_with_parent;
+				opts->shares[ns] = SHARE_WITH_PARENT;
 				found = 1;
 			}
 		}
@@ -99,9 +99,9 @@ int main(int argc, char *argv[], char *envp[])
 	init_capabilities();
 
 	static struct entry_settings opts = {
-		.uid   = -1,
-		.gid   = -1,
-		.umask = -1,
+		.uid   = (uid_t) -1,
+		.gid   = (gid_t) -1,
+		.umask = (mode_t) -1,
 	};
 
 	static struct option options[] = {
@@ -210,11 +210,11 @@ int main(int argc, char *argv[], char *envp[])
 				break;
 
 			case OPTION_UID:
-				opts.uid = atoi(optarg);
+				opts.uid = (uid_t) strtoul(optarg, NULL, 10);
 				break;
 
 			case OPTION_GID:
-				opts.gid = atoi(optarg);
+				opts.gid = (gid_t) strtoul(optarg, NULL, 10);
 				break;
 
 			case OPTION_GROUPS:
@@ -222,7 +222,7 @@ int main(int argc, char *argv[], char *envp[])
 					if (opts.ngroups >= NGROUPS_MAX) {
 						errx(1, "can only be part of a maximum of %d groups", NGROUPS_MAX);
 					}
-					opts.groups[opts.ngroups++] = atoi(grp);
+					opts.groups[opts.ngroups++] = (gid_t) strtoul(grp, NULL, 10);
 				}
 				break;
 
@@ -238,7 +238,7 @@ int main(int argc, char *argv[], char *envp[])
 			case OPTION_SHARE_TIME:
 			case OPTION_SHARE_USER:
 			case OPTION_SHARE_UTS:
-				opts.shares[c - OPTION_SHARE_CGROUP] = optarg ? : share_with_parent;
+				opts.shares[c - OPTION_SHARE_CGROUP] = optarg ? optarg : SHARE_WITH_PARENT;
 				break;
 
 			case OPTION_SHARE_ALL:
@@ -249,7 +249,7 @@ int main(int argc, char *argv[], char *envp[])
 						buf[sizeof(buf) - 1] = 0;
 						opts.shares[i] = strdup(buf);
 					} else {
-						opts.shares[i] = share_with_parent;
+						opts.shares[i] = SHARE_WITH_PARENT;
 					}
 				}
 				break;
@@ -286,7 +286,7 @@ int main(int argc, char *argv[], char *envp[])
 
 				if (clock == -1 && isdigit(name[0])) {
 					errno = 0;
-					clock = strtol(name, NULL, 10);
+					clock = (clockid_t) strtol(name, NULL, 10);
 					if (errno != 0) {
 						clock = -1;
 					}
