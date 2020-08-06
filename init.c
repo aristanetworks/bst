@@ -8,12 +8,26 @@
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
+#include <sys/ioctl.h>
 #include <sys/prctl.h>
 #include <sys/ptrace.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 #include "init.h"
+
+static pid_t main_child_pid = -1;
+
+static void kill_pgrp_handler(int signo)
+{
+	if (main_child_pid != -1) {
+		if (kill(-main_child_pid, signo) == -1) {
+			err(1, "kill");
+		}
+		return;
+	}
+	_exit(signo | 1 << 7);
+}
 
 int main(int argc, char *argv[], char *envp[])
 {
@@ -26,12 +40,37 @@ int main(int argc, char *argv[], char *envp[])
 		err(1, "prctl(PR_SET_NAME)");
 	}
 
-	pid_t main_child_pid = fork();
+	void (*handlers[SIGRTMAX+1])(int);
+
+	for (int sig = 1; sig <= SIGRTMAX; ++sig) {
+		handlers[sig] = kill_pgrp_handler;
+	}
+	handlers[SIGCHLD] = SIG_DFL;
+	handlers[SIGTTIN] = SIG_IGN;
+	handlers[SIGTTOU] = SIG_IGN;
+
+	for (int sig = 1; sig <= SIGRTMAX; ++sig) {
+		if (signal(sig, handlers[sig]) == SIG_ERR && errno != EINVAL) {
+			err(1, "signal %d", sig);
+		}
+	}
+
+	main_child_pid = fork();
 	if (main_child_pid == -1) {
 		err(1, "fork");
 	}
 
 	if (!main_child_pid) {
+		if (setpgid(0, 0) == -1) {
+			err(1, "setpgid");
+		}
+		if (tcsetpgrp(STDIN_FILENO, getpgrp()) == -1) {
+			err(1, "tcsetpgrp");
+		}
+
+		signal(SIGTTIN, SIG_DFL);
+		signal(SIGTTOU, SIG_DFL);
+
 		execvpe(argv[1], argv + 1, envp);
 		err(1, "execvpe");
 	}
