@@ -36,6 +36,12 @@
 
 #define lengthof(Arr) (sizeof (Arr) / sizeof (*Arr))
 
+#ifndef ARG_MAX
+/* ARG_MAX is typically a runtime constant that one can retrieve via sysconf,
+   but we don't want to be using VLAs in sensitive code. */
+# define ARG_MAX 4096
+#endif
+
 struct cloneflag {
 	int flag;
 	const char *proc_ns_name;
@@ -91,10 +97,6 @@ static void opts_to_nsactions(const struct entry_settings *opts, int *nsactions)
 		}
 	}
 }
-
-#ifndef ARG_MAX
-# define ARG_MAX 4096
-#endif
 
 static inline size_t append_argv(char **argv, size_t argc, char *arg)
 {
@@ -449,10 +451,10 @@ int enter(struct entry_settings *opts)
 	}
 
 	int initfd = -1;
-	if (opts->init_argv != NULL && opts->init_argv[0] != NULL) {
-		initfd = open(opts->init_argv[0], O_PATH | O_CLOEXEC);
+	if (opts->init != NULL && opts->init[0] != '\0') {
+		initfd = open(opts->init, O_PATH | O_CLOEXEC);
 		if (initfd == -1) {
-			err(1, "open %s", opts->init_argv[0]);
+			err(1, "open %s", opts->init);
 		}
 	}
 
@@ -538,24 +540,16 @@ int enter(struct entry_settings *opts)
 		char *argv[ARG_MAX];
 		size_t argc = 0;
 
-		char *argv0 = opts->init_argv[0] + strlen(opts->init_argv[0]);
-		for (; argv0 != opts->init_argv[0] && *argv0 != '/'; --argv0) {
-			continue;
-		}
-		++argv0;
-
-		argc = append_argv(argv, argc, argv0);
-		for (char *const *arg = opts->init_argv + 1; *arg; ++arg) {
-			argc = append_argv(argv, argc, *arg);
-		}
+		argc = append_argv(argv, argc, opts->argv[0]);
 		argc = append_argv(argv, argc, (char *) opts->pathname);
-		for (char *const *arg = opts->argv + 1; *arg; ++arg) {
+		char *const *arg = opts->argv + 1;
+		for (; *arg; ++arg) {
 			argc = append_argv(argv, argc, *arg);
 		}
-		append_argv(argv, argc, NULL);
+		argv[argc] = NULL;
 
 		fexecve(initfd, argv, opts->envp);
-		err(1, "execveat %s", opts->init_argv[0]);
+		err(1, "fexecve %s", opts->init);
 	} else {
 		execvpe(opts->pathname, opts->argv, opts->envp);
 		err(1, "execvpe %s", opts->pathname);

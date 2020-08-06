@@ -52,6 +52,7 @@ enum {
 	OPTION_NO_DERANDOMIZE,
 	OPTION_NO_PROC_REMOUNT,
 	OPTION_NO_LOOPBACK_SETUP,
+	OPTION_NO_INIT,
 	OPTION_SHARE_DEPRECATED,
 };
 
@@ -146,6 +147,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ "no-derandomize",     no_argument, NULL, OPTION_NO_DERANDOMIZE        },
 		{ "no-proc-remount",    no_argument, NULL, OPTION_NO_PROC_REMOUNT       },
 		{ "no-loopback-setup",  no_argument, NULL, OPTION_NO_LOOPBACK_SETUP     },
+		{ "no-init",            no_argument, NULL, OPTION_NO_INIT               },
 
 		/* Deprecated flags */
 		{ "share",      required_argument, NULL, OPTION_SHARE_DEPRECATED        },
@@ -157,9 +159,6 @@ int main(int argc, char *argv[], char *envp[])
 		[CLOCK_MONOTONIC] = "monotonic",
 		[CLOCK_BOOTTIME]  = "boottime",
 	};
-
-	char *init[512];
-	size_t init_argc = 0;
 
 	char *setup_sh_argv[] = {
 		"sh",
@@ -367,14 +366,11 @@ int main(int argc, char *argv[], char *envp[])
 				break;
 
 			case OPTION_INIT:
-				for (char *arg = strtok(optarg, " "); arg; arg = strtok(NULL, " ")) {
-					size_t max_args = sizeof (init) / sizeof (*init);
-					if (init_argc >= max_args-1) {
-						errx(1, "max number of arguments in --init is %zu", max_args);
-					}
-					init[init_argc++] = arg;
-				}
-				init[init_argc++] = NULL;
+				opts.init = optarg;
+				break;
+
+			case OPTION_NO_INIT:
+				opts.init = "";
 				break;
 
 			case OPTION_SETUP_EXE:
@@ -413,17 +409,10 @@ int main(int argc, char *argv[], char *envp[])
 		}
 	}
 
-	static char *default_init[] = {
-		LIBEXECDIR "/bst-init",
-		NULL,
-	};
-
 	/* Use our own default init if we unshare the pid namespace, and no
 	   --init has been specified. */
-	if (opts.shares[SHARE_PID] == NULL && init_argc == 0) {
-		opts.init_argv = default_init;
-	} else {
-		opts.init_argv = init;
+	if (opts.shares[SHARE_PID] == NULL && opts.init == NULL) {
+		opts.init = LIBEXECDIR "/bst-init";
 	}
 
 	char *default_argv[] = {
@@ -443,6 +432,14 @@ int main(int argc, char *argv[], char *envp[])
 		argv = default_argv;
 	}
 	char *new_argv[argc - optind + 1];
+
+	if (!argv0 && opts.init) {
+		argv0 = (char *) opts.init + strlen(opts.init) - 1;
+		for (; argv0 != opts.init && *argv0 != '/'; --argv0) {
+			continue;
+		}
+		++argv0;
+	}
 
 	new_argv[0] = argv0 ? argv0 : argv[optind];
 	for (int i = 1; i < argc - optind; ++i) {
