@@ -13,8 +13,13 @@ bst-init [executable [args...]]
 *bst-init* is the default init process employed by *bst*(1) when unsharing
 the PID namespace.
 
-*bst-init* forks and executes _<executable>_, only reaps zombies, and
-immediately terminates when _<executable>_ exits.
+*bst-init* has the following responsibilities:
+
+- spawns _<executable>_, and puts the main process into a new foreground process group;
+- reaps zombies;
+- detaches inherited ptraced processes;
+- forwards user-sent signals to the main process group;
+- immediately terminates when the main process exits.
 
 # SEE ALSO
 

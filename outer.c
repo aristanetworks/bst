@@ -12,8 +12,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mount.h>
-#include <sys/types.h>
+#include <sys/prctl.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -179,6 +180,17 @@ void outer_helper_spawn(struct outer_helper *helper)
 		return;
 	}
 
+	if (prctl(PR_SET_PDEATHSIG, SIGKILL) == -1) {
+		err(1, "prctl PR_SET_PDEATHSIG");
+	}
+
+	sigset_t mask;
+	sigemptyset(&mask);
+
+	if (sigprocmask(SIG_SETMASK, &mask, NULL) == -1) {
+		err(1, "sigprocmask");
+	}
+
 	close(pipefds_in[0]);
 	close(pipefds_out[1]);
 
@@ -274,24 +286,11 @@ static void persist_ns_files(int pid, const char *persist) {
 	close(procnsdir);
 }
 
-void outer_helper_sendpid_and_wait(const struct outer_helper *helper, pid_t pid)
+void outer_helper_sendpid(const struct outer_helper *helper, pid_t pid)
 {
 	/* Unblock the privileged helper to set our own [ug]id maps */
 	if (write(helper->out, &pid, sizeof (pid)) == -1) {
 		err(1, "outer_helper_sendpid_and_wait: write");
-	}
-
-	int status;
-	if (waitpid(helper->pid, &status, 0) == -1) {
-		err(1, "outer_helper_sendpid_and_wait: waitpid");
-	}
-
-	if (WIFSIGNALED(status)) {
-		errx(1, "outer_helper_sendpid_and_wait: helper died with signal %d", WTERMSIG(status));
-	}
-
-	if (WIFEXITED(status) && WEXITSTATUS(status)) {
-		errx(1, "outer_helper_sendpid_and_wait: helper exit status %d", WEXITSTATUS(status));
 	}
 }
 

@@ -14,20 +14,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include "init.h"
-
-static pid_t main_child_pid = -1;
-
-static void kill_pgrp_handler(int signo)
-{
-	if (main_child_pid != -1) {
-		if (kill(-main_child_pid, signo) == -1) {
-			err(1, "kill");
-		}
-		return;
-	}
-	_exit(signo | 1 << 7);
-}
+#include "sig.h"
 
 int main(int argc, char *argv[], char *envp[])
 {
@@ -40,22 +27,14 @@ int main(int argc, char *argv[], char *envp[])
 		err(1, "prctl(PR_SET_NAME)");
 	}
 
-	void (*handlers[SIGRTMAX+1])(int);
+	sigset_t mask;
+	sigfillset(&mask);
 
-	for (int sig = 1; sig <= SIGRTMAX; ++sig) {
-		handlers[sig] = kill_pgrp_handler;
-	}
-	handlers[SIGCHLD] = SIG_DFL;
-	handlers[SIGTTIN] = SIG_IGN;
-	handlers[SIGTTOU] = SIG_IGN;
-
-	for (int sig = 1; sig <= SIGRTMAX; ++sig) {
-		if (signal(sig, handlers[sig]) == SIG_ERR && errno != EINVAL) {
-			err(1, "signal %d", sig);
-		}
+	if (sigprocmask(SIG_SETMASK, &mask, NULL) == -1) {
+		err(1, "sigprocmask");
 	}
 
-	main_child_pid = fork();
+	pid_t main_child_pid = fork();
 	if (main_child_pid == -1) {
 		err(1, "fork");
 	}
@@ -68,48 +47,54 @@ int main(int argc, char *argv[], char *envp[])
 			err(1, "tcsetpgrp");
 		}
 
-		signal(SIGTTIN, SIG_DFL);
-		signal(SIGTTOU, SIG_DFL);
+		sigemptyset(&mask);
+		if (sigprocmask(SIG_SETMASK, &mask, NULL) == -1) {
+			err(1, "sigprocmask");
+		}
 
 		execvpe(argv[1], argv + 1, envp);
 		err(1, "execvpe");
 	}
 
 	for (;;) {
+		siginfo_t info;
+		sig_wait(&mask, &info);
+		sig_reap_and_forward(&info, -main_child_pid);
 
-		int status;
-		pid_t pid = wait(&status);
-
-		if (pid == -1) {
-			// Should never happen. ECHILD in particular is bogus here, because
-			// we explicitly handle it and forward the exit status.
-			err(1, "wait");
+		if (info.si_signo != SIGCHLD) {
+			continue;
 		}
-		if (pid == main_child_pid) {
-			// the main child died -- rather that trying to collect the rest,
-			// just abort init, and the kernel will sweep the rest.
 
-			int exitcode;
-			if (WIFEXITED(status)) {
-				exitcode = WEXITSTATUS(status);
-			} else {
-				exitcode = WTERMSIG(status) | 1 << 7;
+		switch (info.si_code) {
+		case CLD_EXITED:
+		case CLD_KILLED:
+		case CLD_DUMPED:
+
+			if (info.si_pid == main_child_pid) {
+				/* the main child died -- rather that trying to collect the rest,
+				   just abort init, and the kernel will sweep the rest. */
+
+				if (info.si_code == CLD_EXITED) {
+					return info.si_status;
+				} else {
+					return info.si_status | 1 << 7;
+				}
 			}
-			_exit(exitcode);
-		}
-		if (WIFSTOPPED(status)) {
+			break;
+
+		case CLD_TRAPPED:
 			/*
 			 * Empirically, if a traced process's parent exits, the
 			 * init process inherits the tracing of that process.
 			 * If we notice an inherited child has stopped without
 			 * explicitly asking for that notification, detach from
-			 * it, forwarding WSTOPSIG.
+			 * it, forwarding the stopping signal in the status.
 			 */
-			long rc = ptrace(PTRACE_DETACH, pid, 0, WSTOPSIG(status));
-			if (rc != 0) {
+			if (ptrace(PTRACE_DETACH, info.si_pid, 0, info.si_status) == -1) {
 				warn("failed to detach from traced child %d, "
-					"status %d", pid, status);
+					"status %d", info.si_pid, info.si_status);
 			}
+			break;
 		}
 	}
 }

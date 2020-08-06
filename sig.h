@@ -4,11 +4,12 @@
  * in the LICENSE file.
  */
 
-#ifndef SIGNAL_H
-# define SIGNAL_H
+#ifndef SIG_H_
+# define SIG_H_
 
 # include <signal.h>
 
-void ignoresig(int signo);
+void sig_wait(const sigset_t *set, siginfo_t *info);
+void sig_reap_and_forward(const siginfo_t *info, pid_t pid);
 
-#endif /* !SIGNAL_H */
+#endif /* !SIG_H_ */

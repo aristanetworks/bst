@@ -27,12 +27,12 @@
 #include "capable.h"
 #include "enter.h"
 #include "flags.h"
-#include "init.h"
 #include "mount.h"
 #include "net.h"
 #include "outer.h"
 #include "path.h"
 #include "setarch.h"
+#include "sig.h"
 
 #define lengthof(Arr) (sizeof (Arr) / sizeof (*Arr))
 
@@ -131,7 +131,7 @@ int enter(struct entry_settings *opts)
 
 		reset_capabilities();
 	}
-	
+
 	int nsactions[MAX_SHARES];
 	opts_to_nsactions(opts, nsactions);
 
@@ -289,18 +289,55 @@ int enter(struct entry_settings *opts)
 	}
 
 	if (pid) {
-		outer_helper_sendpid_and_wait(&outer_helper, pid);
+		outer_helper_sendpid(&outer_helper, pid);
 		outer_helper_close(&outer_helper);
 
-		int status;
-		if (waitpid(pid, &status, 0) == -1) {
-			err(1, "waitpid");
-		}
+		sigset_t mask;
+		sigfillset(&mask);
 
-		if (WIFEXITED(status)) {
-			return WEXITSTATUS(status);
+		for (;;) {
+
+			siginfo_t info;
+			sig_wait(&mask, &info);
+			sig_reap_and_forward(&info, pid);
+
+			if (info.si_signo != SIGCHLD) {
+				continue;
+			}
+
+			/* We might have been run as a process subreaper against our
+			   will -- make sure we only exit when the main child pid
+			   exited. */
+
+			if (info.si_pid == pid) {
+				switch (info.si_code) {
+				case CLD_EXITED:
+					return info.si_status;
+				case CLD_KILLED:
+				case CLD_DUMPED:
+					return info.si_status | 1 << 7;
+				}
+			} else if (info.si_pid == outer_helper.pid) {
+				switch (info.si_code) {
+				case CLD_KILLED:
+					errx(1, "helper got killed with signal %d", info.si_status);
+				case CLD_DUMPED:
+					errx(1, "helper crashed with signal %d", info.si_status);
+				case CLD_EXITED:
+					if (info.si_status) {
+						errx(1, "helper exit status %d", info.si_status);
+					}
+					break;
+				}
+			}
 		}
-		return WTERMSIG(status) | 1 << 7;
+	}
+
+	sigset_t mask;
+	sigemptyset(&mask);
+
+	if (sigprocmask(SIG_SETMASK, &mask, NULL) == -1) {
+		err(1, "sigprocmask");
 	}
 
 	/* We can't afford to leave the child alive in the background if bst

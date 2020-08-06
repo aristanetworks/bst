@@ -17,7 +17,6 @@
 
 #include "enter.h"
 #include "capable.h"
-#include "sig.h"
 #include "kvlist.h"
 
 enum {
@@ -455,15 +454,13 @@ int main(int argc, char *argv[], char *envp[])
 		errx(1, "workdir must be an absolute path.");
 	}
 
-	/* Ignore all user-sent signals, and a few kernel-sent ones.
-	
-	   Some of these signals are typically sent to the foreground process group,
-	   which includes us and our child process. We act on good faith that whatever
-	   the child chooses to do (e.g. ignore SIGINT) we want to politely
-	   leave them alone until completion. */
+	/* Block all signals. We use sigwaitinfo to probe for pending signals,
+	   including SIGCHLD. */
+	sigset_t mask;
+	sigfillset(&mask);
 
-	for (int sig = 1; sig <= SIGRTMAX; ++sig) {
-		ignoresig(sig);
+	if (sigprocmask(SIG_SETMASK, &mask, NULL) == -1) {
+		err(1, "sigprocmask");
 	}
 
 	return enter(&opts);

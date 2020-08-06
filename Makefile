@@ -46,7 +46,7 @@ bst: $(OBJS)
 	$(SETCAP) cap_setuid,cap_setgid,cap_dac_override,cap_sys_admin,cap_sys_ptrace,cap_sys_chroot+p $@ \
 		|| ($(CHOWN) root $@ && $(CHMOD) u+s $@)
 
-bst-init: init.o
+bst-init: init.o sig.o
 	$(LINK.o) -static -o $@ $^
 
 bst-unpersist: unpersist.o capable.o

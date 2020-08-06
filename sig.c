@@ -6,55 +6,39 @@
 
 #include <err.h>
 #include <errno.h>
-#include <stdlib.h>
-#include "signal.h"
+#include <stddef.h>
+#include <sys/wait.h>
 
-static void ignoresig_handler(int signo, siginfo_t *info, void *context);
+#include "sig.h"
 
-/* ignoresig ignores the signal, just like SIG_IGN but with two
-   differences:
-
-   1. when we exec(), our ignore-handler will not be inherited
-      (whereas SIG_IGN is inherited across exec()), and
-
-   2. if the kernel delivers us a SIGSEGV or SIGILL or SIGBUS,
-      SIG_IGN would ignore it.  Our ignore-handler won't.
-*/
-void ignoresig(int signo)
+void sig_wait(const sigset_t *set, siginfo_t *info)
 {
-	/* Block all signals when the ignore handler is executing. */
-	sigset_t mask;
-	sigfillset(&mask);
-
-	struct sigaction act = {
-		.sa_flags = SA_SIGINFO | SA_RESTART | SA_NODEFER | SA_RESETHAND,
-		.sa_sigaction = ignoresig_handler,
-		.sa_mask = mask,
-	};
-	/* Ignore EINVAL, because some signals in the range from 1 to SIGRTMAX
-	   are either uncatcheable (SIGKILL, SIGSTOP) or don't actually exist. */
-	if (sigaction(signo, &act, NULL) == -1 && errno != EINVAL) {
-		err(1, "ignoresig: sigaction(%d)", signo);
+retry:
+	if (sigwaitinfo(set, info) == -1) {
+		if (errno == EINTR) {
+			goto retry;
+		}
+		err(1, "sigwaitinfo");
 	}
 }
 
-static void ignoresig_handler(int signo, siginfo_t *info, void *context)
+void sig_reap_and_forward(const siginfo_t *info, pid_t pid)
 {
-	switch (signo) {
-		/* These can be legitimately sent by the kernel, typically
-		   when the controlling terminal gets a ^C or ^\. We want
-		   to keep ignoring them, even if kernel-sent. */
-		case SIGINT:
-		case SIGHUP:
-		case SIGQUIT:
-		case SIGCHLD:
-			ignoresig(signo);
-			return;
+	if (info->si_signo == SIGCHLD) {
+		switch (info->si_code) {
+		case CLD_EXITED:
+		case CLD_KILLED:
+		case CLD_DUMPED:
+			if (waitpid(info->si_pid, NULL, WNOHANG) == -1) {
+				err(1, "waitpid");
+			}
+		}
 	}
 
-	/* Ignore user-sent signals. They want to send them to the child process
-	   instead. */
-	if (info->si_code == SI_USER || info->si_code == SI_TKILL) {
-		ignoresig(signo);
+	if (info->si_code != SI_USER) {
+		return;
+	}
+	if (kill(pid, info->si_signo) == -1) {
+		err(1, "kill");
 	}
 }
