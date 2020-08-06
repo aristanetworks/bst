@@ -47,7 +47,7 @@ bst: $(OBJS)
 		|| ($(CHOWN) root $@ && $(CHMOD) u+s $@)
 
 bst-init: init.o
-	$(LINK.o) -o $@ $^
+	$(LINK.o) -static -o $@ $^
 
 bst-unpersist: unpersist.o capable.o
 	$(LINK.o) -o $@ $^

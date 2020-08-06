@@ -23,6 +23,6 @@ jobs:
           set -xeu
           command -v apk && apk add --no-cache linux-headers scdoc
           command -v apt && apt-get update && apt-get install -y scdoc
-          command -v dnf && dnf install -y scdoc
+          command -v dnf && dnf install -y glibc-static scdoc
           CPPFLAGS='-Wconversion -pedantic-errors' make
 
