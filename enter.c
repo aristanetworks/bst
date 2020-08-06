@@ -83,7 +83,7 @@ static void opts_to_nsactions(const struct entry_settings *opts, int *nsactions)
 		} else if (share == SHARE_WITH_PARENT) {
 			nsactions[i] = NSACTION_SHARE_WITH_PARENT;
 		} else {
-			int fd = open(share, O_RDONLY);
+			int fd = open(share, O_RDONLY | O_CLOEXEC);
 			if (fd < 0) {
 				err(1, "open %s", share);
 			}
@@ -116,7 +116,7 @@ int enter(struct entry_settings *opts)
 
 		make_capable(BST_CAP_DAC_OVERRIDE);
 
-		timens_offsets = open("/proc/self/timens_offsets", O_WRONLY);
+		timens_offsets = open("/proc/self/timens_offsets", O_WRONLY | O_CLOEXEC);
 		if (timens_offsets == -1) {
 			if (errno != ENOENT) {
 				err(1, "open /proc/self/timens_offsets");
@@ -406,7 +406,7 @@ int enter(struct entry_settings *opts)
 
 	int initfd = -1;
 	if (opts->init_argv != NULL && opts->init_argv[0] != NULL) {
-		initfd = open(opts->init_argv[0], O_PATH);
+		initfd = open(opts->init_argv[0], O_PATH | O_CLOEXEC);
 		if (initfd == -1) {
 			err(1, "open %s", opts->init_argv[0]);
 		}
