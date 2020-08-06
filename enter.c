@@ -510,7 +510,7 @@ int enter(struct entry_settings *opts)
 		}
 		append_argv(argv, argc, NULL);
 
-		syscall(SYS_execveat, initfd, "", argv, opts->envp, AT_EMPTY_PATH);
+		fexecve(initfd, argv, opts->envp);
 		err(1, "execveat %s", opts->init_argv[0]);
 	} else {
 		execvpe(opts->pathname, opts->argv, opts->envp);
