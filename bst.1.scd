@@ -157,6 +157,22 @@ Users of bst may choose to opt-out of some of the isolation.
 	If bst unshares the pid namespace and no _--init_ is specified, it uses
 	by default *bst-init*(1).
 
+\--setup <cmdline>++
+\--setup-exe <executable>
+
+	Run the specified executable during the setup, after all namespaces
+	have been unshared and the new process has been forked, but before
+	changing anything else.
+
+	If _--setup-exe_, *<executable>* is a filesystem path or an executable
+	name resolvable in _$PATH_, and is executed without any arguments.
+
+	If _--setup_, *<cmdline>* is used as if the setup process was
+	_/bin/sh -euc "<cmdline>"_.
+
+	See the *SETUP PROGRAMS* section for more information about how the program
+	is called and what environment it runs in.
+
 \--no-fake-devtmpfs
 	Do not replace devtmpfs mounts with a fake devtmpfs.
 
@@ -186,6 +202,50 @@ Users of bst may choose to opt-out of some of the isolation.
 	127.0.0.1/8 to it when in a network namespace.
 
 	This does nothing when used with _--share=net_.
+
+# SETUP PROGRAMS
+
+A setup program is a program that execute as part of the setup of a spacetime.
+
+Within a *bst* invocation, exactly one setup program may be specified (see
+_--setup_ and _--setup-exe_), and the program will be run after all
+relevant namespaces have been unshared/entered and the main child process
+has been forked, but before any other initialization occurs.
+
+In particular, this means that the setup script will run before any mounts
+occurs, and before *bst* pivots/chroots into filesystem root.
+
+Because the setup process is run very early, any preparative work done by
+the process may be altered or undone by other command-line switches passed to
+*bst* if not careful.
+
+## Execution
+
+The setup program is executed in the same current work directory as *bst*,
+with the same privileges as the calling user (but note that in a user
+namespace, the setup process has a full set of capabilities within that
+namespace).
+
+If the setup process exits with a non-zero exit status, the rest of the
+setup is aborted and *bst* exits with the same exit status. *bst* will
+always exit silently in these cases -- setup programs are expected to
+print themselves their error conditions.
+
+Setup processes have their standard output and error redirected to the
+standard error of *bst*. Standard input and error are untouched, which means
+it is technically possible to have interactive setup sessions via
+_--setup-exe=sh_.
+
+## Environment
+
+The following environment variables are accessible to the setup program:
+
+*ROOT*
+	Set to the root directory (_--root_) we are expected to pivot/chroot
+	into later on.
+
+*EXECUTABLE*
+	Set to the executable name that will be executed after the setup is done.
 
 # SEE ALSO
 

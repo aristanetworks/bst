@@ -44,6 +44,8 @@ enum {
 	OPTION_PERSIST,
 	OPTION_UMASK,
 	OPTION_INIT,
+	OPTION_SETUP_EXE,
+	OPTION_SETUP,
 	OPTION_NO_FAKE_DEVTMPFS,
 	OPTION_NO_DERANDOMIZE,
 	OPTION_NO_PROC_REMOUNT,
@@ -132,6 +134,8 @@ int main(int argc, char *argv[], char *envp[])
 		{ "persist",            required_argument, NULL, OPTION_PERSIST         },
 		{ "umask",              required_argument, NULL, OPTION_UMASK           },
 		{ "init",               required_argument, NULL, OPTION_INIT            },
+		{ "setup-exe",          required_argument, NULL, OPTION_SETUP_EXE       },
+		{ "setup",              required_argument, NULL, OPTION_SETUP           },
 
 		/* Opt-out feature flags */
 		{ "no-fake-devtmpfs",   no_argument, NULL, OPTION_NO_FAKE_DEVTMPFS      },
@@ -152,6 +156,13 @@ int main(int argc, char *argv[], char *envp[])
 
 	char *init[512];
 	size_t init_argc = 0;
+
+	char *setup_sh_argv[] = {
+		"sh",
+		"-euc",
+		"false",
+		NULL,
+	};
 
 	char *argv0 = NULL;
 
@@ -352,6 +363,16 @@ int main(int argc, char *argv[], char *envp[])
 					init[init_argc++] = arg;
 				}
 				init[init_argc++] = NULL;
+				break;
+
+			case OPTION_SETUP_EXE:
+				opts.setup_program = optarg;
+				break;
+
+			case OPTION_SETUP:
+				opts.setup_program = "/bin/sh";
+				opts.setup_argv = setup_sh_argv;
+				setup_sh_argv[2] = optarg;
 				break;
 
 			case OPTION_NO_LOOPBACK_SETUP:

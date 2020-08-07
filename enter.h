@@ -69,6 +69,9 @@ struct entry_settings {
 
 	const char *arch;
 
+	const char *setup_program;
+	char *const *setup_argv;
+
 	int no_fake_devtmpfs;
 	int no_derandomize;
 	int no_proc_remount;
