@@ -13,6 +13,7 @@
 # include <unistd.h>
 # include "mount.h"
 # include "timens.h"
+# include "userns.h"
 
 enum {
 	MAX_MOUNT = 4096,
@@ -57,6 +58,8 @@ struct entry_settings {
 	gid_t gid;
 	gid_t groups[NGROUPS_MAX];
 	size_t ngroups;
+	id_map uid_map;
+	id_map gid_map;
 
 	struct mount_entry mounts[MAX_MOUNT];
 	size_t nmounts;

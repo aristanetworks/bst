@@ -7,9 +7,7 @@
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <grp.h>
 #include <limits.h>
-#include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -58,7 +56,51 @@ static void burn(int dirfd, char *path, char *data)
 	}
 }
 
-static void burn_uidmap_gidmap(pid_t child_pid)
+static void make_idmap(char *idmap, size_t size, const char *which,
+		const char *subid_path,
+		const char *procmap_path,
+		const struct id *id, id_map desired)
+{
+	id_map cur_id_map;
+	id_map_load_procids(cur_id_map, procmap_path);
+
+	/* /proc/self/[ug]id_map files should be well-formed, but we might as well
+	   enforce that rather than blindly trust. */
+	id_map_normalize(cur_id_map, true, false);
+
+	id_map subids;
+	id_map_load_subids(subids, subid_path, id);
+
+	/* Project desired id maps onto permissible maps */
+	if (!id_map_empty(desired)) {
+		for (struct id_range *r = subids; r < subids + MAX_USER_MAPPINGS; ++r) {
+			r->inner = r->outer;
+		}
+
+		id_map_normalize(desired, false, true);
+		id_map_project(desired, subids, subids);
+
+		uint32_t nids = id_map_count_ids(subids);
+		uint32_t desired_ids = id_map_count_ids(desired);
+		if (nids == UINT32_MAX || desired_ids == UINT32_MAX) {
+			err(1, "too many %ss to map", which);
+		}
+		if (nids != desired_ids) {
+			errx(1, "cannot map desired %s map: some %ss are not in the %ss "
+				"allowed in %s", which, which, which, subid_path);
+		}
+	} else {
+		id_map_generate(subids, subids, subid_path, id);
+	}
+
+	/* Slice up subid maps according to current id mappings. */
+	id_map_normalize(subids, false, true);
+	id_map_project(subids, cur_id_map, subids);
+
+	id_map_format(subids, idmap, size);
+}
+
+static void burn_uidmap_gidmap(pid_t child_pid, id_map uid_desired, id_map gid_desired)
 {
 	char procpath[PATH_MAX];
 	if ((size_t) snprintf(procpath, PATH_MAX, "/proc/%d", child_pid) >= sizeof (procpath)) {
@@ -70,37 +112,14 @@ static void burn_uidmap_gidmap(pid_t child_pid)
 		err(1, "open %s", procpath);
 	}
 
-	id_map cur_uid_map;
-	id_map_load_procids(cur_uid_map, "/proc/self/uid_map");
-	id_map cur_gid_map;
-	id_map_load_procids(cur_gid_map, "/proc/self/gid_map");
-
-	/* /proc/self/[ug]id_map files should be well-formed, but we might as well
-	   enforce that rather than blindly trust. */
-	id_map_normalize(cur_uid_map, true, false);
-	id_map_normalize(cur_gid_map, true, false);
-
-	id_map subuids;
-	uid_t uid = getuid();
-	struct passwd *passwd = getpwuid(uid);
-	id_map_load_subids(subuids, "/etc/subuid", uid, passwd ? passwd->pw_name : NULL);
-
-	id_map subgids;
-	gid_t gid = getgid();
-	struct group *group = getgrgid(gid);
-	id_map_load_subids(subgids, "/etc/subgid", gid, group ? group->gr_name : NULL);
-
-	/* Slice up subid maps according to current id mappings. */
-	id_map_normalize(subuids, false, true);
-	id_map_project(subuids, cur_uid_map, subuids);
-	id_map_normalize(subgids, false, true);
-	id_map_project(subgids, cur_gid_map, subgids);
+	struct id uid = id_load_user(getuid());
+	struct id gid = id_load_group(getgid());
 
 	char uid_map[ID_MAP_MAX];
-	id_map_format(subuids, uid_map, sizeof (uid_map));
+	make_idmap(uid_map, sizeof (uid_map), "uid", "/etc/subuid", "/proc/self/uid_map", &uid, uid_desired);
 
 	char gid_map[ID_MAP_MAX];
-	id_map_format(subgids, gid_map, sizeof (gid_map));
+	make_idmap(gid_map, sizeof (gid_map), "gid", "/etc/subgid", "/proc/self/gid_map", &gid, gid_desired);
 
 	make_capable(BST_CAP_SETUID | BST_CAP_SETGID | BST_CAP_DAC_OVERRIDE);
 
@@ -176,7 +195,7 @@ void outer_helper_spawn(struct outer_helper *helper)
 	}
 
 	if (helper->unshare_user) {
-		burn_uidmap_gidmap(child_pid);
+		burn_uidmap_gidmap(child_pid, helper->uid_desired, helper->gid_desired);
 	}
 
 	if (helper->persist) {

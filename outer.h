@@ -9,9 +9,13 @@
 
 # include <unistd.h>
 
+# include "userns.h"
+
 struct outer_helper {
 	int unshare_user;
 	const char *persist;
+	id_map uid_desired;
+	id_map gid_desired;
 
 	pid_t pid;
 	int in;
