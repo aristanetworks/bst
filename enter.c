@@ -310,6 +310,48 @@ int enter(struct entry_settings *opts)
 	outer_helper_sync(&outer_helper);
 	outer_helper_close(&outer_helper);
 
+	if (opts->setup_program) {
+		pid_t pid = fork();
+		if (pid == -1) {
+			err(1, "setup: fork");
+		}
+
+		if (!pid) {
+			char *default_argv[2];
+			default_argv[0] = (char *) opts->setup_program;
+			default_argv[1] = NULL;
+
+			/* Set some extra useful environment */
+			setenv("ROOT", root, 1);
+			setenv("EXECUTABLE", opts->pathname, 1);
+
+			extern char **environ;
+
+			char *const *argv = default_argv;
+			if (opts->setup_argv) {
+				argv = opts->setup_argv;
+			}
+
+			if (dup2(STDERR_FILENO, STDOUT_FILENO) == -1) {
+				err(1, "setup: dup2");
+			}
+
+			execvpe(opts->setup_program, argv, environ);
+			err(1, "setup: execvpe %s", opts->setup_program);
+		}
+
+		int status;
+		if (waitpid(pid, &status, 0) == -1) {
+			err(1, "setup: waitpid");
+		}
+
+		if (WIFEXITED(status) && WEXITSTATUS(status)) {
+			_exit(WEXITSTATUS(status));
+		} else if (WIFSIGNALED(status)) {
+			_exit(WTERMSIG(status) | 1 << 7);
+		}
+	}
+
 	/* Check whether or not <root>/proc is a mountpoint. If so,
 	   and we're in a PID + mount namespace, mount a new /proc. */
 	if (!opts->no_proc_remount && mnt_unshare && pid_unshare) {

@@ -31,6 +31,8 @@ Options:
 	--domainname <domain>:  Set the domain name.
 	--time <name>=<s>[.ns]: Set the time of a specific clock.
 	--init=<init-argv>:     Use the specified outer path as init process.
+	--setup=<cmdline>:      Run the specified setup command with sh -euc.
+	--setup-exe=<path>:     Run the specified setup executable.
 
 	--no-fake-devtmpfs:     Don't replace devtmpfs mounts with fake ones.
 	--no-derandomize:       Don't attempt to reduce randomness sources.
