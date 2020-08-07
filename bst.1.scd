@@ -173,6 +173,16 @@ Users of bst may choose to opt-out of some of the isolation.
 	See the *SETUP PROGRAMS* section for more information about how the program
 	is called and what environment it runs in.
 
+\--uid-map <inner:outer:length>[,<inner:outer:length>...]++
+\--gid-map <inner:outer:length>[,<inner:outer:length>...]
+	Override the default generated [ug]id map. The map must be fully-specified.
+
+	By default, *bst* maps your current [UG]ID to 0, then maps continously
+	all allotted sub[ug]ids for the current [UG]ID as written in
+	_/etc/sub[ug]id_ (see *subuid*(5), *subgid*(5)).
+
+	You cannot use this option with _--share-user_.
+
 \--no-fake-devtmpfs
 	Do not replace devtmpfs mounts with a fake devtmpfs.
 

@@ -136,6 +136,8 @@ int enter(struct entry_settings *opts)
 	struct outer_helper outer_helper;
 	outer_helper.persist = opts->persist;
 	outer_helper.unshare_user = nsactions[SHARE_USER] == NSACTION_UNSHARE;
+	memcpy(outer_helper.uid_desired, opts->uid_map, sizeof (outer_helper.uid_desired));
+	memcpy(outer_helper.gid_desired, opts->gid_map, sizeof (outer_helper.gid_desired));
 	outer_helper_spawn(&outer_helper);
 
 	/* After this point, we must operate with the privilege set of the caller

@@ -5,7 +5,11 @@
  */
 
 #include <err.h>
+#include <errno.h>
+#include <grp.h>
 #include <inttypes.h>
+#include <limits.h>
+#include <pwd.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -47,17 +51,40 @@ static char *itoa(uint32_t i)
 	return buf;
 }
 
-/* id_map_load_subids generates the contents of a [ug]id map.
+static uint32_t id_parse(const char *s, const char *which)
+{
+	if (s == NULL) {
+		errx(1, "missing %s in id map", which);
+	}
+	unsigned long id = strtoul(s, NULL, 0);
+	if (id == ULONG_MAX) {
+		err(1, "parsing %s", s);
+	}
+	return (uint32_t) id;
+}
 
-   First, a mapping of `id` to 0 (root) is generated.
+void id_map_parse(id_map map, char *opt)
+{
+	size_t i = 0;
+	char *saveptr;
+	char *rangestr = strtok_r(opt, ",", &saveptr);
+	for (; rangestr; rangestr = strtok_r(NULL, ",", &saveptr)) {
+		uint32_t inner = id_parse(strtok(rangestr, ":"), "inner id range start");
+		uint32_t outer = id_parse(strtok(NULL, ":"), "outer id range start");
+		uint32_t length = id_parse(strtok(NULL, ""), "id range length");
+		i = id_map_append(map, i, inner, outer, length);
+	}
+}
+
+/* id_map_load_subids loads the sub[ug]ids alloted to the current user
+   into `map`. More specifically, the `outer` and `length` fields of
+   each ranges are set to the contents of the alloted subid map.
+
+   First, `id` is added to the map.
 
    Then, the function reads each entry in subid_path, which are of the form
    <name_or_id>:<start>:<length>\n, finds any of these allocated [ug]id ranges
-   for which name_or_id matches either `name` or `id`, and grafts them
-   together as a continuous [ug]id map. The function tries to map every uid
-   from 0 to 65534 in the user namespace. If there are less IDs allocated in
-   subid_path, the function fills up the available IDs starting from 0, then
-   prints a warning and returns.
+   for which name_or_id matches either `name` or `id`, and adds them to the map.
 
    For instance, given the following /etc/subuid:
 
@@ -70,31 +97,24 @@ static char *itoa(uint32_t i)
 
    will populate the contents of `map` with the following data:
 
-       0 1000 1
-       1 100000 65534
-
-   There is a special case for id 0 (root) if there are no allocated entries
-   for it in subid_path. In that case, if the real uid of the program is 0,
-   then load_subids maps 1:1 the host range 0-65534 into the user
-   namespace. This is to provide a sane default while keeping some leeway for
-   system configuration. */
-void id_map_load_subids(id_map map, const char *subid_path, uint32_t id, const char *name)
+       inner=0 outer=1000 1
+       inner=0 outer=100000 65535
+ */
+void id_map_load_subids(id_map map, const char *subid_path, const struct id *id)
 {
-	size_t range = 0;
-	uint32_t cur_id = 1;
-
 	FILE *subids = fopen(subid_path, "r");
 	if (!subids) {
-		goto no_subids;
+		return;
 	}
 
-	char *id_str = itoa(id);
+	char *id_str = itoa(id->id);
+	const char *name = id->name;
 	if (name == NULL) {
 		name = id_str;
 	}
 
 	memset(map, 0, sizeof (id_map));
-	range = id_map_append(map, range, 0, id, 1);
+	size_t range = id_map_append(map, 0, 0, id->id, 1);
 
 	/* Realistically speaking, each line can only contain a maximum of
 	   3 * ID_STR_MAX + 2 characters. We are being very generous because
@@ -122,37 +142,70 @@ void id_map_load_subids(id_map map, const char *subid_path, uint32_t id, const c
 			continue;
 		}
 
-		range = id_map_append(map, range, cur_id, start, length);
-		cur_id += length;
+		range = id_map_append(map, range, 0, start, length);
 	}
 
 	fclose(subids);
+}
 
-no_subids:
+void id_map_generate(id_map allotted, id_map out, const char *subid_path, const struct id *id)
+{
+	id_map tmp;
+	memset(tmp, 0, sizeof (tmp));
+
+	size_t i = 0;
+	size_t j = id_map_append(tmp, 0, 0, id->id, 1);
+	uint32_t cur_id = 1;
+
+	struct id_range range = allotted[0];
+	while (i < MAX_USER_MAPPINGS) {
+
+		if (range.length == 0) {
+			range = allotted[++i];
+			continue;
+		}
+
+		/* Ignore the [0-65535) range. */
+		if (range.outer <= ID_MAX) {
+			size_t shift = ID_MAX + 1 - range.outer;
+			if (shift > range.length) {
+				shift = range.length;
+			}
+			range.outer += shift;
+			range.length -= shift;
+			continue;
+		}
+
+		j = id_map_append(tmp, j, cur_id, range.outer, range.length);
+		cur_id += range.length;
+		range.length = 0;
+	}
+
 	/* We're root. We don't care. Map the host range 1:1. */
-	if (cur_id == 1 && id == 0) {
+	if (cur_id == 1 && id->id == 0) {
 		/* UINT32_MAX - 1 is explicitly left out because the kernel rejects it
 		   (see user_namespaces(7)). */
-		range = id_map_append(map, range, 1, 1, UINT32_MAX - 2);
-		return;
+		id_map_append(tmp, 0, 0, 0, UINT32_MAX - 2);
+		goto end;
 	}
 
 	/* Not enough subuids for a full mapping, but, well, it's not the end of
 	   the world. Things might break, so let's at least tell the user. */
 
-	if (!subids) {
-		warnx("no range associated to %s in %s. Things may not work "
-				"as expected, please allocate at least %d IDs for it.",
-				name, subid_path, ID_MAX);
-		return;
-	}
-
 	if (cur_id < ID_MAX) {
+		const char *name = id->name;
+		if (name == NULL) {
+			name = itoa(id->id);
+		}
+
 		warnx("not enough IDs allocated for %s in %s (currently %d allocated). "
 				"Things may not work as expected, please allocate at least %d "
 				"IDs for it.",
 				name, subid_path, cur_id, ID_MAX);
 	}
+
+end:
+	memcpy(out, tmp, sizeof (tmp));
 }
 
 void id_map_load_procids(id_map map, const char *procid_path)
@@ -380,4 +433,40 @@ void id_map_normalize(id_map map, bool inner, bool merge)
 			*(++prev) = *r;
 		}
 	}
+}
+
+bool id_map_empty(id_map map)
+{
+	return id_map_count_ids(map) == 0;
+}
+
+uint32_t id_map_count_ids(id_map map)
+{
+	uint32_t len = 0;
+	for (struct id_range *r = map; r < map + MAX_USER_MAPPINGS; ++r) {
+		if (len > UINT32_MAX - r->length) {
+			errno = EOVERFLOW;
+			return UINT32_MAX;
+		}
+		len += r->length;
+	}
+	return len;
+}
+
+struct id id_load_user(uid_t uid)
+{
+	struct id id;
+	struct passwd *passwd = getpwuid(uid);
+	id.id = (uint32_t) uid;
+	id.name = passwd ? passwd->pw_name : NULL;
+	return id;
+}
+
+struct id id_load_group(gid_t gid)
+{
+	struct id id;
+	struct group *group = getgrgid(gid);
+	id.id = (uint32_t) gid;
+	id.name = group ? group->gr_name : NULL;
+	return id;
 }

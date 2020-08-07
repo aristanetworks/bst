@@ -46,6 +46,8 @@ enum {
 	OPTION_INIT,
 	OPTION_SETUP_EXE,
 	OPTION_SETUP,
+	OPTION_UIDMAP,
+	OPTION_GIDMAP,
 	OPTION_NO_FAKE_DEVTMPFS,
 	OPTION_NO_DERANDOMIZE,
 	OPTION_NO_PROC_REMOUNT,
@@ -136,6 +138,8 @@ int main(int argc, char *argv[], char *envp[])
 		{ "init",               required_argument, NULL, OPTION_INIT            },
 		{ "setup-exe",          required_argument, NULL, OPTION_SETUP_EXE       },
 		{ "setup",              required_argument, NULL, OPTION_SETUP           },
+		{ "uid-map",            required_argument, NULL, OPTION_UIDMAP          },
+		{ "gid-map",            required_argument, NULL, OPTION_GIDMAP          },
 
 		/* Opt-out feature flags */
 		{ "no-fake-devtmpfs",   no_argument, NULL, OPTION_NO_FAKE_DEVTMPFS      },
@@ -340,6 +344,14 @@ int main(int argc, char *argv[], char *envp[])
 				if (sscanf(optarg, "%o", &opts.umask) != 1) {
 					err(2, "%s is not a valid umask", optarg);
 				}
+				break;
+
+			case OPTION_UIDMAP:
+				id_map_parse(opts.uid_map, optarg);
+				break;
+
+			case OPTION_GIDMAP:
+				id_map_parse(opts.gid_map, optarg);
 				break;
 
 			case OPTION_NO_FAKE_DEVTMPFS:

@@ -33,6 +33,8 @@ Options:
 	--init=<init-argv>:     Use the specified outer path as init process.
 	--setup=<cmdline>:      Run the specified setup command with sh -euc.
 	--setup-exe=<path>:     Run the specified setup executable.
+	--uid-map=<map>:        Use the specified uid map for the user namespace mapping.
+	--gid-map=<map>:        Use the specified gid map for the user namespace mapping.
 
 	--no-fake-devtmpfs:     Don't replace devtmpfs mounts with fake ones.
 	--no-derandomize:       Don't attempt to reduce randomness sources.
