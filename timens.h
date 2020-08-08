@@ -7,6 +7,9 @@
 #ifndef TIME_H_
 # define TIME_H_
 
+# include <stddef.h>
+# include <time.h>
+
 enum {
 	MAX_CLOCK = 11, // CLOCK_TAI
 

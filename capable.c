@@ -5,8 +5,6 @@
  */
 
 #include <err.h>
-#include <stdarg.h>
-#include <stddef.h>
 #include <string.h>
 #include <syscall.h>
 #include <unistd.h>

@@ -7,6 +7,8 @@
 #ifndef MOUNT_H
 # define MOUNT_H
 
+# include <stddef.h>
+
 struct mount_entry {
 	char *source;
 	char *target;

@@ -8,7 +8,9 @@
 # define USERNS_H_
 
 # include <stdbool.h>
+# include <stddef.h>
 # include <stdint.h>
+# include <sys/types.h>
 
 enum {
 	MAX_USER_MAPPINGS = 340, /* as of linux 4.15, c.f. user_namespaces(7) */

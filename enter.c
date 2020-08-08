@@ -9,20 +9,16 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <grp.h>
-#include <inttypes.h>
 #include <limits.h>
 #include <sched.h>
-#include <stdarg.h>
-#include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mount.h>
 #include <sys/personality.h>
 #include <sys/prctl.h>
 #include <sys/stat.h>
-#include <sys/syscall.h>
 #include <sys/wait.h>
+#include <syscall.h>
 
 #include "capable.h"
 #include "enter.h"
