@@ -102,6 +102,9 @@ void id_map_parse(id_map map, char *opt)
  */
 void id_map_load_subids(id_map map, const char *subid_path, const struct id *id)
 {
+	memset(map, 0, sizeof (id_map));
+	size_t range = id_map_append(map, 0, 0, id->id, 1);
+
 	FILE *subids = fopen(subid_path, "r");
 	if (!subids) {
 		return;
@@ -112,9 +115,6 @@ void id_map_load_subids(id_map map, const char *subid_path, const struct id *id)
 	if (name == NULL) {
 		name = id_str;
 	}
-
-	memset(map, 0, sizeof (id_map));
-	size_t range = id_map_append(map, 0, 0, id->id, 1);
 
 	/* Realistically speaking, each line can only contain a maximum of
 	   3 * ID_STR_MAX + 2 characters. We are being very generous because
