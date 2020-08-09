@@ -198,6 +198,7 @@ void mount_entries(const char *root, const struct mount_entry *mounts, size_t nm
 				{ "null",    S_IFCHR | 0666, makedev(1, 3) },
 				{ "full",    S_IFCHR | 0666, makedev(1, 7) },
 				{ "zero",    S_IFCHR | 0666, makedev(1, 5) },
+				{ "tty",     S_IFCHR | 0666, makedev(5, 0) },
 				{ "random",  S_IFCHR | 0666, makedev(1, 8) },
 				{ "urandom", S_IFCHR | 0666, makedev(1, 9) },
 			};
