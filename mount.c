@@ -250,7 +250,7 @@ void mount_entries(const char *root, const struct mount_entry *mounts, size_t nm
 				{ "stdin", "/proc/self/fd/0" },
 				{ "stdout", "/proc/self/fd/1" },
 				{ "stderr", "/proc/self/fd/2" },
-				{ "ptmx", "/dev/pts/ptmx" },
+				{ "ptmx", "pts/ptmx" },
 				{ "random", "zero" },
 				{ "urandom", "zero" },
 			};
