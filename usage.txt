@@ -22,7 +22,6 @@ Options:
 	--workdir <directory>:  Set current work directory.
 	--mount <source,target,type,options>:
 	                        Mount source over target before executing the program.
-	--mutable <path>:       Make path mutable.
 	--uid <uid>:            Set user ID.
 	--gid <gid>:            Set group ID.
 	--groups <gid,gid,...>: Set additional groups.

@@ -95,18 +95,6 @@ Users of bst may choose to opt-out of some of the isolation.
 
 	You cannot use this option with _--share=mount_.
 
-\--mutable <dir>
-	Make *<dir>* mutable. This is useful for making specific subtrees writeable
-	when the parent directory has been mounted read-only.
-
-	*<dir>* must be an absolute path relative to the current root, or, if
-	a new root has been specified with _--root_, the new root.
-
-	Any changes to the contents of *<dir>* are discarded when the inner process
-	and all of its descendants exits.
-
-	You cannot use this option with _--share=mount_.
-
 \--uid <uid>
 	Set the user ID of the inner process to *<uid>*.
 

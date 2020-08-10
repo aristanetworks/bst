@@ -21,7 +21,6 @@
 
 enum {
 	OPTION_MOUNT = 128,
-	OPTION_MUTABLE,
 	OPTION_UID,
 	OPTION_GID,
 	OPTION_GROUPS,
@@ -53,6 +52,7 @@ enum {
 	OPTION_NO_LOOPBACK_SETUP,
 	OPTION_NO_INIT,
 	OPTION_SHARE_DEPRECATED,
+	OPTION_MUTABLE_DEPRECATED,
 };
 
 /* Usage is generated from usage.txt. Note that the array is not null-terminated,
@@ -115,7 +115,6 @@ int main(int argc, char *argv[], char *envp[])
 		/* long options without shorthand */
 		{ "workdir",            required_argument, NULL, OPTION_WORKDIR         },
 		{ "mount",              required_argument, NULL, OPTION_MOUNT           },
-		{ "mutable",            required_argument, NULL, OPTION_MUTABLE         },
 		{ "uid",                required_argument, NULL, OPTION_UID             },
 		{ "gid",                required_argument, NULL, OPTION_GID             },
 		{ "groups",             required_argument, NULL, OPTION_GROUPS          },
@@ -150,6 +149,7 @@ int main(int argc, char *argv[], char *envp[])
 
 		/* Deprecated flags */
 		{ "share",      required_argument, NULL, OPTION_SHARE_DEPRECATED        },
+		{ "mutable",    required_argument, NULL, OPTION_MUTABLE_DEPRECATED      },
 		
 		{ 0, 0, 0, 0 }
 	};
@@ -214,7 +214,8 @@ int main(int argc, char *argv[], char *envp[])
 				break;
 			}
 
-			case OPTION_MUTABLE:
+			case OPTION_MUTABLE_DEPRECATED:
+				warnx("--mutable is deprecated; use a setup program instead.");
 				if (opts.nmutables >= MAX_MOUNT) {
 					errx(1, "can only mount a maximum of %d mutables", MAX_MOUNT);
 				}
