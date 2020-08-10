@@ -43,7 +43,7 @@ int main(int argc, char *argv[], char *envp[])
 		if (setpgid(0, 0) == -1) {
 			err(1, "setpgid");
 		}
-		if (tcsetpgrp(STDIN_FILENO, getpgrp()) == -1) {
+		if (tcsetpgrp(STDIN_FILENO, getpgrp()) == -1 && errno != ENOTTY) {
 			err(1, "tcsetpgrp");
 		}
 
