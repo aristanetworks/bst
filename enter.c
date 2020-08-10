@@ -62,22 +62,10 @@ const char *nsname(int ns)
 {
 	return flags[ns].proc_ns_name;
 }
-	
-
-struct nsaction {
-	/* Which namespace is being unshared or entered */
-	int flag;
-
-	/* Legal values for enter_fd are:
-	     >= 0: a file descriptor for an existing namespace that we will enter;
-	     NSACTION_SHARE_WITH_PARENT: inherit from parent (don't unshare or setns);
-	     NSACTION_UNSHARE: unshare this namespace. */
-	int enter_fd;
-};
 
 enum {
-      NSACTION_SHARE_WITH_PARENT = -1,
-      NSACTION_UNSHARE = -2,
+	NSACTION_SHARE_WITH_PARENT = -1,
+	NSACTION_UNSHARE = -2,
 };
 
 static void opts_to_nsactions(const struct entry_settings *opts, int *nsactions)
