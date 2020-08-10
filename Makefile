@@ -9,7 +9,23 @@ CFLAGS += -std=c11 -pedantic -Wall -Wextra -Wno-unused-parameter -fno-strict-ali
 CPPFLAGS ?=
 CPPFLAGS += -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -DLIBEXECDIR=\"$(LIBEXECDIR)\"
 
-SRCS := main.c enter.c outer.c mount.c cp.c setarch.c usage.c sig.c timens.c path.c kvlist.c net.c capable.c userns.c
+SRCS := \
+	capable.c \
+	cp.c \
+	enter.c \
+	kvlist.c \
+	main.c \
+	mount.c \
+	net.c \
+	ns.c \
+	outer.c \
+	path.c \
+	setarch.c \
+	sig.c \
+	timens.c \
+	usage.c \
+	userns.c \
+
 OBJS := $(subst .c,.o,$(SRCS))
 BINS := bst bst-unpersist bst-init
 

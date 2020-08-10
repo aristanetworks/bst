@@ -72,8 +72,8 @@ static void process_share_deprecated(struct entry_settings *opts, const char *op
 		if (!strcmp(share, "mount")) {
 			share = "mnt";
 		}
-		for (int ns = 0; ns < MAX_SHARES; ns++) {
-			if (!strcmp(share, nsname(ns))) {
+		for (enum nstype ns = 0; ns < MAX_NS; ns++) {
+			if (!strcmp(share, ns_name(ns))) {
 				opts->shares[ns] = SHARE_WITH_PARENT;
 				found = 1;
 			}
@@ -81,8 +81,8 @@ static void process_share_deprecated(struct entry_settings *opts, const char *op
 		if (!found) {
 			fprintf(stderr, "namespace `%s` does not exist.\n", share);
 			fprintf(stderr, "valid namespaces are: ");
-			for (int ns = 0; ns < MAX_SHARES; ns++) {
-				fprintf(stderr, "%s%s", ns == 0 ? "" : ", ", nsname(ns));
+			for (enum nstype ns = 0; ns < MAX_NS; ns++) {
+				fprintf(stderr, "%s%s", ns == 0 ? "" : ", ", ns_name(ns));
 			}
 			fprintf(stderr, ".\n");
 			exit(1);
@@ -258,14 +258,14 @@ int main(int argc, char *argv[], char *envp[])
 				break;
 
 			case OPTION_SHARE_ALL:
-				for (int i = 0; i < MAX_SHARES; i++) {
+				for (enum nstype ns = 0; ns < MAX_NS; ns++) {
 					char buf[PATH_MAX];
 					if (optarg) {
-						snprintf(buf, sizeof(buf), "%s/%s", optarg, nsname(i));
+						snprintf(buf, sizeof(buf), "%s/%s", optarg, ns_name(ns));
 						buf[sizeof(buf) - 1] = 0;
-						opts.shares[i] = strdup(buf);
+						opts.shares[ns] = strdup(buf);
 					} else {
-						opts.shares[i] = SHARE_WITH_PARENT;
+						opts.shares[ns] = SHARE_WITH_PARENT;
 					}
 				}
 				break;
@@ -466,7 +466,7 @@ int main(int argc, char *argv[], char *envp[])
 
 	/* Use our own default init if we unshare the pid namespace, and no
 	   --init has been specified. */
-	if (opts.shares[SHARE_PID] == NULL && opts.init == NULL) {
+	if (opts.shares[NS_PID] == NULL && opts.init == NULL) {
 		opts.init = LIBEXECDIR "/bst-init";
 	}
 

@@ -13,28 +13,14 @@
 # include <unistd.h>
 # include "mount.h"
 # include "net.h"
+# include "ns.h"
 # include "timens.h"
 # include "userns.h"
 
 enum {
 	MAX_MOUNT = 4096,
 	MAX_NICS = 4096,
-
-	SHARE_CGROUP = 0,
-	SHARE_IPC,
-	SHARE_MNT,
-	SHARE_NET,
-	SHARE_PID,
-	SHARE_TIME,
-	SHARE_USER,
-	SHARE_UTS,
-	MAX_SHARES,
-
-	/* Maximum length of a share flag. */
-	MAX_FLAG = 16,
 };
-
-const char *nsname(int);
 
 /* SHARE_WITH_PARENT is a special value for entry_settings.shares[ns]. */
 # define SHARE_WITH_PARENT ((char *) -1)
@@ -44,7 +30,7 @@ struct entry_settings {
 	   NULL: unshare.
 	   SHARE_WITH_PARENT: special marker meaning don't unshare or setns.
 	   filename: setns to the given namespace file. */
-	const char *shares[MAX_SHARES]; 
+	const char *shares[MAX_NS];
 
 	const char *pathname;
 	char *const *argv;

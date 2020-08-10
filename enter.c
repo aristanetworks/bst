@@ -22,9 +22,9 @@
 
 #include "capable.h"
 #include "enter.h"
-#include "flags.h"
 #include "mount.h"
 #include "net.h"
+#include "ns.h"
 #include "outer.h"
 #include "path.h"
 #include "setarch.h"
@@ -38,50 +38,6 @@
 # define ARG_MAX 4096
 #endif
 
-struct cloneflag {
-	int flag;
-	const char *proc_ns_name;
-};
-
-static struct cloneflag flags[] = {
-	[ SHARE_CGROUP ] = { BST_CLONE_NEWCGROUP, "cgroup" },
-	[ SHARE_IPC ]    = { BST_CLONE_NEWIPC,    "ipc",   },
-	[ SHARE_MNT ]    = { BST_CLONE_NEWNS,     "mnt"    },
-	[ SHARE_NET ]    = { BST_CLONE_NEWNET,    "net"    },
-	[ SHARE_PID ]    = { BST_CLONE_NEWPID,    "pid"    },
-	[ SHARE_TIME ]   = { BST_CLONE_NEWTIME,   "time"   },
-	[ SHARE_USER ]   = { BST_CLONE_NEWUSER,   "user"   },
-	[ SHARE_UTS ]    = { BST_CLONE_NEWUTS,    "uts"    },
-};
-
-const char *nsname(int ns)
-{
-	return flags[ns].proc_ns_name;
-}
-
-enum {
-	NSACTION_SHARE_WITH_PARENT = -1,
-	NSACTION_UNSHARE = -2,
-};
-
-static void opts_to_nsactions(const struct entry_settings *opts, int *nsactions)
-{
-	for (int i = 0; i < MAX_SHARES; i++) {
-		const char *share = opts->shares[i];
-		if (share == NULL) {
-			nsactions[i] = NSACTION_UNSHARE;
-		} else if (share == SHARE_WITH_PARENT) {
-			nsactions[i] = NSACTION_SHARE_WITH_PARENT;
-		} else {
-			int fd = open(share, O_RDONLY | O_CLOEXEC);
-			if (fd < 0) {
-				err(1, "open %s", share);
-			}
-			nsactions[i] = fd;
-		}
-	}
-}
-
 static inline size_t append_argv(char **argv, size_t argc, char *arg)
 {
 	if (argc >= ARG_MAX) {
@@ -94,7 +50,7 @@ static inline size_t append_argv(char **argv, size_t argc, char *arg)
 int enter(struct entry_settings *opts)
 {
 	int timens_offsets = -1;
-	if (opts->shares[SHARE_TIME] != SHARE_WITH_PARENT) {
+	if (opts->shares[NS_TIME] != SHARE_WITH_PARENT) {
 
 		/* Because this process is privileged, /proc/self/timens_offsets
 		   is unfortunately owned by root and not ourselves, so we have
@@ -110,25 +66,25 @@ int enter(struct entry_settings *opts)
 			/* The kernel evidently doesn't support time namespaces yet.
 			   Don't try to open the time namespace file with --share-all=<dir>,
 			   or try to unshare or setns the time namespace below. */
-			opts->shares[SHARE_TIME] = SHARE_WITH_PARENT;
+			opts->shares[NS_TIME] = SHARE_WITH_PARENT;
 		}
 
 		reset_capabilities();
 	}
 
-	int nsactions[MAX_SHARES];
-	opts_to_nsactions(opts, nsactions);
+	enum nsaction nsactions[MAX_NS];
+	opts_to_nsactions(opts->shares, nsactions);
 
-	if (nsactions[SHARE_NET] != NSACTION_UNSHARE && opts->nnics > 0) {
+	if (nsactions[NS_NET] != NSACTION_UNSHARE && opts->nnics > 0) {
 		errx(1, "cannot create NICs when not in a network namespace");
 	}
 
 	struct outer_helper outer_helper;
 	outer_helper.persist = opts->persist;
-	outer_helper.unshare_user = nsactions[SHARE_USER] == NSACTION_UNSHARE;
+	outer_helper.unshare_user = nsactions[NS_USER] == NSACTION_UNSHARE;
 	memcpy(outer_helper.uid_desired, opts->uid_map, sizeof (outer_helper.uid_desired));
 	memcpy(outer_helper.gid_desired, opts->gid_map, sizeof (outer_helper.gid_desired));
-	outer_helper.unshare_net = nsactions[SHARE_NET] == NSACTION_UNSHARE;
+	outer_helper.unshare_net = nsactions[NS_NET] == NSACTION_UNSHARE;
 	outer_helper.nics = opts->nics;
 	outer_helper.nnics = opts->nnics;
 	outer_helper_spawn(&outer_helper);
@@ -177,66 +133,13 @@ int enter(struct entry_settings *opts)
 		workdir = "/";
 	}
 
-	int nsenterables[] = {
-		SHARE_USER,
-		SHARE_NET,
-		SHARE_MNT,
-		SHARE_IPC,
-		SHARE_PID,
-		SHARE_CGROUP,
-		SHARE_UTS,
-		SHARE_TIME,
-		-1,
-	};
+	ns_enter(nsactions);
 
-	for (int *ns = &nsenterables[0]; *ns != -1; ++ns) {
-		int action = nsactions[*ns];
-		if (action < 0) {
-			continue;
-		}
-		int rc = setns(action, flags[*ns].flag);
-		if (rc == -1) {
-			err(1, "setns %s", flags[*ns].proc_ns_name);
-		}
-		close(action);
-	}
-
-	/* Unshare all relevant namespaces. It's hard to check in advance which
-	   namespaces are supported, so we unshare them one by one in order. */
-
-	int unshareables[] = {
-		/* User namespace must be unshared first and foremost. */
-		SHARE_USER,
-		SHARE_MNT,
-		SHARE_UTS,
-		SHARE_PID,
-		SHARE_NET,
-		SHARE_IPC,
-		SHARE_CGROUP,
-		SHARE_TIME,
-		-1,
-	};
-
-	for (int *ns = &unshareables[0]; *ns != -1; ++ns) {
-		int action = nsactions[*ns];
-		if (action != NSACTION_UNSHARE) {
-			continue;
-		}
-		int rc = unshare(flags[*ns].flag);
-		if (rc == -1 && errno == EINVAL) {
-			/* We realized that the namespace isn't supported -- remove it
-			   from the unshare set. */
-			nsactions[*ns] = NSACTION_SHARE_WITH_PARENT;
-		} else if (rc == -1) {
-			err(1, "unshare %s", flags[*ns].proc_ns_name);
-		}
-	}
-
-	int mnt_unshare  = nsactions[SHARE_MNT]  == NSACTION_UNSHARE;
-	int uts_unshare  = nsactions[SHARE_UTS]  == NSACTION_UNSHARE;
-	int pid_unshare  = nsactions[SHARE_PID]  == NSACTION_UNSHARE;
-	int net_unshare  = nsactions[SHARE_NET]  == NSACTION_UNSHARE;
-	int time_unshare = nsactions[SHARE_TIME] == NSACTION_UNSHARE;
+	int mnt_unshare  = nsactions[NS_MNT]  == NSACTION_UNSHARE;
+	int uts_unshare  = nsactions[NS_UTS]  == NSACTION_UNSHARE;
+	int pid_unshare  = nsactions[NS_PID]  == NSACTION_UNSHARE;
+	int net_unshare  = nsactions[NS_NET]  == NSACTION_UNSHARE;
+	int time_unshare = nsactions[NS_TIME] == NSACTION_UNSHARE;
 
 	/* Just unsharing the mount namespace is not sufficient -- if we don't make
 	   every mount entry private, any change we make will be applied to the
