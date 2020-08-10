@@ -200,7 +200,6 @@ void net_if_add(int sockfd, const struct nic_options *nicopts)
 	pkt.hdr->nlhdr.nlmsg_type = RTM_NEWLINK;
 	pkt.hdr->nlhdr.nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_EXCL | NLM_F_CREATE;
 
-	nlpkt_add_attr_nstr(&pkt, IFLA_IFNAME, nicopts->name);
 	nlpkt_add_attr(&pkt, IFLA_NET_NS_PID, nicopts->netns_pid);
 
 	nic_handler_func *handler = add_default_attrs;
@@ -216,6 +215,28 @@ void net_if_add(int sockfd, const struct nic_options *nicopts)
 
 	if (nl_sendmsg(sockfd, &iov, 1) == -1) {
 		err(1, "if_add %s %.*s", nicopts->type, IF_NAMESIZE, nicopts->name);
+	}
+
+	nlpkt_close(&pkt);
+}
+
+void net_if_rename(int sockfd, int link, const char *to)
+{
+	struct nlpkt pkt;
+	nlpkt_init(&pkt);
+
+	pkt.hdr->nlhdr.nlmsg_type = RTM_NEWLINK;
+	pkt.hdr->nlhdr.nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK;
+	pkt.hdr->ifinfo.ifi_index = link;
+
+	nlpkt_add_attr_sz(&pkt, IFLA_IFNAME, to, strlen(to), 1);
+
+	struct iovec iov = { .iov_base = pkt.data, .iov_len = pkt.size };
+
+	if (nl_sendmsg(sockfd, &iov, 1) == -1) {
+		char name[IF_NAMESIZE];
+		if_indextoname(link, name);
+		err(1, "if_rename %.*s -> %.*s", IF_NAMESIZE, name, IF_NAMESIZE, to);
 	}
 
 	nlpkt_close(&pkt);

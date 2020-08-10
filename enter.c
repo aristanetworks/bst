@@ -346,6 +346,20 @@ int enter(struct entry_settings *opts)
 	outer_helper_sync(&outer_helper);
 	outer_helper_close(&outer_helper);
 
+	int rtnl = init_rtnetlink_socket();
+
+	/* Rename interfaces according to their specifications */
+	if (net_unshare) {
+		for (size_t i = 0; i < opts->nnics; ++i) {
+			if (i > (size_t) INT_MAX - 2) {
+				errx(1, "cannot iterate over more than %d interfaces", INT_MAX - 2);
+			}
+			/* interface indices start from 1, and we want to ignore interface 1 (lo),
+			   so we slide our indices by 2. */
+			net_if_rename(rtnl, (int) i + 2, opts->nics[i].name);
+		}
+	}
+
 	if (opts->setup_program) {
 		pid_t pid = fork();
 		if (pid == -1) {
@@ -441,8 +455,6 @@ int enter(struct entry_settings *opts)
 	if (domainname && setdomainname(domainname, strlen(domainname)) == -1) {
 		err(1, "setdomainname");
 	}
-
-	int rtnl = init_rtnetlink_socket();
 
 	if (net_unshare) {
 		/* Setup localhost */
