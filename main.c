@@ -350,14 +350,14 @@ int main(int argc, char *argv[], char *envp[])
 				kvlist_parse(optarg, kvlist, nopts, NULL);
 
 				/* Only the first two argument need not be key-value pairs */
-				size_t i = 0;
-				if (kvlist[i].value == NULL)
-					strncpy(nic->name, kvlist[i++].key, sizeof (nic->name));
-				if (kvlist[i].value == NULL)
-					strncpy(nic->type, kvlist[i++].key, sizeof (nic->type));
+				size_t start = 0;
+				if (kvlist[start].value == NULL)
+					strncpy(nic->name, kvlist[start++].key, sizeof (nic->name));
+				if (kvlist[start].value == NULL)
+					strncpy(nic->type, kvlist[start++].key, sizeof (nic->type));
 
 				/* Do a first pass to find name= and type= keys */
-				for (; i < nopts; ++i) {
+				for (size_t i = start; i < nopts; ++i) {
 					if (kvlist[i].key == NULL) {
 						continue;
 					}
@@ -380,7 +380,7 @@ int main(int argc, char *argv[], char *envp[])
 					errx(1, "nic: must at least specify a type for '%.16s'", nic->name);
 				}
 
-				for (; i < nopts; ++i) {
+				for (size_t i = start; i < nopts; ++i) {
 					if (kvlist[i].key != NULL) {
 						nic_parse(nic, kvlist[i].key, kvlist[i].value);
 					}
