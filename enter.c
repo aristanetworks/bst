@@ -11,6 +11,7 @@
 #include <grp.h>
 #include <limits.h>
 #include <sched.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mount.h>
@@ -508,8 +509,18 @@ int enter(struct entry_settings *opts)
 		}
 		argv[argc] = NULL;
 
-		fexecve(initfd, argv, opts->envp);
-		err(1, "fexecve %s", opts->init);
+#ifdef SYS_execveat
+		syscall(SYS_execveat, initfd, "", argv, opts->envp, AT_EMPTY_PATH);
+		if (errno != ENOSYS) {
+			err(1, "execveat %s", opts->init);
+		}
+#endif
+		char fdpath[PATH_MAX];
+		if ((size_t) snprintf(fdpath, sizeof (fdpath), "/proc/self/fd/%d", initfd) >= sizeof (fdpath)) {
+			errx(1, "/proc/self/fd/%d takes more than PATH_MAX bytes.", initfd);
+		}
+		execve(fdpath, argv, opts->envp);
+		err(1, "execve %s", opts->init);
 	} else {
 		execvpe(opts->pathname, opts->argv, opts->envp);
 		err(1, "execvpe %s", opts->pathname);
