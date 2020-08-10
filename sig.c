@@ -22,19 +22,8 @@ retry:
 	}
 }
 
-void sig_reap_and_forward(const siginfo_t *info, pid_t pid)
+void sig_forward(const siginfo_t *info, pid_t pid)
 {
-	if (info->si_signo == SIGCHLD) {
-		switch (info->si_code) {
-		case CLD_EXITED:
-		case CLD_KILLED:
-		case CLD_DUMPED:
-			if (waitpid(info->si_pid, NULL, WNOHANG) == -1) {
-				err(1, "waitpid");
-			}
-		}
-	}
-
 	if (info->si_code != SI_USER) {
 		return;
 	}

@@ -193,7 +193,7 @@ int enter(struct entry_settings *opts)
 
 			siginfo_t info;
 			sig_wait(&mask, &info);
-			sig_reap_and_forward(&info, pid);
+			sig_forward(&info, pid);
 
 			if (info.si_signo != SIGCHLD) {
 				continue;
@@ -203,26 +203,36 @@ int enter(struct entry_settings *opts)
 			   will -- make sure we only exit when the main child pid
 			   exited. */
 
-			if (info.si_pid == pid) {
-				switch (info.si_code) {
-				case CLD_EXITED:
-					return info.si_status;
-				case CLD_KILLED:
-				case CLD_DUMPED:
-					return info.si_status | 1 << 7;
-				}
-			} else if (info.si_pid == outer_helper.pid) {
-				switch (info.si_code) {
-				case CLD_KILLED:
-					errx(1, "helper got killed with signal %d", info.si_status);
-				case CLD_DUMPED:
-					errx(1, "helper crashed with signal %d", info.si_status);
-				case CLD_EXITED:
-					if (info.si_status) {
-						errx(1, "helper exit status %d", info.si_status);
-					}
+			int rc;
+			while ((rc = waitid(P_ALL, 0, &info, WEXITED | WNOHANG)) != -1) {
+				if (info.si_signo != SIGCHLD) {
 					break;
 				}
+
+				if (info.si_pid == pid) {
+					switch (info.si_code) {
+					case CLD_EXITED:
+						return info.si_status;
+					case CLD_KILLED:
+					case CLD_DUMPED:
+						return info.si_status | 1 << 7;
+					}
+				} else if (info.si_pid == outer_helper.pid) {
+					switch (info.si_code) {
+					case CLD_KILLED:
+						errx(1, "helper got killed with signal %d", info.si_status);
+					case CLD_DUMPED:
+						errx(1, "helper crashed with signal %d", info.si_status);
+					case CLD_EXITED:
+						if (info.si_status) {
+							errx(1, "helper exit status %d", info.si_status);
+						}
+						break;
+					}
+				}
+			}
+			if (rc == -1) {
+				err(1, "waitid");
 			}
 		}
 	}

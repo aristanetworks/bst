@@ -10,6 +10,6 @@
 # include <signal.h>
 
 void sig_wait(const sigset_t *set, siginfo_t *info);
-void sig_reap_and_forward(const siginfo_t *info, pid_t pid);
+void sig_forward(const siginfo_t *info, pid_t pid);
 
 #endif /* !SIG_H_ */
