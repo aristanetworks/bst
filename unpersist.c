@@ -10,14 +10,18 @@
 #include <getopt.h>
 #include <libgen.h>
 #include <limits.h>
+#include <linux/nsfs.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
+#include <sys/ioctl.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
 #include <unistd.h>
 
 #include "capable.h"
+#include "ns.h"
 
 static gid_t *get_groups(size_t *ngroups)
 {
@@ -27,12 +31,12 @@ static gid_t *get_groups(size_t *ngroups)
 	if (len == 0) {
 		int rc = getgroups(NGROUPS_MAX, groups);
 		if (rc == -1) {
-			err(1, "getgroups");
+			return NULL;
 		}
 		len = (size_t) rc;
 	}
 
-	*ngroups = len;;
+	*ngroups = len;
 	return groups;
 }
 
@@ -56,6 +60,9 @@ static int checkperm(const struct stat *stat)
 
 	size_t ngroups;
 	gid_t *groups = get_groups(&ngroups);
+	if (groups == NULL) {
+		return 0;
+	}
 
 	for (size_t i = 0; i < ngroups; ++i) {
 		if (stat->st_gid == groups[i]) {
@@ -81,31 +88,21 @@ static int unpersistat(int dirfd, const char *pathname, int flags)
 
 	   Everything else results from an access violation on our part. */
 
-	int fd = openat(dirfd, pathname, O_PATH | O_NOFOLLOW);
+	int fd = openat(dirfd, pathname, O_RDONLY | O_NOFOLLOW);
 	if (fd == -1) {
 		goto error;
 	}
 
-	struct stat stat;
-	if (fstat(fd, &stat) == -1) {
-		goto error;
-	}
-
-	/* This check is flawed, but should be a good enough heuristic for
-	   determining if an arbitrary file is an nsfs mount without having to
-	   parse /proc/mountinfo.
-
-	   Worst case scenario, we'd be unmounting a mountpoint that exists in
-	   a directory that the user controls.  Not great, but not the end of
-	   the world either. */
-	if ((stat.st_mode & S_IFMT) != S_IFREG || major(stat.st_dev) != 0) {
-		errno = EPERM;
+	/* Check if the file is a nsfs mount. */
+	if (ioctl(fd, NS_GET_NSTYPE) == -1) {
+		errno = EINVAL;
 		goto error;
 	}
 
 	char selfpath[PATH_MAX];
 	snprintf(selfpath, PATH_MAX, "/proc/self/fd/%d", fd);
 
+	struct stat stat;
 	if (dirfd == AT_FDCWD) {
 		char resolved[PATH_MAX];
 		if (readlink(selfpath, resolved, sizeof (resolved)) == -1) {
@@ -178,6 +175,10 @@ enum {
 	OPTION_NO_UNLINK = 128,
 };
 
+/* the argv0 prefix is a bit spammy, so override that */
+#define warn(Fmt, ...) fprintf(stderr, Fmt ": %s\n", __VA_ARGS__, strerror(errno))
+#define warnx(Fmt, ...) fprintf(stderr, Fmt "\n", __VA_ARGS__)
+
 int main(int argc, char *argv[])
 {
 	static struct option options[] = {
@@ -225,17 +226,6 @@ int main(int argc, char *argv[])
 		return usage(true, argv[0]);
 	}
 
-	const char *namespaces[] = {
-		"cgroup",
-		"ipc",
-		"mnt",
-		"net",
-		"pid",
-		"user",
-		"uts",
-		"time",
-	};
-
 	for (int arg = optind; arg < argc; ++arg) {
 		char *name = argv[arg];
 
@@ -245,28 +235,45 @@ int main(int argc, char *argv[])
 				/* This is a normal filename -- treat it as if we got
 				   passed an nsfs filename. */
 				if (unpersistat(AT_FDCWD, name, settings.unpersistat_flags) == -1) {
-					warn("unpersist \"%s\"", name);
+					switch (errno) {
+					case EINVAL:
+						warnx("%s: not an nsfs file", name);
+						break;
+					case EBUSY:
+						warn("%s: could not unlink mountpoint", name);
+						break;
+					default:
+						warn("%s", name);
+						break;
+					}
+					error = 1;
 				}
 				continue;
 			}
-			err(1, "open \"%s\"", name);
+			warn("open \"%s\"", name);
 		}
 
-		for (size_t i = 0; i < sizeof (namespaces) / sizeof (*namespaces); ++i) {
-			if (unpersistat(dirfd, namespaces[i], settings.unpersistat_flags) == -1) {
+		for (enum nstype ns = 0; ns < MAX_NS; ++ns) {
+			if (unpersistat(dirfd, ns_name(ns), settings.unpersistat_flags) == -1) {
 				switch (errno) {
 				case ENOENT:
 					continue;
-				case EPERM:
-					warnx("ignoring %s/%s: not an nsfs file", name, namespaces[i]);
-					continue;
+				case EINVAL:
+					warnx("%s/%s: not an nsfs file", name, ns_name(ns));
+					break;
+				case EBUSY:
+					warn("%s/%s: could not unlink mountpoint", name, ns_name(ns));
+					break;
+				default:
+					warn("%s/%s", name, ns_name(ns));
+					break;
 				}
-				err(1, "unpersist \"%s/%s\"", name, namespaces[i]);
+				error = 1;
 			}
 		}
 
 		close(dirfd);
 	}
 
-	return 0;
+	return error;
 }

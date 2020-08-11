@@ -65,7 +65,7 @@ bst: $(OBJS)
 bst-init: init.o sig.o
 	$(LINK.o) -static -o $@ $^
 
-bst-unpersist: unpersist.o capable.o
+bst-unpersist: unpersist.o capable.o ns.o
 	$(LINK.o) -o $@ $^
 	$(SETCAP) cap_sys_admin+p $@ \
 		|| ($(CHOWN) root $@ && $(CHMOD) u+s $@)
