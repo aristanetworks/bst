@@ -225,7 +225,7 @@ int enter(struct entry_settings *opts)
 					case CLD_DUMPED:
 						errx(1, "helper crashed with signal %d", info.si_status);
 					case CLD_EXITED:
-						if (info.si_status) {
+						if (info.si_status > 1) {
 							errx(1, "helper exit status %d", info.si_status);
 						}
 						break;
