@@ -266,7 +266,7 @@ int enter(struct entry_settings *opts)
 			}
 			/* interface indices start from 1, and we want to ignore interface 1 (lo),
 			   so we slide our indices by 2. */
-			net_if_rename(rtnl, (int) i + 2, opts->nics[i].name);
+			net_if_rename(rtnl, (unsigned) i + 2, opts->nics[i].name);
 		}
 	}
 

@@ -4,8 +4,10 @@
  * in the LICENSE file.
  */
 
+#include <assert.h>
 #include <err.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <linux/rtnetlink.h>
 #include <net/if.h>
 #include <stddef.h>
@@ -70,7 +72,6 @@ struct nlpkt {
 		struct ifinfomsg ifinfo;
 	} *hdr;
 	char *data;
-	size_t size;
 	size_t capacity;
 };
 
@@ -80,7 +81,6 @@ static void nlpkt_init(struct nlpkt *pkt)
 	pkt->capacity = 4096;
 	pkt->hdr = (void *) pkt->data;
 	pkt->hdr->nlhdr.nlmsg_len = NLMSG_HDRLEN + NLMSG_ALIGN(sizeof (struct ifinfomsg));
-	pkt->size = pkt->hdr->nlhdr.nlmsg_len;
 }
 
 static void nlpkt_close(struct nlpkt *pkt)
@@ -88,41 +88,52 @@ static void nlpkt_close(struct nlpkt *pkt)
 	free(pkt->data);
 }
 
-static struct nlattr *nlpkt_append_attr(struct nlpkt *pkt, uint32_t type, size_t size)
+static struct nlattr *nlpkt_append_attr(struct nlpkt *pkt, uint16_t type, size_t size)
 {
-	size_t aligned = NLA_ALIGN(NLA_HDRLEN + size);
-
-	if (pkt->size > SIZE_MAX - aligned) {
-		errno = EOVERFLOW;
-		err(1, "could not reserve %zu more bytes for netlink packet buffer", aligned);
+	if (size > UINT16_MAX - NLA_HDRLEN) {
+		errx(1, "attribute size %zu overflows uint16_t", NLA_HDRLEN + size);
 	}
 
-	size_t newsize = pkt->size + aligned;
-	if (newsize > pkt->capacity) {
-		while (newsize > pkt->capacity) {
-			if (pkt->capacity > SIZE_MAX / 1.5) {
+	uint32_t aligned = NLA_ALIGN(NLA_HDRLEN + size);
+	uint32_t sz = pkt->hdr->nlhdr.nlmsg_len;
+
+	if (sz > UINT32_MAX - aligned) {
+		errno = EOVERFLOW;
+		err(1, "could not reserve %" PRIu32 " more bytes for netlink packet buffer", aligned);
+	}
+
+	if (sz + aligned > pkt->capacity) {
+		while (sz + aligned > pkt->capacity) {
+			if (pkt->capacity > UINT32_MAX >> 1) {
 				errno = EOVERFLOW;
 				err(1, "could not resize netlink packet buffer");
 			}
-			pkt->capacity *= 1.5;
+			pkt->capacity <<= 1;
 		}
 		pkt->data = realloc(pkt->data, pkt->capacity);
 	}
 
-	void *ptr = pkt->data + pkt->size;
+	void *ptr = pkt->data + sz;
 	memset(ptr, 0, aligned);
 
 	struct nlattr *attr = ptr;
-	attr->nla_len = NLA_HDRLEN + size;
+	attr->nla_len = (uint16_t) (NLA_HDRLEN + size);
 	attr->nla_type = type;
 
-	pkt->hdr->nlhdr.nlmsg_len += NLA_ALIGN(attr->nla_len);
-	pkt->size = newsize;
-
+	pkt->hdr->nlhdr.nlmsg_len += aligned;
 	return attr;
 }
 
-static inline void nlpkt_add_attr_sz(struct nlpkt *pkt, uint32_t type, const void *ptr, size_t size, size_t padding)
+static inline uint16_t nlpkt_attr_sublen(uint32_t hi, uint32_t lo)
+{
+	assert(hi >= lo);
+	if (hi - lo > UINT16_MAX) {
+		errx(1, "nested attribute list size %" PRIu32 "overflows uint16_t", hi - lo);
+	}
+	return (uint16_t) (hi - lo);
+}
+
+static inline void nlpkt_add_attr_sz(struct nlpkt *pkt, uint16_t type, const void *ptr, size_t size, size_t padding)
 {
 	struct nlattr *attr = nlpkt_append_attr(pkt, type, size + padding);
 	memcpy((char *) attr + NLA_HDRLEN, ptr, size);
@@ -138,9 +149,9 @@ static inline void nlpkt_add_attr_sz(struct nlpkt *pkt, uint32_t type, const voi
 
 #define nlpkt_attrlist(Pkt, Type) \
 	for (int __ok = 1; __ok;) \
-	for (size_t __size = (Pkt)->size; __ok;) \
+	for (uint32_t __size = (Pkt)->hdr->nlhdr.nlmsg_len; __ok;) \
 	for (struct nlattr *__attr = nlpkt_append_attr((Pkt), NLA_F_NESTED | (Type), 0); __ok; \
-			__attr->nla_len = (Pkt)->size - __size, \
+			__attr->nla_len = nlpkt_attr_sublen((Pkt)->hdr->nlhdr.nlmsg_len, __size), \
 			__ok = 0)
 
 static void add_macvlan_attrs(struct nlpkt *pkt, const struct nic_options *nicopts)
@@ -211,7 +222,7 @@ void net_if_add(int sockfd, const struct nic_options *nicopts)
 	}
 	handler(&pkt, nicopts);
 
-	struct iovec iov = { .iov_base = pkt.data, .iov_len = pkt.size };
+	struct iovec iov = { .iov_base = pkt.data, .iov_len = pkt.hdr->nlhdr.nlmsg_len };
 
 	if (nl_sendmsg(sockfd, &iov, 1) == -1) {
 		err(1, "if_add %s %.*s", nicopts->type, IF_NAMESIZE, nicopts->name);
@@ -220,7 +231,7 @@ void net_if_add(int sockfd, const struct nic_options *nicopts)
 	nlpkt_close(&pkt);
 }
 
-void net_if_rename(int sockfd, int link, const char *to)
+void net_if_rename(int sockfd, unsigned link, const char *to)
 {
 	struct nlpkt pkt;
 	nlpkt_init(&pkt);
@@ -231,7 +242,7 @@ void net_if_rename(int sockfd, int link, const char *to)
 
 	nlpkt_add_attr_sz(&pkt, IFLA_IFNAME, to, strlen(to), 1);
 
-	struct iovec iov = { .iov_base = pkt.data, .iov_len = pkt.size };
+	struct iovec iov = { .iov_base = pkt.data, .iov_len = pkt.hdr->nlhdr.nlmsg_len };
 
 	if (nl_sendmsg(sockfd, &iov, 1) == -1) {
 		char name[IF_NAMESIZE];

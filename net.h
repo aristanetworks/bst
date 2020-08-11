@@ -21,8 +21,8 @@ struct ipvlan {
 struct nic_options {
 	char type[16];
 	char name[IF_NAMESIZE];
-	int link_idx;
-	int netns_pid;
+	unsigned link_idx;
+	pid_t netns_pid;
 	union {
 		struct macvlan macvlan;
 		struct ipvlan ipvlan;
@@ -32,7 +32,7 @@ struct nic_options {
 int init_rtnetlink_socket();
 
 void net_if_add(int sockfd, const struct nic_options *nicopts);
-void net_if_rename(int sockfd, int link, const char *to);
+void net_if_rename(int sockfd, unsigned link, const char *to);
 void net_if_up(int sockfd, const char *name);
 
 void nic_parse(struct nic_options *nic, const char *key, const char *val);

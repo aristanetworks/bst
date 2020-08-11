@@ -167,7 +167,7 @@ void id_map_generate(id_map allotted, id_map out, const char *subid_path, const 
 
 		/* Ignore the [0-65535) range. */
 		if (range.outer <= ID_MAX) {
-			size_t shift = ID_MAX + 1 - range.outer;
+			uint32_t shift = ID_MAX + 1 - range.outer;
 			if (shift > range.length) {
 				shift = range.length;
 			}
