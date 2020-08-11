@@ -10,7 +10,6 @@
 #include <getopt.h>
 #include <libgen.h>
 #include <limits.h>
-#include <linux/nsfs.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -22,6 +21,11 @@
 
 #include "capable.h"
 #include "ns.h"
+
+#ifndef NS_GET_USERNS
+# define NSIO    0xb7
+# define NS_GET_NSTYPE _IO(NSIO, 0x3)
+#endif
 
 static gid_t *get_groups(size_t *ngroups)
 {
