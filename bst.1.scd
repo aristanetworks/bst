@@ -48,7 +48,7 @@ Users of bst may choose to opt-out of some of the isolation.
 
 	All namespaces are unshared by default; _e.g.,_ if _--share-mnt_
 	is not given, then the child process runs in a new (unshared)
-	mount namespace intialized as a copy of bst's parent's mount
+	mount namespace initialized as a copy of bst's parent's mount
 	namespace.
 
 \--persist <dir>
@@ -140,7 +140,7 @@ Users of bst may choose to opt-out of some of the isolation.
 	executable does not need to exist in the root specified by _--root_).
 
 	If an empty *<argv>* is passed to _--init_, no init process will be
-	spawed by bst, and *<executable>* will be executed directly.
+	spawned by bst, and *<executable>* will be executed directly.
 
 	If bst unshares the pid namespace and no _--init_ is specified, it uses
 	by default *bst-init*(1).
@@ -165,7 +165,7 @@ Users of bst may choose to opt-out of some of the isolation.
 \--gid-map <inner:outer:length>[,<inner:outer:length>...]
 	Override the default generated [ug]id map. The map must be fully-specified.
 
-	By default, *bst* maps your current [UG]ID to 0, then maps continously
+	By default, *bst* maps your current [UG]ID to 0, then maps continuously
 	all allotted sub[ug]ids for the current [UG]ID as written in
 	_/etc/sub[ug]id_ (see *subuid*(5), *subgid*(5)).
 
@@ -178,6 +178,29 @@ Users of bst may choose to opt-out of some of the isolation.
 
 	Supported interface types and valid options are described in more detail
 	in the *NETWORKING* section.
+
+\--limit-<limit> (<value>|[<hard>][:[<soft>]])
+	Set the specified hard and soft resource limits.
+
+	When either limit is not provided (empty string), use the
+	current value without trying to make any changes.  When
+	neither limit is provided, this is a special case to set the
+	soft resource limit to the current hard limit value.
+
+	Without specifying a colon, simply set both hard and soft
+	limits to the provided `value'.
+
+	Available options:++
+	\--limit-core            maximum size of core files created++
+	\--limit-nofile          maximum number of open file descriptors++
+	\--limit-nproc           the maximum number of user processes
+
+	Examples:++
+	\--limit-nproc 100       hard=100, soft=100++
+	\--limit-nproc 200:100   hard=200, soft=100++
+	\--limit-nproc :100      hard=(unchanged), soft=100++
+	\--limit-nproc 100:      hard=100, soft=(unchanged)++
+	\--limit-nproc :         hard=(unchanged), soft=(hard limit)
 
 \--no-fake-devtmpfs
 	Do not replace devtmpfs mounts with a fake devtmpfs.
@@ -221,7 +244,7 @@ has been forked, but before any other initialization occurs.
 In particular, this means that the setup script will run before any mounts
 occurs, and before *bst* pivots/chroots into filesystem root.
 
-Because the setup process is run very early, any preparative work done by
+Because the setup process is run very early, any preparatory work done by
 the process may be altered or undone by other command-line switches passed to
 *bst* if not careful.
 

@@ -8,8 +8,9 @@
 # define ENTER_H_
 
 # include <limits.h>
-# include <time.h>
+# include <sys/resource.h>
 # include <sys/stat.h>
+# include <time.h>
 # include <unistd.h>
 # include "mount.h"
 # include "net.h"
@@ -62,6 +63,8 @@ struct entry_settings {
 	mode_t umask;
 
 	const char *arch;
+
+	struct rlimit limits[RLIM_NLIMITS];
 
 	const char *setup_program;
 	char *const *setup_argv;

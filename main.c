@@ -4,10 +4,12 @@
  * in the LICENSE file.
  */
 
+#include <assert.h>
 #include <ctype.h>
 #include <err.h>
 #include <errno.h>
 #include <getopt.h>
+#include <inttypes.h>
 #include <limits.h>
 #include <signal.h>
 #include <stdio.h>
@@ -15,8 +17,9 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "enter.h"
+#include "bst_limits.h"
 #include "capable.h"
+#include "enter.h"
 #include "kvlist.h"
 
 enum {
@@ -26,6 +29,9 @@ enum {
 	OPTION_GROUPS,
 	OPTION_WORKDIR,
 	OPTION_ARCH,
+	OPTION_LIMIT_CORE,
+	OPTION_LIMIT_NOFILE,
+	OPTION_LIMIT_NPROC,
 	OPTION_SHARE_CGROUP,
 	OPTION_SHARE_IPC,
 	OPTION_SHARE_MNT,
@@ -90,6 +96,12 @@ static void process_share_deprecated(struct entry_settings *opts, const char *op
 	}
 }
 
+static void handle_limit_arg(int resource, struct rlimit *opt_limits, char *arg, char const *which ) {
+	if (parse_rlimit(resource, opt_limits + resource, arg)) {
+		err(1, "error in --limit-%s value", which);
+	}
+}
+
 int usage(int error, char *argv0)
 {
 	usage_txt[usage_txt_len - 1] = 0;
@@ -108,6 +120,11 @@ int main(int argc, char *argv[], char *envp[])
 		.gid   = (gid_t) -1,
 		.umask = (mode_t) -1,
 	};
+	for (size_t resource = 0; resource < RLIM_NLIMITS; ++resource) {
+		struct rlimit *value = opts.limits + resource;
+		value->rlim_cur = RLIM_INFINITY;
+		value->rlim_max = RLIM_INFINITY;
+	}
 
 	static struct option options[] = {
 		{ "help",       no_argument,        NULL,           'h' },
@@ -120,6 +137,9 @@ int main(int argc, char *argv[], char *envp[])
 		{ "gid",                required_argument, NULL, OPTION_GID             },
 		{ "groups",             required_argument, NULL, OPTION_GROUPS          },
 		{ "arch",               required_argument, NULL, OPTION_ARCH            },
+		{ "limit-core",         required_argument, NULL, OPTION_LIMIT_CORE      },
+		{ "limit-nofile",       required_argument, NULL, OPTION_LIMIT_NOFILE    },
+		{ "limit-nproc",        required_argument, NULL, OPTION_LIMIT_NPROC     },
 		{ "share-cgroup",       optional_argument, NULL, OPTION_SHARE_CGROUP    },
 		{ "share-ipc",          optional_argument, NULL, OPTION_SHARE_IPC       },
 		{ "share-mnt",          optional_argument, NULL, OPTION_SHARE_MNT       },
@@ -244,6 +264,16 @@ int main(int argc, char *argv[], char *envp[])
 
 			case OPTION_ARCH:
 				opts.arch = optarg;
+				break;
+
+			case OPTION_LIMIT_CORE:
+				handle_limit_arg(RLIMIT_CORE, opts.limits, optarg, "core");
+				break;
+			case OPTION_LIMIT_NOFILE:
+				handle_limit_arg(RLIMIT_NOFILE, opts.limits, optarg, "nofile");
+				break;
+			case OPTION_LIMIT_NPROC:
+				handle_limit_arg(RLIMIT_NPROC, opts.limits, optarg, "nproc");
 				break;
 
 			case OPTION_SHARE_CGROUP:

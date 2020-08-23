@@ -37,6 +37,13 @@ Options:
 	--nic <name,type,options>:
 	                        Create network interface in namespace.
 
+	--limit-core (<value>)|(<hard>:<soft>)
+	                        Set RLIMIT_CORE to the provided value(s).
+	--limit-nofile (<value>)|(<hard>:<soft>)
+	                        Set RLIMIT_NOFILE to the provided value(s).
+	--limit-nproc (<value>)|(<hard>:<soft>)
+	                        Set RLIMIT_NPROC to the provided value(s).
+
 	--no-fake-devtmpfs:     Don't replace devtmpfs mounts with fake ones.
 	--no-derandomize:       Don't attempt to reduce randomness sources.
 	--no-proc-remount:      Don't remount the existing /proc in pid namespaces.
