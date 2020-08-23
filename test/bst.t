@@ -121,3 +121,33 @@ Testing hostname semantics
 Testing persistence
 
 	$ mkdir -p foo bar; trap 'bst-unpersist foo && rmdir foo bar' EXIT; bst --persist=foo sh -c 'mount -t tmpfs none bar && echo hello > bar/greeting' && [ ! -f bar/greeting ] && bst --share-mnt=foo/mnt --share-user=foo/user sh -c '[ "$(cat '"$PWD"'/bar/greeting)" = "hello" ]'
+
+Testing --limit-core / general tests
+	$ bst --limit-core=0 test/print_limits core
+	core: hard=0 soft=0
+
+	$ bst --limit-core=-1
+	bst: error in --limit-core value: Invalid argument
+	[1]
+
+	$ bst --limit-core=0:-1
+	bst: error in --limit-core value: Invalid argument
+	[1]
+
+	$ bst --limit-core=0xffffffffffffffffffffffffe
+	bst: error in --limit-core value: Numerical result out of range
+	[1]
+
+Testing --limit-nofile
+	$ bst --limit-nofile=750 test/print_limits nofile
+	nofile: hard=750 soft=750
+
+	$ bst --limit-nofile=750:740 test/print_limits nofile
+	nofile: hard=750 soft=740
+
+Testing --limit-nproc
+	$ bst --limit-nproc=3500 test/print_limits nproc
+	nproc: hard=3500 soft=3500
+
+	$ bst --limit-nproc=3500:3499 test/print_limits nproc
+	nproc: hard=3500 soft=3499

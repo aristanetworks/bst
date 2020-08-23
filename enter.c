@@ -17,6 +17,7 @@
 #include <sys/mount.h>
 #include <sys/personality.h>
 #include <sys/prctl.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <syscall.h>
@@ -488,6 +489,15 @@ int enter(struct entry_settings *opts)
 		warnx("falling back work directory to /.");
 		if (chdir("/") == -1) {
 			err(1, "chdir /");
+		}
+	}
+
+	for (size_t resource = 0; resource < RLIM_NLIMITS; ++resource) {
+		struct rlimit const * value = opts->limits + resource;
+		if (value->rlim_max != RLIM_INFINITY) {
+			if (setrlimit(resource, value)) {
+				err(1, "setrlimit(%zu) failed", resource);
+			}
 		}
 	}
 

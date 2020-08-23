@@ -14,6 +14,7 @@ SRCS := \
 	cp.c \
 	enter.c \
 	kvlist.c \
+	bst_limits.c \
 	main.c \
 	mount.c \
 	net.c \
@@ -28,6 +29,12 @@ SRCS := \
 
 OBJS := $(subst .c,.o,$(SRCS))
 BINS := bst bst-unpersist bst-init
+
+all: $(BINS) man
+
+TEST_BINS := test/print_limits test/test_limit_parsing
+
+test/test_limit_parsing: bst_limits.o
 
 ifeq ($(shell id -u),0)
 SUDO =
@@ -44,8 +51,6 @@ SETCAP = :
 CHOWN = :
 CHMOD = :
 endif
-
-all: $(BINS) man
 
 generate: usage.txt
 	(echo "/* Copyright © 2020 Arista Networks, Inc. All rights reserved."; \
@@ -89,10 +94,11 @@ install: $(BINS) man
 		|| ($(CHOWN) root $(BST_INSTALLPATH)-unpersist && $(CHMOD) u+s $(BST_INSTALLPATH)-unpersist)
 
 check: export PATH := $(DESTDIR)$(BINDIR):${PATH}
-check: $(BINS)
+check: $(BINS) $(TEST_BINS)
 	./test/cram.sh test
+	./test/test_limit_parsing
 
 clean:
-	$(RM) $(BINS) $(OBJS) bst.1.gz
+	$(RM) $(BINS) $(TEST_BINS) $(OBJS) bst.1.gz
 
 .PHONY: all clean install generate check man
