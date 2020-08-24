@@ -488,7 +488,7 @@ int main(int argc, char *argv[], char *envp[])
 	}
 	char *new_argv[argc - optind + 1];
 
-	if (!argv0 && opts.init) {
+	if (!argv0 && opts.init && opts.init[0] != '\0') {
 		argv0 = (char *) opts.init + strlen(opts.init) - 1;
 		for (; argv0 != opts.init && *argv0 != '/'; --argv0) {
 			continue;
