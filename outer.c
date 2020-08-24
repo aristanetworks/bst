@@ -4,6 +4,7 @@
  * in the LICENSE file.
  */
 
+#include <assert.h>
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -291,7 +292,8 @@ void outer_helper_spawn(struct outer_helper *helper)
 	/* Notify sibling that we're done persisting their proc files
 	   and/or changing their [ug]id map */
 	int ok = 1;
-	write(pipefds_in[1], &ok, sizeof (ok));
+	ssize_t count = write(pipefds_in[1], &ok, sizeof (ok));
+	assert((ssize_t)(sizeof (ok)) == count);
 
 	_exit(0);
 }
