@@ -9,8 +9,22 @@ as isolated as possible.
 The main purpose of bst is running CI/build processes in a somewhat
 deterministic fashion.
 
-# usage
+# Usage
 
 ```
 $ bst <exe> <args...>
 ```
+
+# Building from source
+
+bst uses [Meson][meson] for its build system.
+
+From the source directory:
+
+```
+$ meson ./build
+$ ninja -C ./build
+$ sudo ninja -C ./build install
+```
+
+[meson]: https://mesonbuild.com
