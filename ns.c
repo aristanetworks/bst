@@ -127,6 +127,30 @@ void ns_enter(enum nsaction *nsactions)
 
 		default:
 			if (setns(action, flags[*ns].flag) == -1) {
+				if (*ns == NS_USER && errno == EINVAL) {
+					/* EINVAL is overloaded -- it might mean that the user
+					   passed something that's not a userns file, or it might
+					   mean that the user is trying to enter the current userns.
+
+					   We want to ignore the latter case, and give semantics
+					   that using --share-userns=/your/own/userns is the same
+					   as --share-userns. */
+
+					struct stat self;
+					if (stat("/proc/self/ns/user", &self) == -1) {
+						err(1, "stat /proc/self/ns/user");
+					}
+
+					struct stat stat;
+					if (fstat(action, &stat) == -1) {
+						err(1, "fstat %s nsfs", flags[*ns].proc_ns_name);
+					}
+
+					if (self.st_ino == stat.st_ino) {
+						nsactions[*ns] = NSACTION_SHARE_WITH_PARENT;
+						continue;
+					}
+				}
 				err(1, "setns %s", flags[*ns].proc_ns_name);
 			}
 			close(action);
