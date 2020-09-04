@@ -52,7 +52,7 @@ int main(int argc, char *argv[], char *envp[])
 		}
 
 		execvpe(argv[1], argv + 1, envp);
-		err(1, "execvpe");
+		err(1, "execvpe %s", argv[1]);
 	}
 
 	for (;;) {
