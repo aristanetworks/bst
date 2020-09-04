@@ -156,7 +156,6 @@ void ns_enter(enum nsaction *nsactions)
 				}
 				err(1, "setns %s", flags[ns->ns].proc_ns_name);
 			}
-			close(ns->action);
 			break;
 		}
 	}
