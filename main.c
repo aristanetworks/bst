@@ -20,6 +20,8 @@
 
 #include <asm/resource.h>
 
+#include "config.h"
+
 #include "bst_limits.h"
 #include "capable.h"
 #include "enter.h"
