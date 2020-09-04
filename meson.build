@@ -8,6 +8,29 @@ prefix     = get_option('prefix')
 bindir     = join_paths(prefix, get_option('bindir'))
 libexecdir = join_paths(prefix, get_option('libexecdir'))
 
+git = find_program('git', required: false)
+
+# Get the right version
+
+is_git_repo = run_command(['[', '-d', '.git', ']']).returncode() == 0
+
+version = 'v' + meson.project_version()
+if get_option('version') != ''
+	version = get_option('version')
+elif git.found() and is_git_repo
+	git_version = run_command([git.path(), 'describe', '--dirty', '--tags']).stdout().strip()
+	branch = run_command([git.path(), 'rev-parse', '--abbrev-ref', 'HEAD']).stdout().strip()
+	if branch == 'HEAD'
+		branch = run_command([git.path(), 'rev-parse', 'HEAD']).stdout().strip()
+	endif
+	if git_version != ''
+		version = git_version
+	endif
+	if branch != 'main'
+		version = '@0@ (@1@)'.format(version, branch)
+	endif
+endif
+
 cc = meson.get_compiler('c')
 
 add_project_arguments(
@@ -23,6 +46,7 @@ config = configuration_data()
 config.set('package', meson.project_name())
 config.set('bindir', bindir)
 config.set('libexecdir', libexecdir)
+config.set('version', version)
 
 configure_file(input: 'config.h.in', output: 'config.h', configuration: config)
 

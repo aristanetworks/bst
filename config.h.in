@@ -10,5 +10,6 @@
 # define PACKAGE "@package@"
 # define BINDIR "@bindir@"
 # define LIBEXECDIR "@libexecdir@"
+# define VERSION "@version@"
 
 #endif /* !CONFIG_H_ */

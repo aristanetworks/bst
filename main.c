@@ -28,7 +28,8 @@
 #include "kvlist.h"
 
 enum {
-	OPTION_MOUNT = 128,
+	OPTION_VERSION = 128,
+	OPTION_MOUNT,
 	OPTION_UID,
 	OPTION_GID,
 	OPTION_GROUPS,
@@ -179,6 +180,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ "root",       required_argument,  NULL,           'r' },
 
 		/* long options without shorthand */
+		{ "version",            no_argument,       NULL, OPTION_VERSION         },
 		{ "workdir",            required_argument, NULL, OPTION_WORKDIR         },
 		{ "mount",              required_argument, NULL, OPTION_MOUNT           },
 		{ "uid",                required_argument, NULL, OPTION_UID             },
@@ -257,6 +259,10 @@ int main(int argc, char *argv[], char *envp[])
 		switch (c) {
 			case 0:
 				break;
+
+			case OPTION_VERSION:
+				printf("%s\n", VERSION);
+				return 0;
 
 			case OPTION_WORKDIR:
 				opts.workdir = optarg;

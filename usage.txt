@@ -6,6 +6,7 @@ order to enter a sane, isolated environment.
 
 Options:
 	-h, --help:             Print this message.
+	--version:              Print the version number.
 	-r, --root <dir>:       Set root directory.
 
 	--argv0 <arg>:          Set argv[0] (defaults to <exe>).

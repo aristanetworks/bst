@@ -1,2 +1,3 @@
+option('version', type: 'string', value: '')
 option('tests', type: 'boolean', value: true)
 option('no-setcap-or-suid', type: 'boolean', value: false)
