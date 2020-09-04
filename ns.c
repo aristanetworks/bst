@@ -56,9 +56,14 @@ void opts_to_nsactions(const char *shares[], enum nsaction *nsactions)
 	}
 }
 
-static int is_setns(const int *ns, const enum nsaction *nsactions)
+struct nsid {
+	int ns;
+	enum nsaction action;
+};
+
+static int is_setns(const struct nsid *ns)
 {
-	switch (nsactions[*ns]) {
+	switch (ns->action) {
 	case NSACTION_UNSHARE:
 	case NSACTION_SHARE_WITH_PARENT:
 		return 0;
@@ -70,9 +75,9 @@ static int is_setns(const int *ns, const enum nsaction *nsactions)
 /* cmp_nsids compares two ns IDs in a stable manner, such that
    namespaces that are entered via setns are sorted before those that
    are entered via unshare (or not changed at all). */
-static int cmp_nsids(const void *lhs, const void *rhs, void *cookie)
+static int cmp_nsids(const void *lhs, const void *rhs)
 {
-	int diff = is_setns(rhs, cookie) - is_setns(lhs, cookie);
+	int diff = is_setns(rhs) - is_setns(lhs);
 	if (diff != 0) {
 		return diff;
 	}
@@ -86,38 +91,36 @@ void ns_enter(enum nsaction *nsactions)
 	/* Enter all relevant namespaces. It's hard to check in advance which
 	   namespaces are supported, so we unshare them one by one in order. */
 
-	int namespaces[] = {
+	struct nsid namespaces[] = {
 		/* User namespace must be entered first and foremost. */
-		NS_USER,
-		NS_NET,
-		NS_MNT,
-		NS_IPC,
-		NS_PID,
-		NS_CGROUP,
-		NS_UTS,
-		NS_TIME,
+		{ NS_USER,   nsactions[NS_USER] },
+		{ NS_NET,    nsactions[NS_NET] },
+		{ NS_MNT,    nsactions[NS_MNT] },
+		{ NS_IPC,    nsactions[NS_IPC] },
+		{ NS_PID,    nsactions[NS_PID] },
+		{ NS_CGROUP, nsactions[NS_CGROUP] },
+		{ NS_UTS,    nsactions[NS_UTS] },
+		{ NS_TIME,   nsactions[NS_TIME] },
 	};
 
 	/* If we have CAP_SYS_ADMIN from the get-go, starting by entering
 	   the userns may restrict us from joining additional namespaces, so
 	   we rearrange the order so that we setns into target nsfs files first. */
 	if (capable(BST_CAP_SYS_ADMIN)) {
-		qsort_r(namespaces, lengthof(namespaces), sizeof (namespaces[0]),
-				cmp_nsids, nsactions);
+		qsort(namespaces, lengthof(namespaces), sizeof (namespaces[0]),
+				cmp_nsids);
 	}
 
-	for (int *ns = &namespaces[0]; ns < namespaces + lengthof(namespaces); ++ns) {
-		enum nsaction action = nsactions[*ns];
-
-		switch (action) {
+	for (struct nsid *ns = &namespaces[0]; ns < namespaces + lengthof(namespaces); ++ns) {
+		switch (ns->action) {
 		case NSACTION_UNSHARE:
-			if (unshare(flags[*ns].flag) == -1) {
+			if (unshare(flags[ns->ns].flag) == -1) {
 				if (errno == EINVAL) {
 					/* We realized that the namespace isn't supported -- remove it
 					   from the unshare set. */
-					nsactions[*ns] = NSACTION_SHARE_WITH_PARENT;
+					nsactions[ns->ns] = NSACTION_SHARE_WITH_PARENT;
 				} else {
-					err(1, "unshare %s", flags[*ns].proc_ns_name);
+					err(1, "unshare %s", flags[ns->ns].proc_ns_name);
 				}
 			}
 			break;
@@ -126,8 +129,8 @@ void ns_enter(enum nsaction *nsactions)
 			break;
 
 		default:
-			if (setns(action, flags[*ns].flag) == -1) {
-				if (*ns == NS_USER && errno == EINVAL) {
+			if (setns(ns->action, flags[ns->ns].flag) == -1) {
+				if (ns->ns == NS_USER && errno == EINVAL) {
 					/* EINVAL is overloaded -- it might mean that the user
 					   passed something that's not a userns file, or it might
 					   mean that the user is trying to enter the current userns.
@@ -142,18 +145,18 @@ void ns_enter(enum nsaction *nsactions)
 					}
 
 					struct stat stat;
-					if (fstat(action, &stat) == -1) {
-						err(1, "fstat %s nsfs", flags[*ns].proc_ns_name);
+					if (fstat(ns->action, &stat) == -1) {
+						err(1, "fstat %s nsfs", flags[ns->ns].proc_ns_name);
 					}
 
 					if (self.st_ino == stat.st_ino) {
-						nsactions[*ns] = NSACTION_SHARE_WITH_PARENT;
+						nsactions[ns->ns] = NSACTION_SHARE_WITH_PARENT;
 						continue;
 					}
 				}
-				err(1, "setns %s", flags[*ns].proc_ns_name);
+				err(1, "setns %s", flags[ns->ns].proc_ns_name);
 			}
-			close(action);
+			close(ns->action);
 			break;
 		}
 	}
