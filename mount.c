@@ -16,8 +16,7 @@
 #include "cp.h"
 #include "mount.h"
 #include "path.h"
-
-#define lengthof(Arr) (sizeof (Arr) / sizeof (*Arr))
+#include "util.h"
 
 struct mntflag {
 	const char *name;

@@ -31,8 +31,7 @@
 #include "path.h"
 #include "setarch.h"
 #include "sig.h"
-
-#define lengthof(Arr) (sizeof (Arr) / sizeof (*Arr))
+#include "util.h"
 
 #ifndef ARG_MAX
 /* ARG_MAX is typically a runtime constant that one can retrieve via sysconf,

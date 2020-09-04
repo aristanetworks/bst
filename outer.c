@@ -23,8 +23,7 @@
 #include "enter.h"
 #include "outer.h"
 #include "userns.h"
-
-#define lengthof(Arr) (sizeof (Arr) / sizeof (*Arr))
+#include "util.h"
 
 enum {
 	/* This should be enough for defining our mappings. If we assign
