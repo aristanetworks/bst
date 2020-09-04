@@ -189,10 +189,15 @@ static void persist_ns_files(pid_t pid, const char *persist)
 		reset_capabilities();
 
 		if (rc == -1) {
-			if (errno == ENOENT) {
+			switch errno {
+			case ENOENT:
 				/* Kernel does not support this namespace type.  Remove the mountpoint. */
 				unlinkat(persistdir, name, 0);
-			} else {
+				break;
+			case EINVAL:
+				errx(1, "bind-mount %s to %s: %s (is the destination on a private mount?)",
+						procname, persistname, strerror(EINVAL));
+			default:
 				err(1, "bind-mount %s to %s", procname, persistname);
 			}
 		}

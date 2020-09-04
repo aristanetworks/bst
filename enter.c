@@ -180,6 +180,9 @@ int enter(struct entry_settings *opts)
 
 	pid_t pid = fork();
 	if (pid == -1) {
+		if (errno == ENOMEM && nsactions[NS_PID] >= 0) {
+			errx(1, "fork: %s (is the target PID namespace dead?)", strerror(errno));
+		}
 		err(1, "fork");
 	}
 
