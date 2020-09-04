@@ -47,6 +47,7 @@ enum {
 	OPTION_UIDMAP,
 	OPTION_GIDMAP,
 	OPTION_NIC,
+	OPTION_CGROUP,
 	OPTION_NO_FAKE_DEVTMPFS,
 	OPTION_NO_DERANDOMIZE,
 	OPTION_NO_PROC_REMOUNT,
@@ -141,6 +142,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ "uid-map",            required_argument, NULL, OPTION_UIDMAP          },
 		{ "gid-map",            required_argument, NULL, OPTION_GIDMAP          },
 		{ "nic",                required_argument, NULL, OPTION_NIC             },
+		{ "cgroup",             required_argument, NULL, OPTION_CGROUP          },
 
 		/* Opt-out feature flags */
 		{ "no-fake-devtmpfs",   no_argument, NULL, OPTION_NO_FAKE_DEVTMPFS      },
@@ -406,6 +408,13 @@ int main(int argc, char *argv[], char *envp[])
 
 			case OPTION_GIDMAP:
 				id_map_parse(opts.gid_map, optarg);
+				break;
+
+			case OPTION_CGROUP:
+				if (opts.ncgroups >= MAX_CGROUPS) {
+					errx(1, "can only join a maximum of %d cgroups", MAX_CGROUPS);
+				}
+				opts.cgroups[opts.ncgroups++] = optarg;
 				break;
 
 			case OPTION_NO_FAKE_DEVTMPFS:

@@ -20,6 +20,14 @@
 enum {
 	MAX_MOUNT = 4096,
 	MAX_NICS = 4096,
+
+	// There are 13 cgroup controllers, so the max theoretical limit for combined
+	// mounted is 2^13 (sum of 13 choose k for k from 1 to 13, plus 1 cgroupv2 mount).
+	//
+	// It's very unlikely that any sane system has 8192 active cgroup mounts,
+	// but memory is supremely cheap, and I doubt we'll have to change that value
+	// for the forseeable future.
+	MAX_CGROUPS = 8192,
 };
 
 /* SHARE_WITH_PARENT is a special value for entry_settings.shares[ns]. */
@@ -60,6 +68,8 @@ struct entry_settings {
 	size_t nnics;
 
 	mode_t umask;
+	const char *cgroups[MAX_CGROUPS];
+	size_t ncgroups;
 
 	const char *arch;
 

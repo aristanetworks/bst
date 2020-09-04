@@ -134,6 +134,26 @@ int enter(struct entry_settings *opts)
 		workdir = "/";
 	}
 
+	/* Open and join specified cgroups. */
+	for (size_t i = 0; i < opts->ncgroups; ++i) {
+		int cgroupfd = open(opts->cgroups[i], O_PATH | O_DIRECTORY);
+		if (cgroupfd == -1) {
+			err(1, "open cgroup %s", opts->cgroups[i]);
+		}
+
+		int fd = openat(cgroupfd, "cgroup.procs", O_WRONLY);
+		if (fd == -1) {
+			err(1, "joining cgroup %s", opts->cgroups[i]);
+		}
+		const char *data = "0";
+		if (write(fd, data, 1) == -1) {
+			err(1, "joining cgroup %s", opts->cgroups[i]);
+		}
+		close(fd);
+
+		close(cgroupfd);
+	}
+
 	ns_enter(nsactions);
 
 	int mnt_unshare  = nsactions[NS_MNT]  == NSACTION_UNSHARE;
