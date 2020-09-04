@@ -8,7 +8,9 @@ prefix     = get_option('prefix')
 bindir     = join_paths(prefix, get_option('bindir'))
 libexecdir = join_paths(prefix, get_option('libexecdir'))
 
-git = find_program('git', required: false)
+sh    = find_program('sh')
+git   = find_program('git', required: false)
+scdoc = find_program('scdoc', required: get_option('man-pages'))
 
 # Get the right version
 
@@ -110,16 +112,20 @@ if not get_option('no-setcap-or-suid')
 	setcap = find_program('setcap', '/usr/sbin/setcap', '/sbin/setcap', required: false)
 	if setcap.found()
 		foreach bin, caps : capabilities
-			meson.add_install_script('/bin/sh', '-c', '@0@ @1@ ${MESON_INSTALL_DESTDIR_PREFIX}/bin/@2@'.format(setcap.path(), ','.join(caps) + '=p', bin))
+			meson.add_install_script(sh.path(), '-c', '@0@ @1@ ${MESON_INSTALL_DESTDIR_PREFIX}/bin/@2@'.format(setcap.path(), ','.join(caps) + '=p', bin))
 		endforeach
 	else
 		chmod = find_program('chmod')
 		foreach bin, _ : capabilities
-			meson.add_install_script('/bin/sh', '-c', '@0@ u+s ${MESON_INSTALL_DESTDIR_PREFIX}/bin/@1@'.format(chmod.path(), bin))
+			meson.add_install_script(sh.path(), '-c', '@0@ u+s ${MESON_INSTALL_DESTDIR_PREFIX}/bin/@1@'.format(chmod.path(), bin))
 		endforeach
 	endif
 endif
 
 if get_option('tests')
 	subdir('test')
+endif
+
+if scdoc.found()
+	subdir('man')
 endif

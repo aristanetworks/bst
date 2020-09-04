@@ -1,3 +1,4 @@
 option('version', type: 'string', value: '')
 option('tests', type: 'boolean', value: true)
+option('man-pages', type: 'feature', value: 'auto')
 option('no-setcap-or-suid', type: 'boolean', value: false)
