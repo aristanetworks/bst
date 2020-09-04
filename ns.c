@@ -141,6 +141,12 @@ void ns_enter(enum nsaction *nsactions)
 
 					struct stat self;
 					if (stat("/proc/self/ns/user", &self) == -1) {
+						if (errno == ENOENT) {
+							/* user namespaces are not supported -- bailing
+							   with the original errno. */
+							errno = EINVAL;
+							goto original_error;
+						}
 						err(1, "stat /proc/self/ns/user");
 					}
 
@@ -154,6 +160,7 @@ void ns_enter(enum nsaction *nsactions)
 						continue;
 					}
 				}
+			original_error:
 				err(1, "setns %s", flags[ns->ns].proc_ns_name);
 			}
 			break;
