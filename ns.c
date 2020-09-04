@@ -10,8 +10,10 @@
 #include <sched.h>
 #include <stdlib.h>
 
+#include "capable.h"
 #include "enter.h"
 #include "ns.h"
+#include "util.h"
 
 static struct {
 	int flag;
@@ -54,12 +56,37 @@ void opts_to_nsactions(const char *shares[], enum nsaction *nsactions)
 	}
 }
 
+static int is_setns(const int *ns, const enum nsaction *nsactions)
+{
+	switch (nsactions[*ns]) {
+	case NSACTION_UNSHARE:
+	case NSACTION_SHARE_WITH_PARENT:
+		return 0;
+	default:
+		return 1;
+	}
+}
+
+/* cmp_nsids compares two ns IDs in a stable manner, such that
+   namespaces that are entered via setns are sorted before those that
+   are entered via unshare (or not changed at all). */
+static int cmp_nsids(const void *lhs, const void *rhs, void *cookie)
+{
+	int diff = is_setns(rhs, cookie) - is_setns(lhs, cookie);
+	if (diff != 0) {
+		return diff;
+	}
+	/* Both namespaces are the same kind -- keep ordering intact by comparing
+	   pointer values. */
+	return (int) ((intptr_t) lhs - (intptr_t) rhs);
+}
+
 void ns_enter(enum nsaction *nsactions)
 {
 	/* Enter all relevant namespaces. It's hard to check in advance which
 	   namespaces are supported, so we unshare them one by one in order. */
 
-	static int namespaces[] = {
+	int namespaces[] = {
 		/* User namespace must be entered first and foremost. */
 		NS_USER,
 		NS_NET,
@@ -69,10 +96,17 @@ void ns_enter(enum nsaction *nsactions)
 		NS_CGROUP,
 		NS_UTS,
 		NS_TIME,
-		-1,
 	};
 
-	for (int *ns = &namespaces[0]; *ns != -1; ++ns) {
+	/* If we have CAP_SYS_ADMIN from the get-go, starting by entering
+	   the userns may restrict us from joining additional namespaces, so
+	   we rearrange the order so that we setns into target nsfs files first. */
+	if (capable(BST_CAP_SYS_ADMIN)) {
+		qsort_r(namespaces, lengthof(namespaces), sizeof (namespaces[0]),
+				cmp_nsids, nsactions);
+	}
+
+	for (int *ns = &namespaces[0]; ns < namespaces + lengthof(namespaces); ++ns) {
 		enum nsaction action = nsactions[*ns];
 
 		switch (action) {
