@@ -8,6 +8,7 @@
 #include <err.h>
 #include <errno.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <linux/rtnetlink.h>
 #include <net/if.h>
 #include <stddef.h>
@@ -17,6 +18,12 @@
 #include <sys/socket.h>
 
 #include "net.h"
+
+// NLA_HDRLEN is defined with -Wsign-conversion errors, so just define our own here,
+// making sure that the values match.
+#define _NLA_HDRLEN ((int) NLA_ALIGN((int)(sizeof(struct nlattr))))
+_Static_assert((_NLA_HDRLEN) == (NLA_HDRLEN), "NLA_HDRLEN mismatch");
+
 
 int init_rtnetlink_socket()
 {
@@ -90,11 +97,11 @@ static void nlpkt_close(struct nlpkt *pkt)
 
 static struct nlattr *nlpkt_append_attr(struct nlpkt *pkt, uint16_t type, size_t size)
 {
-	if (size > UINT16_MAX - NLA_HDRLEN) {
-		errx(1, "attribute size %zu overflows uint16_t", NLA_HDRLEN + size);
+	if (size > UINT16_MAX - _NLA_HDRLEN) {
+		errx(1, "attribute size %zu overflows uint16_t", _NLA_HDRLEN + size);
 	}
 
-	uint32_t aligned = NLA_ALIGN(NLA_HDRLEN + size);
+	uint32_t aligned = (uint32_t)(NLA_ALIGN(_NLA_HDRLEN + (int)size));
 	uint32_t sz = pkt->hdr->nlhdr.nlmsg_len;
 
 	if (sz > UINT32_MAX - aligned) {
@@ -117,7 +124,7 @@ static struct nlattr *nlpkt_append_attr(struct nlpkt *pkt, uint16_t type, size_t
 	memset(ptr, 0, aligned);
 
 	struct nlattr *attr = ptr;
-	attr->nla_len = (uint16_t) (NLA_HDRLEN + size);
+	attr->nla_len = (uint16_t) (_NLA_HDRLEN + size);
 	attr->nla_type = type;
 
 	pkt->hdr->nlhdr.nlmsg_len += aligned;
@@ -136,7 +143,7 @@ static inline uint16_t nlpkt_attr_sublen(uint32_t hi, uint32_t lo)
 static inline void nlpkt_add_attr_sz(struct nlpkt *pkt, uint16_t type, const void *ptr, size_t size, size_t padding)
 {
 	struct nlattr *attr = nlpkt_append_attr(pkt, type, size + padding);
-	memcpy((char *) attr + NLA_HDRLEN, ptr, size);
+	memcpy((char *) attr + _NLA_HDRLEN, ptr, size);
 }
 
 #define nlpkt_add_attr(Pkt, Type, Val) \
@@ -231,7 +238,7 @@ void net_if_add(int sockfd, const struct nic_options *nicopts)
 	nlpkt_close(&pkt);
 }
 
-void net_if_rename(int sockfd, unsigned link, const char *to)
+void net_if_rename(int sockfd, int link, const char *to)
 {
 	struct nlpkt pkt;
 	nlpkt_init(&pkt);
@@ -246,7 +253,7 @@ void net_if_rename(int sockfd, unsigned link, const char *to)
 
 	if (nl_sendmsg(sockfd, &iov, 1) == -1) {
 		char name[IF_NAMESIZE];
-		if_indextoname(link, name);
+		if_indextoname((unsigned int)link, name);
 		err(1, "if_rename %.*s -> %.*s", IF_NAMESIZE, name, IF_NAMESIZE, to);
 	}
 
@@ -262,10 +269,10 @@ void net_if_up(int sockfd, const char *name)
 	};
 
 	struct ifinfomsg ifinfo = {
-		.ifi_index = if_nametoindex(name),
+		.ifi_index = (int)if_nametoindex(name),
 		.ifi_flags = IFF_UP,
 	};
-	hdr.nlmsg_len += sizeof (ifinfo);
+	hdr.nlmsg_len += (unsigned int)(sizeof (ifinfo));
 
 	if (ifinfo.ifi_index == 0) {
 		err(1, "if_up %s: if_nametoindex", name);
