@@ -37,12 +37,38 @@ Options:
 	--nic <name,type,options>:
 	                        Create network interface in namespace.
 
+	--limit-as (<value>)|(<hard>:<soft>)
+	                        Set RLIMIT_AS to the provided value(s).
 	--limit-core (<value>)|(<hard>:<soft>)
 	                        Set RLIMIT_CORE to the provided value(s).
+	--limit-cpu (<value>)|(<hard>:<soft>)
+	                        Set RLIMIT_CPU to the provided value(s).
+	--limit-data (<value>)|(<hard>:<soft>)
+	                        Set RLIMIT_DATA to the provided value(s).
+	--limit-fsize (<value>)|(<hard>:<soft>)
+	                        Set RLIMIT_FSIZE to the provided value(s).
+	--limit-locks (<value>)|(<hard>:<soft>)
+	                        Set RLIMIT_LOCKS to the provided value(s).
+	--limit-memlock (<value>)|(<hard>:<soft>)
+	                        Set RLIMIT_MEMLOCK to the provided value(s).
+	--limit-msgqueue (<value>)|(<hard>:<soft>)
+	                        Set RLIMIT_MSGQUEUE to the provided value(s).
+	--limit-nice (<value>)|(<hard>:<soft>)
+	                        Set RLIMIT_NICE to the provided value(s).
 	--limit-nofile (<value>)|(<hard>:<soft>)
 	                        Set RLIMIT_NOFILE to the provided value(s).
 	--limit-nproc (<value>)|(<hard>:<soft>)
 	                        Set RLIMIT_NPROC to the provided value(s).
+	--limit-rss (<value>)|(<hard>:<soft>)
+	                        Set RLIMIT_RSS to the provided value(s).
+	--limit-rtprio (<value>)|(<hard>:<soft>)
+	                        Set RLIMIT_RTPRIO to the provided value(s).
+	--limit-rttime (<value>)|(<hard>:<soft>)
+	                        Set RLIMIT_RTTIME to the provided value(s).
+	--limit-sigpending (<value>)|(<hard>:<soft>)
+	                        Set RLIMIT_SIGPENDING to the provided value(s).
+	--limit-stack (<value>)|(<hard>:<soft>)
+	                        Set RLIMIT_STACK to the provided value(s).
 
 	--no-fake-devtmpfs:     Don't replace devtmpfs mounts with fake ones.
 	--no-derandomize:       Don't attempt to reduce randomness sources.

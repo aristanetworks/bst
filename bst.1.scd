@@ -179,21 +179,50 @@ Users of bst may choose to opt-out of some of the isolation.
 	Supported interface types and valid options are described in more detail
 	in the *NETWORKING* section.
 
-\--limit-<limit> (<value>|[<hard>][:[<soft>]])
-	Set the specified hard and soft resource limits.
+|[ --limit-as <arg>
+:< size of virtual memory
+|[ --limit-core <arg>
+:< maximum size of core files created
+|[ --limit-cpu <arg>
+:< maximum amount of CPU time in seconds
+|[ --limit-data <arg>
+:< maximum size of a process's data segment
+|[ --limit-fsize <arg>
+:< maximum size of files written by the shell and its children
+|[ --limit-locks <arg>
+:< maximum number of file locks
+|[ --limit-memlock <arg>
+:< maximum size a process may lock into memory
+|[ --limit-msgqueue <arg>
+:< maximum number of bytes in POSIX message queues
+|[ --limit-nice <arg>
+:< maximum scheduling priority (`nice')
+|[ --limit-nofile <arg>
+:< maximum number of open file descriptors
+|[ --limit-nproc <arg>
+:< maximum number of user processes
+|[ --limit-rss <arg>
+:< maximum resident set size
+|[ --limit-rtprio <arg>
+:< maximum real-time scheduling priority
+|[ --limit-rttime <arg>
+:< limit (in microseconds) of real-time-scheduled CPU time before making a blocking system call
+|[ --limit-sigpending <arg>
+:< maximum number of pending signals
+|[ --limit-stack <arg>
+:< maximum stack size
+
+	The *--limit-<limit>* options set the specified hard and soft
+	resource limits based on <arg>.
+
+	Format of <arg>:
+	- Single numerical value: set both hard and soft limits to <arg>.
+	- Colon-separated hard:soft values.
 
 	When either limit is not provided (empty string), use the
 	current value without trying to make any changes.  When
 	neither limit is provided, this is a special case to set the
 	soft resource limit to the current hard limit value.
-
-	Without specifying a colon, simply set both hard and soft
-	limits to the provided `value'.
-
-	Available options:++
-	\--limit-core            maximum size of core files created++
-	\--limit-nofile          maximum number of open file descriptors++
-	\--limit-nproc           the maximum number of user processes
 
 	Examples:++
 	\--limit-nproc 100       hard=100, soft=100++
@@ -201,6 +230,8 @@ Users of bst may choose to opt-out of some of the isolation.
 	\--limit-nproc :100      hard=(unchanged), soft=100++
 	\--limit-nproc 100:      hard=100, soft=(unchanged)++
 	\--limit-nproc :         hard=(unchanged), soft=(hard limit)
+
+	Full details for each limit value can be found in *getrlimit*(2).
 
 \--no-fake-devtmpfs
 	Do not replace devtmpfs mounts with a fake devtmpfs.
@@ -310,4 +341,4 @@ Supported interface types are:
 
 # SEE ALSO
 
-*bst-unpersist*(1), *bst-init*(1), *namespaces*(7), *mount*(1), *setarch*(1)
+*bst-unpersist*(1), *bst-init*(1), *namespaces*(7), *mount*(1), *setarch*(1), *getrlimit*(2)

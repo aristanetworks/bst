@@ -494,12 +494,13 @@ int enter(struct entry_settings *opts)
 		}
 	}
 
-	for (size_t resource = 0; resource < RLIM_NLIMITS; ++resource) {
-		struct rlimit const * value = opts->limits + resource;
-		if (value->rlim_max != RLIM_INFINITY) {
-			if (setrlimit(resource, value)) {
-				err(1, "setrlimit(%zu) failed", resource);
-			}
+	for (int resource = 0; resource < RLIM_NLIMITS; ++resource) {
+		struct rlimit const * value = opts->limits[resource];
+		if (!value) {
+			continue;
+		}
+		if (setrlimit(resource, value)) {
+			err(1, "setrlimit(%d) failed", resource);
 		}
 	}
 

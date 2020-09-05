@@ -64,7 +64,9 @@ struct entry_settings {
 
 	const char *arch;
 
-	struct rlimit limits[RLIM_NLIMITS];
+	// Set the `limits' pointer when the option has been provided.
+	struct rlimit limits_storage[RLIM_NLIMITS];
+	struct rlimit *limits[RLIM_NLIMITS];
 
 	const char *setup_program;
 	char *const *setup_argv;
