@@ -22,6 +22,7 @@
 #include "capable.h"
 #include "enter.h"
 #include "outer.h"
+#include "path.h"
 #include "userns.h"
 #include "util.h"
 
@@ -145,66 +146,41 @@ static void create_nics(pid_t child_pid, struct nic_options *nics, size_t nnics)
 
 static void persist_ns_files(pid_t pid, const char *persist)
 {
-	char procname[PATH_MAX];
-	if ((size_t) snprintf(procname, sizeof (procname), "/proc/%d/ns", pid) >= sizeof (procname)) {
-		errx(1, "/proc/%d/ns takes more than PATH_MAX bytes.", pid);
-	}
-
-	int procnsdir = open(procname, O_DIRECTORY | O_PATH);
-	if (procnsdir < 0) {
-		err(1, "open %s", procname);
-	}
-
-	int persistdir = open(persist, O_DIRECTORY | O_PATH);
-	if (persistdir < 0) {
-		err(1, "open %s", persist);
-	}
-
 	for (enum nstype ns = 0; ns < MAX_NS; ++ns) {
 		const char *name = ns_name(ns);
 
-		int nsfd = openat(persistdir, name, O_CREAT | O_WRONLY | O_EXCL, 0666);
-		if (nsfd < 0) {
-			if (errno != EEXIST) {
-				err(1, "creat %s/%s", persist, name);
-			}
-		} else {
-			close(nsfd);
+		/* Where is mountat()?  Thankfully, we can still name the persist directory. */
+		char persistpath[PATH_MAX];
+		makepath_r(persistpath, "%s/%s", persist, name);
+
+		if (mknod(persistpath, S_IFREG, 0) == -1 && errno != EEXIST) {
+			err(1, "create %s", persistpath);
 		}
 
-		// Where is mountat()?  Thankfully, we can still name the persist directory.
-		if ((size_t) snprintf(procname, sizeof (procname), "/proc/%d/ns/%s", pid, name) >= sizeof (procname)) {
-			errx(1, "/proc/%d/ns/%s takes more than PATH_MAX bytes.", pid, name);
-		}
-
-		char persistname[PATH_MAX];
-		if ((size_t) snprintf(persistname, sizeof (persistname), "%s/%s", persist, name) >= sizeof (persistname)) {
-			errx(1, "%s/%s takes more than PATH_MAX bytes.", persist, name);
-		}
+		char procpath[PATH_MAX];
+		makepath_r(procpath, "/proc/%d/ns/%s", pid, name);
 
 		make_capable(BST_CAP_SYS_ADMIN | BST_CAP_SYS_PTRACE);
 
-		int rc = mount(procname, persistname, "", MS_BIND, "");
+		int rc = mount(procpath, persistpath, "", MS_BIND, "");
 
 		reset_capabilities();
 
 		if (rc == -1) {
+			unlink(persistpath);
+
 			switch errno {
 			case ENOENT:
-				/* Kernel does not support this namespace type.  Remove the mountpoint. */
-				unlinkat(persistdir, name, 0);
+				/* Kernel does not support this namespace type. */
 				break;
 			case EINVAL:
 				errx(1, "bind-mount %s to %s: %s (is the destination on a private mount?)",
-						procname, persistname, strerror(EINVAL));
+						procpath, persistpath, strerror(EINVAL));
 			default:
-				err(1, "bind-mount %s to %s", procname, persistname);
+				err(1, "bind-mount %s to %s", procpath, persistpath);
 			}
 		}
 	}
-
-	close(persistdir);
-	close(procnsdir);
 }
 
 /* outer_helper_spawn spawns a new process whose only purpose is to modify

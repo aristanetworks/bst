@@ -13,6 +13,7 @@
 #include "capable.h"
 #include "enter.h"
 #include "ns.h"
+#include "path.h"
 #include "util.h"
 
 static struct {
@@ -39,18 +40,49 @@ int ns_cloneflag(enum nstype ns)
 	return flags[ns].flag;
 }
 
+static bool is_nsfd_current(int nsfd, const char *name)
+{
+	const char *path = makepath("/proc/self/ns/%s", name);
+
+	struct stat self;
+	if (stat(path, &self) == -1) {
+		if (errno == ENOENT) {
+			/* This namespace is unsupported. */
+			return false;
+		}
+		err(1, "stat %s", path);
+	}
+
+	struct stat stat;
+	if (fstat(nsfd, &stat) == -1) {
+		err(1, "fstat %s nsfs", name);
+	}
+
+	return self.st_ino == stat.st_ino;
+}
+
 void opts_to_nsactions(const char *shares[], enum nsaction *nsactions)
 {
-	for (size_t i = 0; i < MAX_NS; i++) {
-		const char *share = shares[i];
+	for (enum nstype ns = 0; ns < MAX_NS; ns++) {
+		const char *share = shares[ns];
 		if (share == NULL) {
-			nsactions[i] = NSACTION_UNSHARE;
+			nsactions[ns] = NSACTION_UNSHARE;
 		} else if (share == SHARE_WITH_PARENT) {
-			nsactions[i] = NSACTION_SHARE_WITH_PARENT;
+			nsactions[ns] = NSACTION_SHARE_WITH_PARENT;
 		} else {
-			nsactions[i] = open(share, O_RDONLY | O_CLOEXEC);
-			if (nsactions[i] < 0) {
+			nsactions[ns] = open(share, O_RDONLY | O_CLOEXEC);
+			if (nsactions[ns] < 0) {
 				err(1, "open %s", share);
+			}
+
+			/* If the nsfd refers to the same namespace as the one we are
+			   currently in, treat as for SHARE_WITH_PARENT.
+
+			   We want to give semantics to --share-<ns>=/proc/self/ns/<ns>
+			   being the same as --share-<ns>. */
+			if (is_nsfd_current(nsactions[ns], ns_name(ns))) {
+				close(nsactions[ns]);
+				nsactions[ns] = NSACTION_SHARE_WITH_PARENT;
 			}
 		}
 	}
@@ -130,37 +162,6 @@ void ns_enter(enum nsaction *nsactions)
 
 		default:
 			if (setns(ns->action, flags[ns->ns].flag) == -1) {
-				if (ns->ns == NS_USER && errno == EINVAL) {
-					/* EINVAL is overloaded -- it might mean that the user
-					   passed something that's not a userns file, or it might
-					   mean that the user is trying to enter the current userns.
-
-					   We want to ignore the latter case, and give semantics
-					   that using --share-userns=/your/own/userns is the same
-					   as --share-userns. */
-
-					struct stat self;
-					if (stat("/proc/self/ns/user", &self) == -1) {
-						if (errno == ENOENT) {
-							/* user namespaces are not supported -- bailing
-							   with the original errno. */
-							errno = EINVAL;
-							goto original_error;
-						}
-						err(1, "stat /proc/self/ns/user");
-					}
-
-					struct stat stat;
-					if (fstat(ns->action, &stat) == -1) {
-						err(1, "fstat %s nsfs", flags[ns->ns].proc_ns_name);
-					}
-
-					if (self.st_ino == stat.st_ino) {
-						nsactions[ns->ns] = NSACTION_SHARE_WITH_PARENT;
-						continue;
-					}
-				}
-			original_error:
 				err(1, "setns %s", flags[ns->ns].proc_ns_name);
 			}
 			break;
