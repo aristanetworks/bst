@@ -1,11 +1,14 @@
 #include <err.h>
 #include <inttypes.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/resource.h>
 
-static void print_limit(int resource, char const *tag)
+#include <asm/resource.h>
+
+static void print_limit(int resource, char const *tag, bool soft_only)
 {
 	struct rlimit rlim;
 
@@ -32,26 +35,56 @@ static void print_limit(int resource, char const *tag)
 			errx(1, "buffer error");
 		}
 	}
-	printf("%s: hard=%s soft=%s\n", tag, hard, soft);
+
+	if (soft_only) {
+		if (!strcmp(soft, hard)) {
+			printf("%s: soft=hard\n", tag);
+		} else {
+			printf("%s: soft=%s\n", tag, soft);
+		}
+	} else {
+		printf("%s: hard=%s soft=%s\n", tag, hard, soft);
+	}
 }
 
 int main(int argc, char **argv)
 {
-	struct lim {
+	struct {
 		int resource;
 		char const *tag;
-	};
-	struct lim limits[] = {
-		{ RLIMIT_CORE, "core"},
-		{ RLIMIT_NOFILE, "nofile"},
-		{ RLIMIT_NPROC, "nproc"},
+	} limits[] = {
+		{ RLIMIT_AS,         "as"         },
+		{ RLIMIT_CORE,       "core"       },
+		{ RLIMIT_CPU,        "cpu"        },
+		{ RLIMIT_DATA,       "data"       },
+		{ RLIMIT_FSIZE,      "fsize"      },
+		{ RLIMIT_LOCKS,      "locks"      },
+		{ RLIMIT_MEMLOCK,    "memlock"    },
+		{ RLIMIT_MSGQUEUE,   "msgqueue"   },
+		{ RLIMIT_NICE,       "nice"       },
+		{ RLIMIT_NOFILE,     "nofile"     },
+		{ RLIMIT_NPROC,      "nproc"      },
+		{ RLIMIT_RSS,        "rss"        },
+		{ RLIMIT_RTPRIO,     "rtprio"     },
+		{ RLIMIT_RTTIME,     "rttime"     },
+		{ RLIMIT_SIGPENDING, "sigpending" },
+		{ RLIMIT_STACK,      "stack"      },
 	};
 
+	bool soft_only = false;
+
+	int arg = 1;
+
+	if (argc > arg && !strcmp(argv[arg], "--soft-only")) {
+		++arg;
+		soft_only = true;
+	}
+
 	for (size_t x = 0; x < sizeof(limits)/sizeof(*limits); ++x) {
-		if (argc > 1 && strcmp(argv[1], limits[x].tag) ) {
+		if (argc > arg && strcmp(argv[arg], limits[x].tag) ) {
 			continue;
 		}
-		print_limit(limits[x].resource, limits[x].tag);
+		print_limit(limits[x].resource, limits[x].tag, soft_only);
 	}
 
 	return 0;

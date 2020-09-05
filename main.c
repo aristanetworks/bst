@@ -15,7 +15,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/resource.h>
 #include <unistd.h>
+
+#include <asm/resource.h>
 
 #include "bst_limits.h"
 #include "capable.h"
@@ -29,9 +32,24 @@ enum {
 	OPTION_GROUPS,
 	OPTION_WORKDIR,
 	OPTION_ARCH,
+	OPTION_LIMIT_AS,
+	_OPTION_LIMIT_START = OPTION_LIMIT_AS,
 	OPTION_LIMIT_CORE,
+	OPTION_LIMIT_CPU,
+	OPTION_LIMIT_DATA,
+	OPTION_LIMIT_FSIZE,
+	OPTION_LIMIT_LOCKS,
+	OPTION_LIMIT_MEMLOCK,
+	OPTION_LIMIT_MSGQUEUE,
+	OPTION_LIMIT_NICE,
 	OPTION_LIMIT_NOFILE,
 	OPTION_LIMIT_NPROC,
+	OPTION_LIMIT_RSS,
+	OPTION_LIMIT_RTPRIO,
+	OPTION_LIMIT_RTTIME,
+	OPTION_LIMIT_SIGPENDING,
+	OPTION_LIMIT_STACK,
+	_OPTION_LIMIT_END = OPTION_LIMIT_STACK,
 	OPTION_SHARE_CGROUP,
 	OPTION_SHARE_IPC,
 	OPTION_SHARE_MNT,
@@ -96,10 +114,43 @@ static void process_share_deprecated(struct entry_settings *opts, const char *op
 	}
 }
 
-static void handle_limit_arg(int resource, struct rlimit *opt_limits, char *arg, char const *which ) {
-	if (parse_rlimit(resource, opt_limits + resource, arg)) {
-		err(1, "error in --limit-%s value", which);
+static void handle_limit_arg(int option_num, struct entry_settings *opts, char *arg) {
+	struct opt {
+		int option_num;
+		int resource;
+		char const *name;
+	};
+	static const struct opt option_map[] = {
+		{ OPTION_LIMIT_AS,         RLIMIT_AS,         "as"         },
+		{ OPTION_LIMIT_CORE,       RLIMIT_CORE,       "core"       },
+		{ OPTION_LIMIT_CPU,        RLIMIT_CPU,        "cpu"        },
+		{ OPTION_LIMIT_DATA,       RLIMIT_DATA,       "data"       },
+		{ OPTION_LIMIT_FSIZE,      RLIMIT_FSIZE,      "fsize"      },
+		{ OPTION_LIMIT_LOCKS,      RLIMIT_LOCKS,      "locks"      },
+		{ OPTION_LIMIT_MEMLOCK,    RLIMIT_MEMLOCK,    "memlock"    },
+		{ OPTION_LIMIT_MSGQUEUE,   RLIMIT_MSGQUEUE,   "msgqueue"   },
+		{ OPTION_LIMIT_NICE,       RLIMIT_NICE,       "nice"       },
+		{ OPTION_LIMIT_NOFILE,     RLIMIT_NOFILE,     "nofile"     },
+		{ OPTION_LIMIT_NPROC,      RLIMIT_NPROC,      "nproc"      },
+		{ OPTION_LIMIT_RSS,        RLIMIT_RSS,        "rss"        },
+		{ OPTION_LIMIT_RTPRIO,     RLIMIT_RTPRIO,     "rtprio"     },
+		{ OPTION_LIMIT_RTTIME,     RLIMIT_RTTIME,     "rttime"     },
+		{ OPTION_LIMIT_SIGPENDING, RLIMIT_SIGPENDING, "sigpending" },
+		{ OPTION_LIMIT_STACK,      RLIMIT_STACK,      "stack"      },
+	};
+
+	assert(option_num >= _OPTION_LIMIT_START && option_num <= _OPTION_LIMIT_END);
+
+	size_t index = (size_t)(option_num - _OPTION_LIMIT_START);
+	assert(index < sizeof (option_map) / sizeof (*option_map));
+
+	struct opt const * opt_ent = option_map + index;
+	assert(opt_ent->option_num == option_num);
+
+	if (parse_rlimit(opt_ent->resource, opts->limits_storage + opt_ent->resource, arg)) {
+		err(1, "error in --limit-%s value", opt_ent->name);
 	}
+	*(opts->limits + opt_ent->resource) = opts->limits_storage + opt_ent->resource;
 }
 
 int usage(int error, char *argv0)
@@ -120,11 +171,6 @@ int main(int argc, char *argv[], char *envp[])
 		.gid   = (gid_t) -1,
 		.umask = (mode_t) -1,
 	};
-	for (size_t resource = 0; resource < RLIM_NLIMITS; ++resource) {
-		struct rlimit *value = opts.limits + resource;
-		value->rlim_cur = RLIM_INFINITY;
-		value->rlim_max = RLIM_INFINITY;
-	}
 
 	static struct option options[] = {
 		{ "help",       no_argument,        NULL,           'h' },
@@ -137,9 +183,22 @@ int main(int argc, char *argv[], char *envp[])
 		{ "gid",                required_argument, NULL, OPTION_GID             },
 		{ "groups",             required_argument, NULL, OPTION_GROUPS          },
 		{ "arch",               required_argument, NULL, OPTION_ARCH            },
+		{ "limit-as",           required_argument, NULL, OPTION_LIMIT_AS        },
 		{ "limit-core",         required_argument, NULL, OPTION_LIMIT_CORE      },
+		{ "limit-cpu",          required_argument, NULL, OPTION_LIMIT_CPU       },
+		{ "limit-data",         required_argument, NULL, OPTION_LIMIT_DATA      },
+		{ "limit-fsize",        required_argument, NULL, OPTION_LIMIT_FSIZE     },
+		{ "limit-locks",        required_argument, NULL, OPTION_LIMIT_LOCKS     },
+		{ "limit-memlock",      required_argument, NULL, OPTION_LIMIT_MEMLOCK   },
+		{ "limit-msgqueue",     required_argument, NULL, OPTION_LIMIT_MSGQUEUE  },
+		{ "limit-nice",         required_argument, NULL, OPTION_LIMIT_NICE      },
 		{ "limit-nofile",       required_argument, NULL, OPTION_LIMIT_NOFILE    },
 		{ "limit-nproc",        required_argument, NULL, OPTION_LIMIT_NPROC     },
+		{ "limit-rss",          required_argument, NULL, OPTION_LIMIT_RSS       },
+		{ "limit-rtprio",       required_argument, NULL, OPTION_LIMIT_RTPRIO    },
+		{ "limit-rttime",       required_argument, NULL, OPTION_LIMIT_RTTIME    },
+		{ "limit-sigpending",   required_argument, NULL, OPTION_LIMIT_SIGPENDING},
+		{ "limit-stack",        required_argument, NULL, OPTION_LIMIT_STACK     },
 		{ "share-cgroup",       optional_argument, NULL, OPTION_SHARE_CGROUP    },
 		{ "share-ipc",          optional_argument, NULL, OPTION_SHARE_IPC       },
 		{ "share-mnt",          optional_argument, NULL, OPTION_SHARE_MNT       },
@@ -266,14 +325,23 @@ int main(int argc, char *argv[], char *envp[])
 				opts.arch = optarg;
 				break;
 
+			case OPTION_LIMIT_AS:
 			case OPTION_LIMIT_CORE:
-				handle_limit_arg(RLIMIT_CORE, opts.limits, optarg, "core");
-				break;
+			case OPTION_LIMIT_CPU:
+			case OPTION_LIMIT_DATA:
+			case OPTION_LIMIT_FSIZE:
+			case OPTION_LIMIT_LOCKS:
+			case OPTION_LIMIT_MEMLOCK:
+			case OPTION_LIMIT_MSGQUEUE:
+			case OPTION_LIMIT_NICE:
 			case OPTION_LIMIT_NOFILE:
-				handle_limit_arg(RLIMIT_NOFILE, opts.limits, optarg, "nofile");
-				break;
 			case OPTION_LIMIT_NPROC:
-				handle_limit_arg(RLIMIT_NPROC, opts.limits, optarg, "nproc");
+			case OPTION_LIMIT_RSS:
+			case OPTION_LIMIT_RTPRIO:
+			case OPTION_LIMIT_RTTIME:
+			case OPTION_LIMIT_SIGPENDING:
+			case OPTION_LIMIT_STACK:
+				handle_limit_arg(c, &opts, optarg);
 				break;
 
 			case OPTION_SHARE_CGROUP:

@@ -151,3 +151,67 @@ Testing --limit-nproc
 
 	$ bst --limit-nproc=3500:3499 test/print_limits nproc
 	nproc: hard=3500 soft=3499
+
+Testing --limit-as
+	$ bst --limit-as=: test/print_limits --soft-only as
+	as: soft=hard
+
+Testing --limit-core
+	$ bst --limit-core=: test/print_limits --soft-only core
+	core: soft=hard
+
+Testing --limit-cpu
+	$ bst --limit-cpu=: test/print_limits --soft-only cpu
+	cpu: soft=hard
+
+Testing --limit-data
+	$ bst --limit-data=: test/print_limits --soft-only data
+	data: soft=hard
+
+Testing --limit-fsize
+	$ bst --limit-fsize=: test/print_limits --soft-only fsize
+	fsize: soft=hard
+
+Testing --limit-locks
+	$ bst --limit-locks=: test/print_limits --soft-only locks
+	locks: soft=hard
+
+Testing --limit-memlock
+	$ bst --limit-memlock=: test/print_limits --soft-only memlock
+	memlock: soft=hard
+
+Testing --limit-msgqueue
+	$ bst --limit-msgqueue=: test/print_limits --soft-only msgqueue
+	msgqueue: soft=hard
+
+Testing --limit-nice
+	$ bst --limit-nice=: test/print_limits --soft-only nice
+	nice: soft=hard
+
+Testing --limit-nofile
+	$ bst --limit-nofile=: test/print_limits --soft-only nofile
+	nofile: soft=hard
+
+Testing --limit-nproc
+	$ bst --limit-nproc=: test/print_limits --soft-only nproc
+	nproc: soft=hard
+
+Testing --limit-rss
+	$ bst --limit-rss=: test/print_limits --soft-only rss
+	rss: soft=hard
+
+Testing --limit-rtprio
+	$ bst --limit-rtprio=: test/print_limits --soft-only rtprio
+	rtprio: soft=hard
+
+Testing --limit-rttime
+	$ bst --limit-rttime=: test/print_limits --soft-only rttime
+	rttime: soft=hard
+
+Testing --limit-sigpending
+	$ bst --limit-sigpending=: test/print_limits --soft-only sigpending
+	sigpending: soft=hard
+
+Testing --limit-stack
+	$ bst --limit-stack=: test/print_limits --soft-only stack
+	stack: soft=hard
