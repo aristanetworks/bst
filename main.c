@@ -80,7 +80,6 @@ enum {
 	OPTION_NO_LOOPBACK_SETUP,
 	OPTION_NO_INIT,
 	OPTION_SHARE_DEPRECATED,
-	OPTION_MUTABLE_DEPRECATED,
 };
 
 /* Usage is generated from usage.txt. Note that the array is not null-terminated,
@@ -234,7 +233,6 @@ int main(int argc, char *argv[], char *envp[])
 
 		/* Deprecated flags */
 		{ "share",      required_argument, NULL, OPTION_SHARE_DEPRECATED        },
-		{ "mutable",    required_argument, NULL, OPTION_MUTABLE_DEPRECATED      },
 		
 		{ 0, 0, 0, 0 }
 	};
@@ -302,15 +300,6 @@ int main(int argc, char *argv[], char *envp[])
 				opts.nmounts++;
 				break;
 			}
-
-			case OPTION_MUTABLE_DEPRECATED:
-				warnx("--mutable is deprecated; use a setup program instead.");
-				if (opts.nmutables >= MAX_MOUNT) {
-					errx(1, "can only mount a maximum of %d mutables", MAX_MOUNT);
-				}
-				opts.mutables[opts.nmutables] = optarg;
-				opts.nmutables++;
-				break;
 
 			case OPTION_UID:
 				opts.uid = (uid_t) strtoul(optarg, NULL, 10);

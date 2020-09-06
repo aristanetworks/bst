@@ -52,8 +52,6 @@ struct entry_settings {
 
 	struct mount_entry mounts[MAX_MOUNT];
 	size_t nmounts;
-	const char *mutables[MAX_MOUNT];
-	size_t nmutables;
 
 	struct timespec clockspecs[MAX_CLOCK + 1];
 

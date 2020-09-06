@@ -13,7 +13,7 @@
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
 #include <unistd.h>
-#include "cp.h"
+
 #include "mount.h"
 #include "path.h"
 #include "util.h"
@@ -264,56 +264,4 @@ void mount_entries(const char *root, const struct mount_entry *mounts, size_t nm
 	}
 
 	umask(old_mask);
-}
-
-void mount_mutables(const char *root, const char *const *mutables, size_t nmutables)
-{
-	for (const char *const *mut = mutables; mut < mutables + nmutables; ++mut) {
-		const char *mutpath = *mut;
-
-		if (strcmp(mutpath, "/") == 0) {
-			errx(1, "mount_mutables: cannot make / mutable (this would descend into /dev, /proc, /sys).");
-		}
-		if (mutpath[0] != '/') {
-			errx(1, "mount_mutables: mutable \"%s\" must be an absolute path.", mutpath);
-		}
-
-		char fullpath[PATH_MAX];
-		makepath_r(fullpath, "%s%s", root, mutpath);
-		mutpath = fullpath;
-
-		struct stat info;
-		if (stat(mutpath, &info) == -1) {
-			err(1, "mount_mutables: stat %s", mutpath);
-		}
-
-		char tmpdir[PATH_MAX] = "/tmp/bst.XXXXXX";
-		if (!mkdtemp(tmpdir)) {
-			err(1, "mount_mutables: mkdtemp");
-		}
-
-		if (mount("none", tmpdir, "tmpfs", 0, "") == -1) {
-			err(1, "mount_mutables: mount tmpfs %s", tmpdir);
-		}
-
-		const char *mnt_source = tmpdir;
-		const char *mnt_target = mutpath;
-
-		if ((info.st_mode & S_IFMT) != S_IFDIR) {
-			mnt_source = makepath("%s/%s", tmpdir, basename(mutpath));
-		}
-		copy(mnt_source, mutpath, &info);
-
-		if (mount(mnt_source, mnt_target, "", MS_BIND, "") == -1) {
-			err(1, "mount_mutables: bind-mount %s to %s", mnt_source, mnt_target);
-		}
-
-		if (umount(tmpdir) == -1) {
-			warn("mount_mutables: umount(\"%s\")", tmpdir);
-		}
-
-		if (rmdir(tmpdir) == -1) {
-			warn("mount_mutables: rmdir(\"%s\")", tmpdir);
-		}
-	}
 }

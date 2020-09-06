@@ -392,7 +392,7 @@ int enter(struct entry_settings *opts)
 	/* We have to do this after setuid/setgid/setgroups since mounting
 	   tmpfses in user namespaces forces the options uid=<real-uid> and
 	   gid=<real-gid>. */
-	if (opts->nmounts > 0 || opts->nmutables > 0) {
+	if (opts->nmounts > 0) {
 		/* Don't shoot ourselves in the foot. It's technically possible to
 		   let users mount things in the host mount namespace but in practice
 		   it's a terrible idea due to the sheer amount of things that can go
@@ -411,7 +411,6 @@ int enter(struct entry_settings *opts)
 		}
 
 		mount_entries(root, opts->mounts, opts->nmounts, opts->no_derandomize);
-		mount_mutables(root, opts->mutables, opts->nmutables);
 	}
 
 	int initfd = -1;
