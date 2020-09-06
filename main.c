@@ -562,7 +562,7 @@ int main(int argc, char *argv[], char *envp[])
 	/* Use our own default init if we unshare the pid namespace, and no
 	   --init has been specified. */
 	if (opts.shares[NS_PID] == NULL && opts.init == NULL) {
-		opts.init = LIBEXECDIR "/bst-init";
+		opts.init = BINDIR "/bst-init";
 	}
 
 	char *default_argv[] = {
