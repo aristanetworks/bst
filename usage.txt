@@ -71,6 +71,7 @@ Options:
 	--limit-stack (<value>)|(<hard>:<soft>)
 	                        Set RLIMIT_STACK to the provided value(s).
 
+	--no-copy-hard-limits:  Don't copy hard limit values to soft limits.
 	--no-fake-devtmpfs:     Don't replace devtmpfs mounts with fake ones.
 	--no-derandomize:       Don't attempt to reduce randomness sources.
 	--no-proc-remount:      Don't remount the existing /proc in pid namespaces.

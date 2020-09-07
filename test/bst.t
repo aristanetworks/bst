@@ -138,6 +138,27 @@ Testing --limit-core / general tests
 	bst: error in --limit-core value: Numerical result out of range
 	[1]
 
+Testing limit-copying
+	$ bst --no-copy-hard-limits true  # smoke test
+
+	$ bst test/print_limits --soft-only
+	as: soft=hard
+	core: soft=hard
+	cpu: soft=hard
+	data: soft=hard
+	fsize: soft=hard
+	locks: soft=hard
+	memlock: soft=hard
+	msgqueue: soft=hard
+	nice: soft=hard
+	nofile: soft=hard
+	nproc: soft=hard
+	rss: soft=hard
+	rtprio: soft=hard
+	rttime: soft=hard
+	sigpending: soft=hard
+	stack: soft=hard
+
 Testing --limit-nofile
 	$ bst --limit-nofile=750 test/print_limits nofile
 	nofile: hard=750 soft=750
