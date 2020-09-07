@@ -231,7 +231,18 @@ Users of bst may choose to opt-out of some of the isolation.
 	\--limit-nproc 100:      hard=100, soft=(unchanged)++
 	\--limit-nproc :         hard=(unchanged), soft=(hard limit)
 
+	If a value is not provided using a --limit-<limit> option for a given resource,
+	the hard limit will be used as the soft limit, unless *--no-copy-hard-limits* has
+	been provided.
+
 	Full details for each limit value can be found in *getrlimit*(2).
+
+\--no-copy-hard-limits
+	Do not copy hard limit values to soft limits for all resources mentioned above.
+
+	By default, *bst* copies the hard limit to the soft limit for all of the resources mentioned
+	above.  To avoid setting any resource values, except as directed by --limit-<limit> options,
+	use this option.
 
 \--no-fake-devtmpfs
 	Do not replace devtmpfs mounts with a fake devtmpfs.
