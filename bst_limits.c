@@ -7,6 +7,8 @@
 #include <string.h>
 #include <sys/resource.h>
 
+#include "bst_limits.h"
+
 /* parse_complete_rlim_t: parses an rlim_t value from `value_str`.  Return 0 on
    success, 1 otherwise. */
 static int parse_complete_rlim_t(int resource, rlim_t *value, char const *value_str)
@@ -39,7 +41,7 @@ static int parse_complete_rlim_t(int resource, rlim_t *value, char const *value_
 
 	/* Before casting to rlim_t, check against the max possible rlim_t
 	   value so that the (rlim_t) cast is guaranteed correct. */
-	if ((uintmax_t)parse_val >= RLIM_INFINITY) {
+	if ((uintmax_t)parse_val >= BST_RLIM_INFINITY) {
 		errno = EOVERFLOW;
 		return 1;
 	}

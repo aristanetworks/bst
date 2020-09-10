@@ -22,6 +22,7 @@
 #include <sys/wait.h>
 #include <syscall.h>
 
+#include "bst_limits.h"
 #include "capable.h"
 #include "enter.h"
 #include "mount.h"
@@ -54,6 +55,10 @@ static void apply_limit(int resource, struct rlimit const *value) {
 	struct rlimit new_limit;
 	if (!value) {
 		if (getrlimit(resource, &new_limit)) {
+			if (errno == EINVAL) {
+				/* Skip this limit -- it is not supported. */
+				return;
+			}
 			err(1, "getrlimit(%d) failed", resource);
 			return;
 		}
@@ -511,7 +516,7 @@ int enter(struct entry_settings *opts)
 		}
 	}
 
-	for (int resource = 0; resource < RLIM_NLIMITS; ++resource) {
+	for (size_t resource = 0; resource < lengthof(opts->limits); ++resource) {
 		struct rlimit const * value = NULL;
 		if (opts->limits[resource].present) {
 			value = &opts->limits[resource].rlim;

@@ -13,6 +13,7 @@
 # include <sys/stat.h>
 # include <time.h>
 # include <unistd.h>
+# include "bst_limits.h"
 # include "mount.h"
 # include "net.h"
 # include "ns.h"
@@ -68,7 +69,7 @@ struct entry_settings {
 
 	const char *arch;
 
-	struct limit limits[RLIM_NLIMITS];
+	struct limit limits[BST_NLIMIT];
 
 	const char *setup_program;
 	char *const *setup_argv;

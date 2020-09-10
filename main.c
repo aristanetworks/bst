@@ -18,8 +18,6 @@
 #include <sys/resource.h>
 #include <unistd.h>
 
-#include <asm/resource.h>
-
 #include "config.h"
 
 #include "bst_limits.h"
@@ -117,29 +115,30 @@ static void process_share_deprecated(struct entry_settings *opts, const char *op
 	}
 }
 
-static void handle_limit_arg(int option_num, struct entry_settings *opts, char *arg) {
+static void handle_limit_arg(int option_num, struct entry_settings *opts, char *arg)
+{
 	struct opt {
 		int option_num;
 		int resource;
 		char const *name;
 	};
 	static const struct opt option_map[] = {
-		{ OPTION_LIMIT_AS,         RLIMIT_AS,         "as"         },
-		{ OPTION_LIMIT_CORE,       RLIMIT_CORE,       "core"       },
-		{ OPTION_LIMIT_CPU,        RLIMIT_CPU,        "cpu"        },
-		{ OPTION_LIMIT_DATA,       RLIMIT_DATA,       "data"       },
-		{ OPTION_LIMIT_FSIZE,      RLIMIT_FSIZE,      "fsize"      },
-		{ OPTION_LIMIT_LOCKS,      RLIMIT_LOCKS,      "locks"      },
-		{ OPTION_LIMIT_MEMLOCK,    RLIMIT_MEMLOCK,    "memlock"    },
-		{ OPTION_LIMIT_MSGQUEUE,   RLIMIT_MSGQUEUE,   "msgqueue"   },
-		{ OPTION_LIMIT_NICE,       RLIMIT_NICE,       "nice"       },
-		{ OPTION_LIMIT_NOFILE,     RLIMIT_NOFILE,     "nofile"     },
-		{ OPTION_LIMIT_NPROC,      RLIMIT_NPROC,      "nproc"      },
-		{ OPTION_LIMIT_RSS,        RLIMIT_RSS,        "rss"        },
-		{ OPTION_LIMIT_RTPRIO,     RLIMIT_RTPRIO,     "rtprio"     },
-		{ OPTION_LIMIT_RTTIME,     RLIMIT_RTTIME,     "rttime"     },
-		{ OPTION_LIMIT_SIGPENDING, RLIMIT_SIGPENDING, "sigpending" },
-		{ OPTION_LIMIT_STACK,      RLIMIT_STACK,      "stack"      },
+		{ OPTION_LIMIT_AS,         BST_RLIMIT_AS,         "as"         },
+		{ OPTION_LIMIT_CORE,       BST_RLIMIT_CORE,       "core"       },
+		{ OPTION_LIMIT_CPU,        BST_RLIMIT_CPU,        "cpu"        },
+		{ OPTION_LIMIT_DATA,       BST_RLIMIT_DATA,       "data"       },
+		{ OPTION_LIMIT_FSIZE,      BST_RLIMIT_FSIZE,      "fsize"      },
+		{ OPTION_LIMIT_LOCKS,      BST_RLIMIT_LOCKS,      "locks"      },
+		{ OPTION_LIMIT_MEMLOCK,    BST_RLIMIT_MEMLOCK,    "memlock"    },
+		{ OPTION_LIMIT_MSGQUEUE,   BST_RLIMIT_MSGQUEUE,   "msgqueue"   },
+		{ OPTION_LIMIT_NICE,       BST_RLIMIT_NICE,       "nice"       },
+		{ OPTION_LIMIT_NOFILE,     BST_RLIMIT_NOFILE,     "nofile"     },
+		{ OPTION_LIMIT_NPROC,      BST_RLIMIT_NPROC,      "nproc"      },
+		{ OPTION_LIMIT_RSS,        BST_RLIMIT_RSS,        "rss"        },
+		{ OPTION_LIMIT_RTPRIO,     BST_RLIMIT_RTPRIO,     "rtprio"     },
+		{ OPTION_LIMIT_RTTIME,     BST_RLIMIT_RTTIME,     "rttime"     },
+		{ OPTION_LIMIT_SIGPENDING, BST_RLIMIT_SIGPENDING, "sigpending" },
+		{ OPTION_LIMIT_STACK,      BST_RLIMIT_STACK,      "stack"      },
 	};
 
 	assert(option_num >= _OPTION_LIMIT_START && option_num <= _OPTION_LIMIT_END);
