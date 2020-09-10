@@ -88,7 +88,8 @@ enum {
 extern unsigned char usage_txt[];
 extern unsigned int usage_txt_len;
 
-static void process_share_deprecated(struct entry_settings *opts, const char *optarg) {
+static void process_share_deprecated(struct entry_settings *opts, const char *optarg)
+{
 	for (const char *share = strtok((char *) optarg, ","); share; share = strtok(NULL, ",")) {
 		int found = 0;
 		if (!strcmp(share, "network")) {

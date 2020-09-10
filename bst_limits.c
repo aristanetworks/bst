@@ -1,3 +1,9 @@
+/* Copyright © 2020 Arista Networks, Inc. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT license that can be found
+ * in the LICENSE file.
+ */
+
 #include <assert.h>
 #include <err.h>
 #include <errno.h>
@@ -87,7 +93,7 @@ int parse_rlimit(int resource, struct rlimit *limit, char *arg)
 	char const *soft_limit = found_sep ? p : hard_limit;
 
 	if (getrlimit(resource, limit) == -1) {
-		err(1, "getlrimit(%d) failed", resource);
+		err(1, "getrlimit(%d) failed", resource);
 	}
 
 	if (!soft_limit[0] && !hard_limit[0]) {

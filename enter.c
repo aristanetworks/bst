@@ -51,7 +51,8 @@ static inline size_t append_argv(char **argv, size_t argc, char *arg)
 
 /* Applies the limit specified by `resource'.  If value is NULL, then copy the
    hard limit value to the soft limit and call `setrlimit'. */
-static void apply_limit(int resource, struct rlimit const *value) {
+static void apply_limit(int resource, struct rlimit const *value)
+{
 	struct rlimit new_limit;
 	if (!value) {
 		if (getrlimit(resource, &new_limit)) {
@@ -60,7 +61,6 @@ static void apply_limit(int resource, struct rlimit const *value) {
 				return;
 			}
 			err(1, "getrlimit(%d) failed", resource);
-			return;
 		}
 		new_limit.rlim_cur = new_limit.rlim_max;
 		value = &new_limit;
