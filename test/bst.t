@@ -134,9 +134,8 @@ Testing --limit-core / general tests
 	bst: error in --limit-core value: Invalid argument
 	[1]
 
-	$ bst --limit-core=0xffffffffffffffffffffffffe
+	$ bst --limit-core=0xffffffffffffffffffffffffe 2>&1 | sed -e 's/Result not representable/Numerical result out of range/'
 	bst: error in --limit-core value: Numerical result out of range
-	[1]
 
 Testing limit-copying
 	$ bst --no-copy-hard-limits true  # smoke test
