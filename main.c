@@ -150,10 +150,10 @@ static void handle_limit_arg(int option_num, struct entry_settings *opts, char *
 	struct opt const * opt_ent = option_map + index;
 	assert(opt_ent->option_num == option_num);
 
-	if (parse_rlimit(opt_ent->resource, opts->limits_storage + opt_ent->resource, arg)) {
+	if (parse_rlimit(opt_ent->resource, &opts->limits[opt_ent->resource].rlim, arg)) {
 		err(1, "error in --limit-%s value", opt_ent->name);
 	}
-	*(opts->limits + opt_ent->resource) = opts->limits_storage + opt_ent->resource;
+	opts->limits[opt_ent->resource].present = true;
 }
 
 int usage(int error, char *argv0)

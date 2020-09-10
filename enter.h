@@ -8,6 +8,7 @@
 # define ENTER_H_
 
 # include <limits.h>
+# include <stdbool.h>
 # include <sys/resource.h>
 # include <sys/stat.h>
 # include <time.h>
@@ -17,6 +18,11 @@
 # include "ns.h"
 # include "timens.h"
 # include "userns.h"
+
+struct limit {
+	bool present;
+	struct rlimit rlim;
+};
 
 enum {
 	MAX_MOUNT = 4096,
@@ -62,9 +68,7 @@ struct entry_settings {
 
 	const char *arch;
 
-	// Set the `limits' pointer when the option has been provided.
-	struct rlimit limits_storage[RLIM_NLIMITS];
-	struct rlimit *limits[RLIM_NLIMITS];
+	struct limit limits[RLIM_NLIMITS];
 
 	const char *setup_program;
 	char *const *setup_argv;

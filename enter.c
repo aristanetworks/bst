@@ -512,7 +512,10 @@ int enter(struct entry_settings *opts)
 	}
 
 	for (int resource = 0; resource < RLIM_NLIMITS; ++resource) {
-		struct rlimit const * value = opts->limits[resource];
+		struct rlimit const * value = NULL;
+		if (opts->limits[resource].present) {
+			value = &opts->limits[resource].rlim;
+		}
 		/* When no_copy_hard_limits is not set, we always want to call apply_limit, either
 		   with the explicitly configured value (value != NULL), or by copying hard->soft
 		   (value == NULL). */

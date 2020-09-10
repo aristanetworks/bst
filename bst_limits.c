@@ -9,12 +9,12 @@
 
 /* parse_complete_rlim_t: parses an rlim_t value from `value_str`.  Return 0 on
    success, 1 otherwise. */
-static int parse_complete_rlim_t(int resource, rlim_t *value, char const *value_str, rlim_t const *cur_value) {
+static int parse_complete_rlim_t(int resource, rlim_t *value, char const *value_str)
+{
 	assert(value_str);
 
 	/* an empty string means to use the current value  */
 	if (*value_str == '\0') {
-		*value = *cur_value;
 		return 0;
 	}
 
@@ -84,32 +84,23 @@ int parse_rlimit(int resource, struct rlimit *limit, char *arg)
 	/* Special case: no ":" separator, so set hard and soft to <value> */
 	char const *soft_limit = found_sep ? p : hard_limit;
 
-	struct rlimit cur_limit_value;
-	rlim_t const *cur_hard_limit;
-	rlim_t const *cur_soft_limit;
-	if ( !soft_limit[0] || !hard_limit[0] ) {
-		if (getrlimit(resource, &cur_limit_value)) {
-			err(1, "getlrimit(%d) failed", resource);
-			return 1;
-		}
-		cur_hard_limit = &cur_limit_value.rlim_max;
-		cur_soft_limit = &cur_limit_value.rlim_cur;
+	if (getrlimit(resource, limit) == -1) {
+		err(1, "getlrimit(%d) failed", resource);
 	}
 
-	if ( !soft_limit[0] && !hard_limit[0] ) {
+	if (!soft_limit[0] && !hard_limit[0]) {
 		/* special case: preserve hard limit, use that value as new soft
 		   limit value */
-		limit->rlim_max = *cur_hard_limit;
-		limit->rlim_cur = *cur_hard_limit;
+		limit->rlim_cur = limit->rlim_max;
 		return 0;
 	}
 
-	if (parse_complete_rlim_t(resource, &limit->rlim_max, hard_limit, cur_hard_limit)) {
+	if (parse_complete_rlim_t(resource, &limit->rlim_max, hard_limit)) {
 		/* pass errno through to caller */
 		return 1;
 	}
 
-	if (parse_complete_rlim_t(resource, &limit->rlim_cur, soft_limit, cur_soft_limit)) {	
+	if (parse_complete_rlim_t(resource, &limit->rlim_cur, soft_limit)) {
 		/* pass errno through to caller */
 		return 1;
 	}
