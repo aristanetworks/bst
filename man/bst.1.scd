@@ -350,6 +350,92 @@ Supported interface types are:
 	- *l3*
 	- *l3s*
 
+# EXAMPLES
+
+## Using bst to get an isolated shell
+
+The default invocation of bst will provide a shell as isolated as possible on
+your host system.
+
+*$ id*++
+uid=1000(barney) gid=1000(barney) groups=1000(barney)++
+*$ bst*
+
+This shell sees all of its namespaces unshared. Most notably, you are root
+inside the spacetime, by virtue of the user namespace being unshared:
+
+*# id*++
+uid=0(root) gid=0(root) groups=0(root)
+
+Being root in a user namespace does give you full control over your
+namespaces:
+
+*# mount -t tempfs tmp /tmp*++
+*# touch /tmp/greeting*++
+*# ls /tmp*++
+greeting
+
+This does not mean that you got a magical privilege escalation -- the root user
+for this user namespace is mapped to your outer UID:
+
+*$ touch foo*++
+*$ ls -l foo*++
+-rw-r--r--  1 barney barney 0 10 août  22:45 foo++
+*$ bst ls -l foo*++
+-rw-r--r--  1 root root 0 10 août  22:45 foo
+
+Similarly, some operations are restricted while in a user namespace, and cannot
+be done without having host privileges, like mounting devices:
+
+*# mount /dev/sda1 /mnt*++
+mount: /mnt: permission denied.
+
+A more comprehensive description of the capabilities within a user namespace
+can be found in *user_namespaces*(7) § _"Effect of capabilities within a user namespace"_.
+
+## Using bst as a fakeroot substitute
+
+bst can be used in a similar manner as fakeroot to perform operations as if the
+current user was root. For instance, here's how to build and package sudo
+without ever needing root privileges to set the setuid bit, or passing a gaggle
+of transformative flags to tar.
+
+*$ git clone https://github.com/sudo-project/sudo*++
+*$ cd sudo*++
+*$ ./configure --prefix=/usr*++
+*$ make -j$(nproc)*++
+*$ bst make install DESTDIR=$(pwd)/out*++
+*$ bst tar -cJf sudo.tar.xz -C out .*++
+*$ tar -tvf sudo.tar.xz | grep /usr/bin/sudo*++
+lrwxrwxrwx root/root         0 2020-10-15 14:34 ./usr/bin/sudoedit -> sudo++
+-rwsr-xr-x root/root    644048 2020-10-15 14:34 ./usr/bin/sudo++
+-rwxr-xr-x root/root    315960 2020-10-15 14:34 ./usr/bin/sudoreplay
+
+## Creating and entering an Alpine-Linux-based rootfs
+
+*$* # download a minirootfs archive from https://alpinelinux.org/downloads/++
+*$ wget \<the minirootfs url\> -o alpine-minirootfs.tar.gz*
+
+*$* # extract the rootfs into a directory++
+*$ mkdir rootfs*++
+*$ bst tar -xzf alpine-minirootfs.tar.gz -C rootfs*
+
+*$* # enter the rootfs, with a few useful mounts++
+*$ bst -r rootfs \\++
+    \--mount source=proc,target=/proc,type=proc \\++
+    \--mount source=dev,target=/dev,type=devtmpfs \\++
+    \--mount source=run,target=/run,type=tmpfs \\++
+    \--mount source=tmp,target=/tmp,type=tmpfs \\++
+    /bin/sh*++
+*# export PATH=/usr/bin:/bin:/usr/sbin:/sbin*++
+*# cat /etc/os-release*++
+NAME="Alpine Linux"++
+ID=alpine++
+VERSION_ID=3.12.0++
+PRETTY_NAME="Alpine Linux v3.12"++
+HOME_URL="https://alpinelinux.org/"++
+BUG_REPORT_URL="https://bugs.alpinelinux.org/"
+
 # SEE ALSO
 
 *bst-unpersist*(1), *bst-init*(1), *namespaces*(7), *mount*(1), *setarch*(1), *getrlimit*(2)
