@@ -17,21 +17,21 @@ Testing that we are in our own namespaces by default
 
 Testing namespace sharing
 
-	$ [ "$(bst --share-all readlink /proc/self/ns/user)" = "$(readlink /proc/self/ns/user)" ]
-	$ [ "$(bst --share-cgroup readlink /proc/self/ns/cgroup)" = "$(readlink /proc/self/ns/cgroup)" ]
-	$ [ "$(bst --share-ipc readlink /proc/self/ns/ipc)" = "$(readlink /proc/self/ns/ipc)" ]
-	$ [ "$(bst --share-mnt readlink /proc/self/ns/mnt)" = "$(readlink /proc/self/ns/mnt)" ]
-	$ [ "$(bst --share-net readlink /proc/self/ns/net)" = "$(readlink /proc/self/ns/net)" ]
-	$ [ "$(bst --share-uts readlink /proc/self/ns/uts)" = "$(readlink /proc/self/ns/uts)" ]
-	$ [ "$(bst --share-pid readlink /proc/self/ns/pid)" = "$(readlink /proc/self/ns/pid)" ]
-	$ [ "$(bst --share-all ls -l /proc/self/ns)" = "$(ls -l /proc/self/ns)" ]
+	$ bst sh -c '[ "$(bst --share user readlink /proc/self/ns/user)" = "$(readlink /proc/self/ns/user)" ]'
+	$ [ "$(bst --share cgroup readlink /proc/self/ns/cgroup)" = "$(readlink /proc/self/ns/cgroup)" ]
+	$ [ "$(bst --share ipc readlink /proc/self/ns/ipc)" = "$(readlink /proc/self/ns/ipc)" ]
+	$ [ "$(bst --share mnt readlink /proc/self/ns/mnt)" = "$(readlink /proc/self/ns/mnt)" ]
+	$ [ "$(bst --share net readlink /proc/self/ns/net)" = "$(readlink /proc/self/ns/net)" ]
+	$ [ "$(bst --share uts readlink /proc/self/ns/uts)" = "$(readlink /proc/self/ns/uts)" ]
+	$ [ "$(bst --share pid readlink /proc/self/ns/pid)" = "$(readlink /proc/self/ns/pid)" ]
+	$ [ "$(bst --share all ls -l /proc/self/ns)" = "$(ls -l /proc/self/ns)" ]
 
 Testing uid/gid/groups semantics
 
 	$ bst id | sed -e 's/,65534([^)]*)//'
 	uid=0(root) gid=0(root) groups=0(root)
 
-	$ [ "$(bst --share-all id)" = "$(id)" ]
+	$ [ "$(bst --share all id)" = "$(id)" ]
 
 	$ bst --workdir=/ --uid=1 --gid=2 --groups=3,4 sh -c 'id -u; id -g; id -G'
 	1
@@ -95,7 +95,7 @@ Testing exit code handling
 	$ bst sh -c "exit 17"
 	[17]
 
-	$ bst --share-pid sh -c 'kill -9 $$'
+	$ bst --share pid sh -c 'kill -9 $$'
 	[137]
 
 Testing --argv0
@@ -114,13 +114,13 @@ Testing hostname semantics
 	$ bst --hostname foobar uname -n
 	foobar
 
-	$ bst --share-uts --hostname foobar false
+	$ bst --share uts --hostname foobar false
 	bst: attempted to set host or domain names on the host UTS namespace.
 	[1]
 
 Testing persistence
 
-	$ mkdir -p foo bar; trap 'bst-unpersist foo && rmdir foo bar' EXIT; bst --persist=foo sh -c 'mount -t tmpfs none bar && echo hello > bar/greeting' && [ ! -f bar/greeting ] && bst --share-mnt=foo/mnt --share-user=foo/user sh -c '[ "$(cat '"$PWD"'/bar/greeting)" = "hello" ]'
+	$ mkdir -p foo bar; trap 'bst-unpersist foo && rmdir foo bar' EXIT; bst --persist=foo sh -c 'mount -t tmpfs none bar && echo hello > bar/greeting' && [ ! -f bar/greeting ] && bst --share mnt,user=foo sh -c '[ "$(cat '"$PWD"'/bar/greeting)" = "hello" ]'
 
 Testing --limit-core / general tests
 	$ bst --limit-core=0 test/print_limits core

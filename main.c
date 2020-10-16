@@ -25,6 +25,7 @@
 #include "enter.h"
 #include "kvlist.h"
 #include "util.h"
+#include "path.h"
 
 enum {
 	OPTION_VERSION = 128,
@@ -53,15 +54,7 @@ enum {
 	OPTION_LIMIT_STACK,
 	_OPTION_LIMIT_END = OPTION_LIMIT_STACK,
 	OPTION_LIMIT_NO_COPY,
-	OPTION_SHARE_CGROUP,
-	OPTION_SHARE_IPC,
-	OPTION_SHARE_MNT,
-	OPTION_SHARE_NET,
-	OPTION_SHARE_PID,
-	OPTION_SHARE_TIME,
-	OPTION_SHARE_USER,
-	OPTION_SHARE_UTS,
-	OPTION_SHARE_ALL,
+	OPTION_SHARE,
 	OPTION_ARGV0,
 	OPTION_HOSTNAME,
 	OPTION_DOMAIN,
@@ -80,41 +73,61 @@ enum {
 	OPTION_NO_LOOPBACK_SETUP,
 	OPTION_NO_INIT,
 	OPTION_NO_ENV,
-	OPTION_SHARE_DEPRECATED,
 };
 
-/* Usage is generated from usage.txt. Note that the array is not null-terminated,
-   I couldn't find a way to convince xxd to do that for me, so instead
-   I just replace the last newline with a NUL and print an extra newline
-   from the usage function. */
-extern unsigned char usage_txt[];
-extern unsigned int usage_txt_len;
-
-static void process_share_deprecated(struct entry_settings *opts, const char *optarg)
+static void process_nslist_entry(const char **out, const char *share, const char *path, int multiple)
 {
-	for (const char *share = strtok((char *) optarg, ","); share; share = strtok(NULL, ",")) {
-		int found = 0;
-		if (!strcmp(share, "network")) {
-			share = "net";
-		}
-		if (!strcmp(share, "mount")) {
-			share = "mnt";
-		}
-		for (enum nstype ns = 0; ns < MAX_NS; ns++) {
-			if (!strcmp(share, ns_name(ns))) {
-				opts->shares[ns] = SHARE_WITH_PARENT;
-				found = 1;
+	if (!strcmp(share, "network")) {
+		share = "net";
+	}
+	if (!strcmp(share, "mount")) {
+		share = "mnt";
+	}
+	for (enum nstype ns = 0; ns < MAX_NS; ns++) {
+		if (!strcmp(share, ns_name(ns))) {
+			if (path) {
+				if (multiple) {
+					out[ns] = strdup(makepath("%s/%s", path, ns_name(ns)));
+				} else {
+					out[ns] = path;
+				}
+			} else {
+				out[ns] = SHARE_WITH_PARENT;
 			}
+			return;
 		}
-		if (!found) {
-			fprintf(stderr, "namespace `%s` does not exist.\n", share);
-			fprintf(stderr, "valid namespaces are: ");
-			for (enum nstype ns = 0; ns < MAX_NS; ns++) {
-				fprintf(stderr, "%s%s", ns == 0 ? "" : ", ", ns_name(ns));
-			}
-			fprintf(stderr, ".\n");
-			exit(1);
-		}
+	}
+	fprintf(stderr, "namespace `%s` does not exist.\n", share);
+	fprintf(stderr, "valid namespaces are: ");
+	for (enum nstype ns = 0; ns < MAX_NS; ns++) {
+		fprintf(stderr, "%s%s", ns == 0 ? "" : ", ", ns_name(ns));
+	}
+	fprintf(stderr, ".\n");
+	exit(2);
+}
+
+static void process_share(const char **out, const char *optarg)
+{
+	char *nsnames = strtok((char *) optarg, "=");
+	char *path    = strtok(NULL, "");
+
+	/* Specifying a standalone path means that all namespaces should be entered
+	   from the nsfs files relative to that directory path. */
+	char all_namespaces[] = "cgroup,ipc,mnt,net,pid,time,user,uts";
+	if (nsnames[0] == '/' || nsnames[0] == '.') {
+		path = nsnames;
+		nsnames = all_namespaces;
+	}
+	if (strcmp(nsnames, "all") == 0) {
+		nsnames = all_namespaces;
+	}
+
+	size_t nsnames_len = strlen(nsnames);
+	const char *share = strtok(nsnames, ",");
+	bool multiple = share + strlen(share) != nsnames + nsnames_len;
+
+	for (; share; share = strtok(NULL, ",")) {
+		process_nslist_entry(out, share, path, multiple);
 	}
 }
 
@@ -160,6 +173,13 @@ static void handle_limit_arg(int option_num, struct entry_settings *opts, char *
 
 int usage(int error, char *argv0)
 {
+	/* Usage is generated from usage.txt. Note that the array is not null-terminated,
+	   I couldn't find a way to convince xxd to do that for me, so instead
+	   I just replace the last newline with a NUL and print an extra newline
+	   from the usage function. */
+	extern unsigned char usage_txt[];
+	extern unsigned int usage_txt_len;
+
 	usage_txt[usage_txt_len - 1] = 0;
 	FILE *out = error ? stderr : stdout;
 	fprintf(out, (char *) usage_txt, argv0);
@@ -205,15 +225,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ "limit-rttime",       required_argument, NULL, OPTION_LIMIT_RTTIME    },
 		{ "limit-sigpending",   required_argument, NULL, OPTION_LIMIT_SIGPENDING},
 		{ "limit-stack",        required_argument, NULL, OPTION_LIMIT_STACK     },
-		{ "share-cgroup",       optional_argument, NULL, OPTION_SHARE_CGROUP    },
-		{ "share-ipc",          optional_argument, NULL, OPTION_SHARE_IPC       },
-		{ "share-mnt",          optional_argument, NULL, OPTION_SHARE_MNT       },
-		{ "share-net",          optional_argument, NULL, OPTION_SHARE_NET       },
-		{ "share-pid",          optional_argument, NULL, OPTION_SHARE_PID       },
-		{ "share-time",         optional_argument, NULL, OPTION_SHARE_TIME      },
-		{ "share-user",         optional_argument, NULL, OPTION_SHARE_USER      },
-		{ "share-uts",          optional_argument, NULL, OPTION_SHARE_UTS       },
-		{ "share-all",          optional_argument, NULL, OPTION_SHARE_ALL       },
+		{ "share",              required_argument, NULL, OPTION_SHARE           },
 		{ "argv0",              required_argument, NULL, OPTION_ARGV0           },
 		{ "hostname",           required_argument, NULL, OPTION_HOSTNAME        },
 		{ "domainname",         required_argument, NULL, OPTION_DOMAIN          },
@@ -235,9 +247,6 @@ int main(int argc, char *argv[], char *envp[])
 		{ "no-loopback-setup",   no_argument, NULL, OPTION_NO_LOOPBACK_SETUP    },
 		{ "no-init",             no_argument, NULL, OPTION_NO_INIT              },
 		{ "no-env",              no_argument, NULL, OPTION_NO_ENV               },
-
-		/* Deprecated flags */
-		{ "share",      required_argument, NULL, OPTION_SHARE_DEPRECATED        },
 
 		{ 0, 0, 0, 0 }
 	};
@@ -350,34 +359,10 @@ int main(int argc, char *argv[], char *envp[])
 				opts.no_copy_hard_limits = 1;
 				break;
 
-			case OPTION_SHARE_CGROUP:
-			case OPTION_SHARE_IPC:
-			case OPTION_SHARE_MNT:
-			case OPTION_SHARE_NET:
-			case OPTION_SHARE_PID:
-			case OPTION_SHARE_TIME:
-			case OPTION_SHARE_USER:
-			case OPTION_SHARE_UTS:
-				opts.shares[c - OPTION_SHARE_CGROUP] = optarg ? optarg : SHARE_WITH_PARENT;
+			case OPTION_SHARE:
+				process_share(opts.shares, optarg);
 				break;
 
-			case OPTION_SHARE_ALL:
-				for (enum nstype ns = 0; ns < MAX_NS; ns++) {
-					char buf[PATH_MAX];
-					if (optarg) {
-						snprintf(buf, sizeof(buf), "%s/%s", optarg, ns_name(ns));
-						buf[sizeof(buf) - 1] = 0;
-						opts.shares[ns] = strdup(buf);
-					} else {
-						opts.shares[ns] = SHARE_WITH_PARENT;
-					}
-				}
-				break;
-
-			case OPTION_SHARE_DEPRECATED:
-				process_share_deprecated(&opts, optarg);
-				break;
-					
 			case OPTION_ARGV0:
 				argv0 = optarg;
 				break;

@@ -78,8 +78,8 @@ void opts_to_nsactions(const char *shares[], enum nsaction *nsactions)
 			/* If the nsfd refers to the same namespace as the one we are
 			   currently in, treat as for SHARE_WITH_PARENT.
 
-			   We want to give semantics to --share-<ns>=/proc/self/ns/<ns>
-			   being the same as --share-<ns>. */
+			   We want to give semantics to --share <ns>=/proc/self/ns/<ns>
+			   being the same as --share <ns>. */
 			if (is_nsfd_current(nsactions[ns], ns_name(ns))) {
 				close(nsactions[ns]);
 				nsactions[ns] = NSACTION_SHARE_WITH_PARENT;

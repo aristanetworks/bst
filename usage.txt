@@ -13,15 +13,8 @@ Options:
 	-r, --root <dir>:       Set root directory.
 
 	--argv0 <arg>:          Set argv[0] (defaults to <exe>).
-	--share-cgroup[=nsfile] Share the cgroup namespace in nsfile (default: parent).
-	--share-ipc[=nsfile]    Share the ipc namespace in nsfile (default: parent).
-	--share-mnt[=nsfile]    Share the mount namespace in nsfile (default: parent).
-	--share-net[=nsfile]    Share the network namespace in nsfile (default: parent).
-	--share-pid[=nsfile]    Share the pid namespace in nsfile (default: parent).
-	--share-time[=nsfile]   Share the time namespace in nsfile (default: parent).
-	--share-user[=nsfile]   Share the user namespace in nsfile (default: parent).
-	--share-uts[=nsfile]    Share the uts namespace in nsfile (default: parent).
-	--share-all[=directory] Share all namespaces in the directory (default: parent).
+	--share <ns,...>[=dir]  Share the specified namespaces using target nsfs files
+	                        (default: parent).
 	--persist <directory>:  Bind-mount process namespaces into <dir> for re-entry.
 	--workdir <directory>:  Set current work directory.
 	--mount <source,target,type,options>:

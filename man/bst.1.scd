@@ -32,12 +32,21 @@ _VAR=value_ before the executable to run.
 	Run _executable_ with the specified value for _argv[0]_.
 	By default, _argv[0]_ is _executable_ itself.
 
-\--share-<ns>[=<file>]
+\--share <ns>[=<file>]++
+\--share <ns,ns...>[=<directory>]++
+\--share <directory>
 	Share the specified namespaces with the namespace anchored by
 	*<file>*, which can be a file like /proc/[pid]/ns/mnt,
 	or a bind-mount of that file, or a file created by
 	_bst --persist=_*<dir>*.  If no *=<file>* is given, then share the
 	given namespace with the process invoking bst.
+
+	Multiple namespaces may be specified in a comma-separated list.  If more
+	than one namespace is specified, and a target path is specified, it is
+	interpreted as a directory name in which to find the eponymous nsfs files.
+
+	_--share_ can also take a lone directory path, in which case all namespaces
+	are presumed to be shared from their respective nsfs files under that path.
 
 	Available namespaces are:
 	- *cgroup* (since Linux 4.6)
@@ -49,14 +58,17 @@ _VAR=value_ before the executable to run.
 	- *uts* (since Linux 2.6.19)
 	- *user* (since Linux 3.8)
 
-	All namespaces are unshared by default; _e.g.,_ if _--share-mnt_
+	A special value of *all* can also be used to signify to share all
+	namespaces.
+
+	All namespaces are unshared by default; _e.g.,_ if _--share mnt_
 	is not given, then the child process runs in a new (unshared)
 	mount namespace initialized as a copy of bst's parent's mount
 	namespace.
 
 \--persist <dir>
 	Persist all namespaces of the new process into files in the
-	given directory, allowing re-entry via _--share-\*=<dir>_ even after bst
+	given directory, allowing re-entry via _--share <dir>_ even after bst
 	exits (but note that pid namespaces whose init died cannot be re-entered).
 
 	The files are named the same as the namespace files in /proc/[pid]/ns.
@@ -172,7 +184,7 @@ _VAR=value_ before the executable to run.
 	all allotted sub[ug]ids for the current [UG]ID as written in
 	_/etc/sub[ug]id_ (see *subuid*(5), *subgid*(5)).
 
-	You cannot use this option with _--share-user_.
+	You cannot use this option with _--share=user_.
 
 \--nic [name=]<name>,[type=]<type>[,[options]]
 	Create a network interface in the inner process' network namespace.
