@@ -274,6 +274,51 @@ Users of bst may choose to opt-out of some of the isolation.
 
 	This does nothing when used with _--share=net_.
 
+# PRIVILEGE MODEL
+
+*bst* strives to be runnable by unprivileged users.  However, some code paths
+within *bst* need some sets of capabilities that the calling user usually does
+not have in order to perform its job correctly.  One such path is the path that
+maps IDs into newly created user namespaces.
+
+To this end, we define what the privilege model is.  The *bst* binary typically
+has permitted (but not effective) file capabilities, and gives itself select
+effective capabilities only when needed.  If file capabilities are unavailable,
+the executable must be setuid and owned by root, and *bst* takes care to drop
+privileges when it no longer needs them.
+
+*bst* never gives users more privilges than they have access to.  For instance,
+trying to operate on a mount namespace requires the calling user to have the
+requisite capabilities in the user namespace that the mount namespace belongs
+to, which typically belong to the root user of that namespace.
+
+*bst* never implicitly changes any sort of resource in any of the original
+namespaces that the calling process belong in.  For instance, *bst* will flat-out
+refuse to perform a mount if it were to stay in the original mount namespace.
+Another case is network interfaces: *bst* will not allow unprivileged users
+to create new interfaces on the host, which does make veth unfortunately not
+fit within that privilege model as one end has to exist on the host while the
+other exists within the spacetime.  We expect instead system administrators
+to configure interfaces on the host that unprivileged users can attach
+MACVLANs or IPVLANs to.
+
+## User namespaces and sub-IDs
+
+When creating new user namespaces, *bst* consults _/etc/subuid_ and _/etc/subgid_
+to find out what UIDs and GIDs are owned by the real UID/GID.  Mapped IDs
+in the user namespace that do not belong in these sets for your real UID/GID
+are rejected (see _--uid-map_ and _--gid-map_).
+
+A consequence of this is that overlapping ID ranges in /etc/sub[ug]id for
+different users mean that both users will be able to have complete control
+over any file owned by that sub[ug]id.
+
+In a default mapping, the real [UG]ID typically gets mapped as _0_ (root) in the
+spacetime.  The privileges allotted to this root user are defined within
+the rules of user namespaces (see *user_namespaces*(7)): permission and access
+errors in the parent user namespace will still result in _EACCES_ and _EPERM_
+in the new user namespace.
+
 # SETUP PROGRAMS
 
 A setup program is a program that execute as part of the setup of a spacetime.
