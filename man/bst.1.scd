@@ -66,17 +66,28 @@ _VAR=value_ before the executable to run.
 	mount namespace initialized as a copy of bst's parent's mount
 	namespace.
 
-\--persist <dir>
-	Persist all namespaces of the new process into files in the
+\--persist <ns,ns...>=<path>++
+\--persist <directory>
+	Persist specified namespaces of the new process into files in the
 	given directory, allowing re-entry via _--share <dir>_ even after bst
 	exits (but note that pid namespaces whose init died cannot be re-entered).
 
-	The files are named the same as the namespace files in /proc/[pid]/ns.
-	This option is equivalent to bind-mounting /proc/[pid]/ns/\* into
-	*<dir>*/\* after invoking bst, except avoiding a race where the child
-	exits before the bind-mounts complete.  Note that in order to persist the
-	mount namespace, the persist directory must be on a private mount subtree
-	(for more information, see *mount_namespaces*(7)).
+	If no namespaces are specified, all namespaces are persisted into
+	*<directory>*.
+
+	If one namespace is specified, *<path>* is used as the bind-mount target
+	for the nsfs file representing this namespace.
+
+	Multiple namespaces may be specified in a comma-separated list.  If more
+	than one namespace is specified, *<path>* represents instead the directory
+	into which nsfs files will be persisted.  In this case, the files are named
+	the same as the namespace files in _/proc/[pid]/ns_.
+
+	This option is equivalent to bind-mounting files under _/proc/[pid]/ns/_
+	in (or on) the target path after invoking bst, except avoiding a race where
+	the child exits before the bind-mounts complete.  Note that in order to
+	persist the mount namespace, the persist directory must be on a private
+	mount subtree (for more information, see *mount_namespaces*(7)).
 
 	See *bst-unpersist*(1) for more details about how to release persisted
 	namespace files.

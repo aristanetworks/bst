@@ -13,9 +13,13 @@ Options:
 	-r, --root <dir>:       Set root directory.
 
 	--argv0 <arg>:          Set argv[0] (defaults to <exe>).
-	--share <ns,...>[=dir]  Share the specified namespaces using target nsfs files
-	                        (default: parent).
-	--persist <directory>:  Bind-mount process namespaces into <dir> for re-entry.
+	--share <dir>,
+	--share <ns,...>[=path]:
+	                        Share the specified namespaces using target nsfs files
+	                        (default: share parent namespaces).
+	--persist <dir>,
+	--persist <ns,...>[=path]:
+	                        Persist process namespaces into target path for re-entry.
 	--workdir <directory>:  Set current work directory.
 	--mount <source,target,type,options>:
 	                        Mount source over target before executing the program.

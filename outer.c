@@ -144,17 +144,17 @@ static void create_nics(pid_t child_pid, struct nic_options *nics, size_t nnics)
 	reset_capabilities();
 }
 
-static void persist_ns_files(pid_t pid, const char *persist)
+static void persist_ns_files(pid_t pid, const char **persist)
 {
 	for (enum nstype ns = 0; ns < MAX_NS; ++ns) {
+		if (persist[ns] == NULL) {
+			continue;
+		}
+
 		const char *name = ns_name(ns);
 
-		/* Where is mountat()?  Thankfully, we can still name the persist directory. */
-		char persistpath[PATH_MAX];
-		makepath_r(persistpath, "%s/%s", persist, name);
-
-		if (mknod(persistpath, S_IFREG, 0) == -1 && errno != EEXIST) {
-			err(1, "create %s", persistpath);
+		if (mknod(persist[ns], S_IFREG, 0) == -1 && errno != EEXIST) {
+			err(1, "create %s", persist[ns]);
 		}
 
 		char procpath[PATH_MAX];
@@ -162,12 +162,12 @@ static void persist_ns_files(pid_t pid, const char *persist)
 
 		make_capable(BST_CAP_SYS_ADMIN | BST_CAP_SYS_PTRACE);
 
-		int rc = mount(procpath, persistpath, "", MS_BIND, "");
+		int rc = mount(procpath, persist[ns], "", MS_BIND, "");
 
 		reset_capabilities();
 
 		if (rc == -1) {
-			unlink(persistpath);
+			unlink(persist[ns]);
 
 			switch errno {
 			case ENOENT:
@@ -175,9 +175,9 @@ static void persist_ns_files(pid_t pid, const char *persist)
 				break;
 			case EINVAL:
 				errx(1, "bind-mount %s to %s: %s (is the destination on a private mount?)",
-						procpath, persistpath, strerror(EINVAL));
+						procpath, persist[ns], strerror(EINVAL));
 			default:
-				err(1, "bind-mount %s to %s", procpath, persistpath);
+				err(1, "bind-mount %s to %s", procpath, persist[ns]);
 			}
 		}
 	}
@@ -261,9 +261,7 @@ void outer_helper_spawn(struct outer_helper *helper)
 		burn_uidmap_gidmap(child_pid, helper->uid_desired, helper->gid_desired);
 	}
 
-	if (helper->persist) {
-		persist_ns_files(child_pid, helper->persist);
-	}
+	persist_ns_files(child_pid, helper->persist);
 
 	if (helper->unshare_net) {
 		create_nics(child_pid, helper->nics, helper->nnics);

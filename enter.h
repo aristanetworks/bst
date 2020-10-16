@@ -39,6 +39,7 @@ struct entry_settings {
 	   SHARE_WITH_PARENT: special marker meaning don't unshare or setns.
 	   filename: setns to the given namespace file. */
 	const char *shares[MAX_NS];
+	const char *persist[MAX_NS];
 
 	const char *pathname;
 	char *const *argv;
@@ -81,8 +82,6 @@ struct entry_settings {
 	int no_init;
 	int no_loopback_setup;
 	int no_env;
-
-	const char *persist;
 };
 
 int enter(struct entry_settings *opts);

@@ -131,6 +131,40 @@ static void process_share(const char **out, const char *optarg)
 	}
 }
 
+static void process_persist(const char **out, const char *optarg)
+{
+	/* Similar rules as for process_share, but refuse when no path is passed,
+	   and treat long arguments as paths */
+
+	char *nsnames = strtok((char *) optarg, "=");
+	char *path    = strtok(NULL, "");
+
+	/* Specifying a standalone path means that all namespaces should be persisted
+	   into nsfs files relative to that directory path. */
+	char all_namespaces[] = "cgroup,ipc,mnt,net,pid,time,user,uts";
+	if (!path) {
+		path = nsnames;
+		nsnames = all_namespaces;
+	}
+	if (strcmp(nsnames, "all") == 0) {
+		nsnames = all_namespaces;
+	}
+
+	size_t nsnames_len = strlen(nsnames);
+	const char *share = strtok(nsnames, ",");
+	bool multiple = share + strlen(share) != nsnames + nsnames_len;
+
+	for (; share; share = strtok(NULL, ",")) {
+		process_nslist_entry(out, share, path, multiple);
+	}
+
+	for (enum nstype ns = 0; ns < MAX_NS; ns++) {
+		if (out[ns] == SHARE_WITH_PARENT) {
+			err(2, "--persist must take a path to persist namespaces to");
+		}
+	}
+}
+
 static void handle_limit_arg(int option_num, struct entry_settings *opts, char *arg)
 {
 	struct opt {
@@ -363,6 +397,10 @@ int main(int argc, char *argv[], char *envp[])
 				process_share(opts.shares, optarg);
 				break;
 
+			case OPTION_PERSIST:
+				process_persist(opts.persist, optarg);
+				break;
+
 			case OPTION_ARGV0:
 				argv0 = optarg;
 				break;
@@ -479,10 +517,6 @@ int main(int argc, char *argv[], char *envp[])
 				break;
 			}
 
-			case OPTION_PERSIST:
-				opts.persist = optarg;
-				break;
-				
 			case OPTION_UMASK:
 				if (sscanf(optarg, "%o", &opts.umask) != 1) {
 					err(2, "%s is not a valid umask", optarg);

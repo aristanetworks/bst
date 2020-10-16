@@ -15,7 +15,7 @@
 struct outer_helper {
 	int unshare_user;
 	int unshare_net;
-	const char *persist;
+	const char **persist;
 	id_map uid_desired;
 	id_map gid_desired;
 	struct nic_options *nics;
