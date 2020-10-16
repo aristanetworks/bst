@@ -9,4 +9,10 @@
 
 # define lengthof(Arr) (sizeof (Arr) / sizeof (*Arr))
 
+# ifndef ARG_MAX
+/* ARG_MAX is typically a runtime constant that one can retrieve via sysconf,
+   but we don't want to be using VLAs in sensitive code. */
+#  define ARG_MAX 4096
+# endif
+
 #endif /* !UTIL_H_ */

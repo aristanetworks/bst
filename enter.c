@@ -34,12 +34,6 @@
 #include "sig.h"
 #include "util.h"
 
-#ifndef ARG_MAX
-/* ARG_MAX is typically a runtime constant that one can retrieve via sysconf,
-   but we don't want to be using VLAs in sensitive code. */
-# define ARG_MAX 4096
-#endif
-
 static inline size_t append_argv(char **argv, size_t argc, char *arg)
 {
 	if (argc >= ARG_MAX) {

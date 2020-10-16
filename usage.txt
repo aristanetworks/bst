@@ -1,8 +1,11 @@
-usage: %1$s [-h] [options] <exe> [args ...]
+usage: %1$s [-h] [options] [--] [VAR=value...] [exe [args ...]]
 
 Chroot into <root> and execute <exe> with the specified arguments,
 setting up namespaces and other low-level minutiae that are needed in
 order to enter a sane, isolated environment.
+
+Environment variables can be overriden for the spacetime process by
+specifying VAR=value before the executable to run.
 
 Options:
 	-h, --help:             Print this message.
@@ -76,3 +79,4 @@ Options:
 	--no-derandomize:       Don't attempt to reduce randomness sources.
 	--no-proc-remount:      Don't remount the existing /proc in pid namespaces.
 	--no-loopback-setup:    Don't bring the lo interface up in network namespaces.
+	--no-env:               Clear the environment before running the executable.

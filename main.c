@@ -24,6 +24,7 @@
 #include "capable.h"
 #include "enter.h"
 #include "kvlist.h"
+#include "util.h"
 
 enum {
 	OPTION_VERSION = 128,
@@ -78,6 +79,7 @@ enum {
 	OPTION_NO_PROC_REMOUNT,
 	OPTION_NO_LOOPBACK_SETUP,
 	OPTION_NO_INIT,
+	OPTION_NO_ENV,
 	OPTION_SHARE_DEPRECATED,
 };
 
@@ -232,6 +234,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ "no-proc-remount",     no_argument, NULL, OPTION_NO_PROC_REMOUNT      },
 		{ "no-loopback-setup",   no_argument, NULL, OPTION_NO_LOOPBACK_SETUP    },
 		{ "no-init",             no_argument, NULL, OPTION_NO_INIT              },
+		{ "no-env",              no_argument, NULL, OPTION_NO_ENV               },
 
 		/* Deprecated flags */
 		{ "share",      required_argument, NULL, OPTION_SHARE_DEPRECATED        },
@@ -543,6 +546,10 @@ int main(int argc, char *argv[], char *envp[])
 				opts.no_loopback_setup = 1;
 				break;
 
+			case OPTION_NO_ENV:
+				opts.no_env = 1;
+				break;
+
 			case 'r':
 				opts.root = optarg;
 				break;
@@ -564,6 +571,42 @@ int main(int argc, char *argv[], char *envp[])
 				}
 		}
 	}
+
+	/* ARG_MAX isn't really supposed to be the size of a pointer array, but
+	   instead the size of the cmdline area... but this is a good enough upper
+	   bound. */
+	char *newenv[ARG_MAX];
+
+	size_t i = 0;
+	if (!opts.no_env) {
+		for (char **e = envp; *e != NULL && i < ARG_MAX - 1; ++e, ++i) {
+			newenv[i] = *e;
+		}
+	}
+
+	/* Intepret any NAME=value at the start of the command line as environment
+	   variable overrides. */
+	for (; optind + 1 <= argc; ++optind) {
+		char *c = argv[optind];
+		for (; *c != '\0'; ++c) {
+			if (*c == '=' && c != argv[optind]) {
+				newenv[i++] = argv[optind];
+				break;
+			}
+			if (!isalnum(*c) && *c != '_') {
+				/* This is not a word, and thus not an environment variable
+				   name, meaning this is the program name. */
+				goto end;
+			}
+		}
+		if (*c == '\0') {
+			/* This was a word, but we didn't encounter an '='; this is also the
+			   program name. */
+			break;
+		}
+	}
+end:
+	newenv[i] = NULL;
 
 	/* Use our own default init if we unshare the pid namespace, and no
 	   --init has been specified. */
@@ -605,7 +648,7 @@ int main(int argc, char *argv[], char *envp[])
 
 	opts.pathname = argv[optind];
 	opts.argv = new_argv;
-	opts.envp = envp;
+	opts.envp = newenv;
 
 	if (opts.workdir && opts.workdir[0] != '\0' && opts.workdir[0] != '/') {
 		errx(1, "workdir must be an absolute path.");

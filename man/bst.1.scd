@@ -6,7 +6,7 @@ bst - run executables in their own spacetime.
 
 # SYNOPSIS
 
-bst [options] [--] [executable [args...]]
+bst [options] [--] [VAR=value...] [executable [args...]]
 
 # DESCRIPTION
 
@@ -22,6 +22,9 @@ Spacetimes may define their own meaning about devices, randomness, locale,
 time, namespaces, and filesystem structure.
 
 Users of bst may choose to opt-out of some of the isolation.
+
+Environment variables can be overriden for the spacetime process by specifying
+_VAR=value_ before the executable to run.
 
 # OPTIONS
 
@@ -273,6 +276,13 @@ Users of bst may choose to opt-out of some of the isolation.
 	127.0.0.1/8 to it when in a network namespace.
 
 	This does nothing when used with _--share=net_.
+
+\--no-env
+	Clear the environment before running _executable_.
+
+	By default, the environment of the parent process is inherited as-is into
+	the spacetime process. This can cause issues for environment variables like
+	PATH if the rootfs layout is different than the host.
 
 # PRIVILEGE MODEL
 

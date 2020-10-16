@@ -235,3 +235,13 @@ Testing --limit-sigpending
 Testing --limit-stack
 	$ bst --limit-stack=: test/print_limits --soft-only stack
 	stack: soft=hard
+
+Testing Environment
+
+	$ bst --no-env FOO=bar env
+	FOO=bar
+
+	$ env -i FOO=bar $(which bst) --setup-exe /usr/bin/env /bin/true
+	FOO=bar
+	ROOT=/
+	EXECUTABLE=/bin/true

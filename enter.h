@@ -80,6 +80,7 @@ struct entry_settings {
 	int no_proc_remount;
 	int no_init;
 	int no_loopback_setup;
+	int no_env;
 
 	const char *persist;
 };
