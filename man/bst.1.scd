@@ -66,6 +66,15 @@ _VAR=value_ before the executable to run.
 	mount namespace initialized as a copy of bst's parent's mount
 	namespace.
 
+\--unshare <ns,ns...>
+	Unshare the specified namespaces.  By default, *bst* unshares all
+	namespaces, so this flag is not normally necessary.
+
+	_--unshare_ is useful when used in conjunction with _--share all_ in
+	order to share a select set of namespaces except for a few ones.
+
+	Available namespaces are the same as for _--share_.
+
 \--persist <ns,ns...>=<path>++
 \--persist <directory>
 	Persist specified namespaces of the new process into files in the

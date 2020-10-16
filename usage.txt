@@ -17,6 +17,8 @@ Options:
 	--share <ns,...>[=path]:
 	                        Share the specified namespaces using target nsfs files
 	                        (default: share parent namespaces).
+	--unshare <ns,...>:     Unshare the specified namespaces (all namespaces
+	                        are unshared by default).
 	--persist <dir>,
 	--persist <ns,...>[=path]:
 	                        Persist process namespaces into target path for re-entry.

@@ -38,6 +38,7 @@ enum {
 	OPTION_ARCH,
 	OPTION_LIMIT,
 	OPTION_SHARE,
+	OPTION_UNSHARE,
 	OPTION_ARGV0,
 	OPTION_HOSTNAME,
 	OPTION_DOMAIN,
@@ -59,7 +60,7 @@ enum {
 	OPTION_NO_COPY_HARD_LIMITS,
 };
 
-static void process_nslist_entry(const char **out, const char *share, const char *path, int multiple)
+static void process_nslist_entry(const char **out, const char *share, const char *path, int append_nsname)
 {
 	if (!strcmp(share, "network")) {
 		share = "net";
@@ -69,14 +70,10 @@ static void process_nslist_entry(const char **out, const char *share, const char
 	}
 	for (enum nstype ns = 0; ns < MAX_NS; ns++) {
 		if (!strcmp(share, ns_name(ns))) {
-			if (path) {
-				if (multiple) {
-					out[ns] = strdup(makepath("%s/%s", path, ns_name(ns)));
-				} else {
-					out[ns] = path;
-				}
+			if (append_nsname) {
+				out[ns] = strdup(makepath("%s/%s", path, ns_name(ns)));
 			} else {
-				out[ns] = SHARE_WITH_PARENT;
+				out[ns] = path;
 			}
 			return;
 		}
@@ -90,6 +87,8 @@ static void process_nslist_entry(const char **out, const char *share, const char
 	exit(2);
 }
 
+#define ALL_NAMESPACES "cgroup,ipc,mnt,net,pid,time,user,uts"
+
 static void process_share(const char **out, const char *optarg)
 {
 	char *nsnames = strtok((char *) optarg, "=");
@@ -97,7 +96,7 @@ static void process_share(const char **out, const char *optarg)
 
 	/* Specifying a standalone path means that all namespaces should be entered
 	   from the nsfs files relative to that directory path. */
-	char all_namespaces[] = "cgroup,ipc,mnt,net,pid,time,user,uts";
+	char all_namespaces[] = ALL_NAMESPACES;
 	if (nsnames[0] == '/' || nsnames[0] == '.') {
 		path = nsnames;
 		nsnames = all_namespaces;
@@ -108,10 +107,17 @@ static void process_share(const char **out, const char *optarg)
 
 	size_t nsnames_len = strlen(nsnames);
 	const char *share = strtok(nsnames, ",");
-	bool multiple = share + strlen(share) != nsnames + nsnames_len;
+
+	/* Only append the ns name to the path if there is more than one
+	   namespace specified. */
+	bool append_nsname = share + strlen(share) != nsnames + nsnames_len;
+	if (path == NULL) {
+		path = SHARE_WITH_PARENT;
+		append_nsname = false;
+	}
 
 	for (; share; share = strtok(NULL, ",")) {
-		process_nslist_entry(out, share, path, multiple);
+		process_nslist_entry(out, share, path, append_nsname);
 	}
 }
 
@@ -125,7 +131,7 @@ static void process_persist(const char **out, const char *optarg)
 
 	/* Specifying a standalone path means that all namespaces should be persisted
 	   into nsfs files relative to that directory path. */
-	char all_namespaces[] = "cgroup,ipc,mnt,net,pid,time,user,uts";
+	char all_namespaces[] = ALL_NAMESPACES;
 	if (!path) {
 		path = nsnames;
 		nsnames = all_namespaces;
@@ -141,11 +147,19 @@ static void process_persist(const char **out, const char *optarg)
 	for (; share; share = strtok(NULL, ",")) {
 		process_nslist_entry(out, share, path, multiple);
 	}
+}
 
-	for (enum nstype ns = 0; ns < MAX_NS; ns++) {
-		if (out[ns] == SHARE_WITH_PARENT) {
-			err(2, "--persist must take a path to persist namespaces to");
-		}
+static void process_unshare(const char **out, char *nsnames)
+{
+	/* Similar rules as for process_share, but we do not take in paths. */
+
+	char all_namespaces[] = ALL_NAMESPACES;
+	if (strcmp(nsnames, "all") == 0) {
+		nsnames = all_namespaces;
+	}
+
+	for (const char *ns = strtok(nsnames, ","); ns; ns = strtok(NULL, ",")) {
+		process_nslist_entry(out, ns, NULL, false);
 	}
 }
 
@@ -245,6 +259,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ "arch",               required_argument, NULL, OPTION_ARCH            },
 		{ "limit",              required_argument, NULL, OPTION_LIMIT           },
 		{ "share",              required_argument, NULL, OPTION_SHARE           },
+		{ "unshare",            required_argument, NULL, OPTION_UNSHARE         },
 		{ "argv0",              required_argument, NULL, OPTION_ARGV0           },
 		{ "hostname",           required_argument, NULL, OPTION_HOSTNAME        },
 		{ "domainname",         required_argument, NULL, OPTION_DOMAIN          },
@@ -361,6 +376,10 @@ int main(int argc, char *argv[], char *envp[])
 
 			case OPTION_SHARE:
 				process_share(opts.shares, optarg);
+				break;
+
+			case OPTION_UNSHARE:
+				process_unshare(opts.shares, optarg);
 				break;
 
 			case OPTION_PERSIST:
