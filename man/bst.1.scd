@@ -205,44 +205,31 @@ _VAR=value_ before the executable to run.
 	Supported interface types and valid options are described in more detail
 	in the *NETWORKING* section.
 
-|[ --limit-as <arg>
-:< size of virtual memory
-|[ --limit-core <arg>
-:< maximum size of core files created
-|[ --limit-cpu <arg>
-:< maximum amount of CPU time in seconds
-|[ --limit-data <arg>
-:< maximum size of a process's data segment
-|[ --limit-fsize <arg>
-:< maximum size of files written by the shell and its children
-|[ --limit-locks <arg>
-:< maximum number of file locks
-|[ --limit-memlock <arg>
-:< maximum size a process may lock into memory
-|[ --limit-msgqueue <arg>
-:< maximum number of bytes in POSIX message queues
-|[ --limit-nice <arg>
-:< maximum scheduling priority (`nice')
-|[ --limit-nofile <arg>
-:< maximum number of open file descriptors
-|[ --limit-nproc <arg>
-:< maximum number of user processes
-|[ --limit-rss <arg>
-:< maximum resident set size
-|[ --limit-rtprio <arg>
-:< maximum real-time scheduling priority
-|[ --limit-rttime <arg>
-:< limit (in microseconds) of real-time-scheduled CPU time before making a blocking system call
-|[ --limit-sigpending <arg>
-:< maximum number of pending signals
-|[ --limit-stack <arg>
-:< maximum stack size
+\--limit <resource>=<value>++
+\--limit <resource>=[hard]:[soft]
+	Set the specified hard and soft resource limits of the specified resource
+	based on *<value>*.
 
-	The *--limit-<limit>* options set the specified hard and soft
-	resource limits based on <arg>.
+	Accepted values for *<resource>* are:
+	- *as*:         size of virtual memory
+	- *core*:       maximum size of core files created
+	- *cpu*:        maximum amount of CPU time in seconds
+	- *data*:       maximum size of a process's data segment
+	- *fsize*:      maximum size of files written by the shell and its children
+	- *locks*:      maximum number of file locks
+	- *memlock*:    maximum size a process may lock into memory
+	- *msgqueue*:   maximum number of bytes in POSIX message queues
+	- *nice*:       maximum scheduling priority (`nice')
+	- *nofile*:     maximum number of open file descriptors
+	- *nproc*:      maximum number of user processes
+	- *rss*:        maximum resident set size
+	- *rtprio*:     maximum real-time scheduling priority
+	- *rttime*:     limit (in microseconds) of real-time-scheduled CPU time before making a blocking system call
+	- *sigpending*: maximum number of pending signals
+	- *stack*:      maximum stack size
 
-	Format of <arg>:
-	- Single numerical value: set both hard and soft limits to <arg>.
+	Format of *<value>*:
+	- Single numerical value: set both hard and soft limits to <value>.
 	- Colon-separated hard:soft values.
 
 	When either limit is not provided (empty string), use the
@@ -251,13 +238,13 @@ _VAR=value_ before the executable to run.
 	soft resource limit to the current hard limit value.
 
 	Examples:++
-	\--limit-nproc 100       hard=100, soft=100++
-	\--limit-nproc 200:100   hard=200, soft=100++
-	\--limit-nproc :100      hard=(unchanged), soft=100++
-	\--limit-nproc 100:      hard=100, soft=(unchanged)++
-	\--limit-nproc :         hard=(unchanged), soft=(hard limit)
+	\--limit nproc=100       hard=100, soft=100++
+	\--limit nproc=200:100   hard=200, soft=100++
+	\--limit nproc=:100      hard=(unchanged), soft=100++
+	\--limit nproc=100:      hard=100, soft=(unchanged)++
+	\--limit nproc=:         hard=(unchanged), soft=(hard limit)
 
-	If a value is not provided using a --limit-<limit> option for a given resource,
+	If a value is not provided using a --limit option for a given resource,
 	the hard limit will be used as the soft limit, unless *--no-copy-hard-limits* has
 	been provided.
 

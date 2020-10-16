@@ -26,6 +26,7 @@
 #include "kvlist.h"
 #include "util.h"
 #include "path.h"
+#include "util.h"
 
 enum {
 	OPTION_VERSION = 128,
@@ -35,25 +36,7 @@ enum {
 	OPTION_GROUPS,
 	OPTION_WORKDIR,
 	OPTION_ARCH,
-	OPTION_LIMIT_AS,
-	_OPTION_LIMIT_START = OPTION_LIMIT_AS,
-	OPTION_LIMIT_CORE,
-	OPTION_LIMIT_CPU,
-	OPTION_LIMIT_DATA,
-	OPTION_LIMIT_FSIZE,
-	OPTION_LIMIT_LOCKS,
-	OPTION_LIMIT_MEMLOCK,
-	OPTION_LIMIT_MSGQUEUE,
-	OPTION_LIMIT_NICE,
-	OPTION_LIMIT_NOFILE,
-	OPTION_LIMIT_NPROC,
-	OPTION_LIMIT_RSS,
-	OPTION_LIMIT_RTPRIO,
-	OPTION_LIMIT_RTTIME,
-	OPTION_LIMIT_SIGPENDING,
-	OPTION_LIMIT_STACK,
-	_OPTION_LIMIT_END = OPTION_LIMIT_STACK,
-	OPTION_LIMIT_NO_COPY,
+	OPTION_LIMIT,
 	OPTION_SHARE,
 	OPTION_ARGV0,
 	OPTION_HOSTNAME,
@@ -73,6 +56,7 @@ enum {
 	OPTION_NO_LOOPBACK_SETUP,
 	OPTION_NO_INIT,
 	OPTION_NO_ENV,
+	OPTION_NO_COPY_HARD_LIMITS,
 };
 
 static void process_nslist_entry(const char **out, const char *share, const char *path, int multiple)
@@ -165,42 +149,58 @@ static void process_persist(const char **out, const char *optarg)
 	}
 }
 
-static void handle_limit_arg(int option_num, struct entry_settings *opts, char *arg)
+static void handle_limit_arg(struct entry_settings *opts, char *optarg)
 {
 	struct opt {
-		int option_num;
 		int resource;
 		char const *name;
 	};
 	static const struct opt option_map[] = {
-		{ OPTION_LIMIT_AS,         BST_RLIMIT_AS,         "as"         },
-		{ OPTION_LIMIT_CORE,       BST_RLIMIT_CORE,       "core"       },
-		{ OPTION_LIMIT_CPU,        BST_RLIMIT_CPU,        "cpu"        },
-		{ OPTION_LIMIT_DATA,       BST_RLIMIT_DATA,       "data"       },
-		{ OPTION_LIMIT_FSIZE,      BST_RLIMIT_FSIZE,      "fsize"      },
-		{ OPTION_LIMIT_LOCKS,      BST_RLIMIT_LOCKS,      "locks"      },
-		{ OPTION_LIMIT_MEMLOCK,    BST_RLIMIT_MEMLOCK,    "memlock"    },
-		{ OPTION_LIMIT_MSGQUEUE,   BST_RLIMIT_MSGQUEUE,   "msgqueue"   },
-		{ OPTION_LIMIT_NICE,       BST_RLIMIT_NICE,       "nice"       },
-		{ OPTION_LIMIT_NOFILE,     BST_RLIMIT_NOFILE,     "nofile"     },
-		{ OPTION_LIMIT_NPROC,      BST_RLIMIT_NPROC,      "nproc"      },
-		{ OPTION_LIMIT_RSS,        BST_RLIMIT_RSS,        "rss"        },
-		{ OPTION_LIMIT_RTPRIO,     BST_RLIMIT_RTPRIO,     "rtprio"     },
-		{ OPTION_LIMIT_RTTIME,     BST_RLIMIT_RTTIME,     "rttime"     },
-		{ OPTION_LIMIT_SIGPENDING, BST_RLIMIT_SIGPENDING, "sigpending" },
-		{ OPTION_LIMIT_STACK,      BST_RLIMIT_STACK,      "stack"      },
+		{ BST_RLIMIT_AS,         "as"         },
+		{ BST_RLIMIT_CORE,       "core"       },
+		{ BST_RLIMIT_CPU,        "cpu"        },
+		{ BST_RLIMIT_DATA,       "data"       },
+		{ BST_RLIMIT_FSIZE,      "fsize"      },
+		{ BST_RLIMIT_LOCKS,      "locks"      },
+		{ BST_RLIMIT_MEMLOCK,    "memlock"    },
+		{ BST_RLIMIT_MSGQUEUE,   "msgqueue"   },
+		{ BST_RLIMIT_NICE,       "nice"       },
+		{ BST_RLIMIT_NOFILE,     "nofile"     },
+		{ BST_RLIMIT_NPROC,      "nproc"      },
+		{ BST_RLIMIT_RSS,        "rss"        },
+		{ BST_RLIMIT_RTPRIO,     "rtprio"     },
+		{ BST_RLIMIT_RTTIME,     "rttime"     },
+		{ BST_RLIMIT_SIGPENDING, "sigpending" },
+		{ BST_RLIMIT_STACK,      "stack"      },
 	};
 
-	assert(option_num >= _OPTION_LIMIT_START && option_num <= _OPTION_LIMIT_END);
+	char *name = strtok(optarg, "=");
+	char *arg = strtok(NULL, "");
 
-	size_t index = (size_t)(option_num - _OPTION_LIMIT_START);
-	assert(index < sizeof (option_map) / sizeof (*option_map));
+	if (arg == NULL) {
+		err(2, "--limit takes an argument in the form resource=value");
+	}
 
-	struct opt const * opt_ent = option_map + index;
-	assert(opt_ent->option_num == option_num);
+	const struct opt *opt_ent = NULL;
+	for (const struct opt *opt = option_map; opt < option_map + lengthof(option_map); ++opt) {
+		if (strcmp(opt->name, name) == 0) {
+			opt_ent = opt;
+		}
+	}
+
+	if (opt_ent == NULL) {
+		fprintf(stderr, "--limit: `%s` is not a valid resource name.\n", name);
+		fprintf(stderr, "valid resources are: ");
+
+		for (const struct opt *opt = option_map; opt < option_map + lengthof(option_map); ++opt) {
+			fprintf(stderr, "%s%s", opt == option_map ? "" : ", ", opt->name);
+		}
+		fprintf(stderr, ".\n");
+		exit(2);
+	}
 
 	if (parse_rlimit(opt_ent->resource, &opts->limits[opt_ent->resource].rlim, arg)) {
-		err(1, "error in --limit-%s value", opt_ent->name);
+		err(1, "error in --limit %s value", opt_ent->name);
 	}
 	opts->limits[opt_ent->resource].present = true;
 }
@@ -243,22 +243,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ "gid",                required_argument, NULL, OPTION_GID             },
 		{ "groups",             required_argument, NULL, OPTION_GROUPS          },
 		{ "arch",               required_argument, NULL, OPTION_ARCH            },
-		{ "limit-as",           required_argument, NULL, OPTION_LIMIT_AS        },
-		{ "limit-core",         required_argument, NULL, OPTION_LIMIT_CORE      },
-		{ "limit-cpu",          required_argument, NULL, OPTION_LIMIT_CPU       },
-		{ "limit-data",         required_argument, NULL, OPTION_LIMIT_DATA      },
-		{ "limit-fsize",        required_argument, NULL, OPTION_LIMIT_FSIZE     },
-		{ "limit-locks",        required_argument, NULL, OPTION_LIMIT_LOCKS     },
-		{ "limit-memlock",      required_argument, NULL, OPTION_LIMIT_MEMLOCK   },
-		{ "limit-msgqueue",     required_argument, NULL, OPTION_LIMIT_MSGQUEUE  },
-		{ "limit-nice",         required_argument, NULL, OPTION_LIMIT_NICE      },
-		{ "limit-nofile",       required_argument, NULL, OPTION_LIMIT_NOFILE    },
-		{ "limit-nproc",        required_argument, NULL, OPTION_LIMIT_NPROC     },
-		{ "limit-rss",          required_argument, NULL, OPTION_LIMIT_RSS       },
-		{ "limit-rtprio",       required_argument, NULL, OPTION_LIMIT_RTPRIO    },
-		{ "limit-rttime",       required_argument, NULL, OPTION_LIMIT_RTTIME    },
-		{ "limit-sigpending",   required_argument, NULL, OPTION_LIMIT_SIGPENDING},
-		{ "limit-stack",        required_argument, NULL, OPTION_LIMIT_STACK     },
+		{ "limit",              required_argument, NULL, OPTION_LIMIT           },
 		{ "share",              required_argument, NULL, OPTION_SHARE           },
 		{ "argv0",              required_argument, NULL, OPTION_ARGV0           },
 		{ "hostname",           required_argument, NULL, OPTION_HOSTNAME        },
@@ -274,7 +259,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ "nic",                required_argument, NULL, OPTION_NIC             },
 
 		/* Opt-out feature flags */
-		{ "no-copy-hard-limits", no_argument, NULL, OPTION_LIMIT_NO_COPY        },
+		{ "no-copy-hard-limits", no_argument, NULL, OPTION_NO_COPY_HARD_LIMITS  },
 		{ "no-fake-devtmpfs",    no_argument, NULL, OPTION_NO_FAKE_DEVTMPFS     },
 		{ "no-derandomize",      no_argument, NULL, OPTION_NO_DERANDOMIZE       },
 		{ "no-proc-remount",     no_argument, NULL, OPTION_NO_PROC_REMOUNT      },
@@ -370,27 +355,8 @@ int main(int argc, char *argv[], char *envp[])
 				opts.arch = optarg;
 				break;
 
-			case OPTION_LIMIT_AS:
-			case OPTION_LIMIT_CORE:
-			case OPTION_LIMIT_CPU:
-			case OPTION_LIMIT_DATA:
-			case OPTION_LIMIT_FSIZE:
-			case OPTION_LIMIT_LOCKS:
-			case OPTION_LIMIT_MEMLOCK:
-			case OPTION_LIMIT_MSGQUEUE:
-			case OPTION_LIMIT_NICE:
-			case OPTION_LIMIT_NOFILE:
-			case OPTION_LIMIT_NPROC:
-			case OPTION_LIMIT_RSS:
-			case OPTION_LIMIT_RTPRIO:
-			case OPTION_LIMIT_RTTIME:
-			case OPTION_LIMIT_SIGPENDING:
-			case OPTION_LIMIT_STACK:
-				handle_limit_arg(c, &opts, optarg);
-				break;
-
-			case OPTION_LIMIT_NO_COPY:
-				opts.no_copy_hard_limits = 1;
+			case OPTION_LIMIT:
+				handle_limit_arg(&opts, optarg);
 				break;
 
 			case OPTION_SHARE:
@@ -541,6 +507,10 @@ int main(int argc, char *argv[], char *envp[])
 
 			case OPTION_NO_PROC_REMOUNT:
 				opts.no_proc_remount = 1;
+				break;
+
+			case OPTION_NO_COPY_HARD_LIMITS:
+				opts.no_copy_hard_limits = 1;
 				break;
 
 			case OPTION_INIT:
