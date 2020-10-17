@@ -64,14 +64,18 @@ if [ -f "$what" -a -x "$what" ]; then
 
 	# reset environment, and define sensible defaults
 	env -i PATH="$PATH" LC_ALL=C TERM=dumb CRAM_PATH=$(dirname $0) \
-		gawk <"$what" >"$what".err '
+		gawk -v what="$what" <"$what" >"$what".err '
 	match($0, /^([[:space:]]+)\$(.*)$/, m) {
 		print $0
-		while ( ( "(" m[2] ") 2>&1 || echo [$?]" | getline ln ) > 0 ) {
+		while ( ( "(" m[2] "\n) 2>&1 || echo [$?]" | getline ln ) > 0 ) {
 			print m[1] ln
 		}
 	}
-	/^([^[:space:]].*|)$/ {
+	/^([^[:space:]].*)$/ {
+		print $0
+		print $0 | "cat 1>&2"
+	}
+	/^$/ {
 		print $0
 	}
 	'
