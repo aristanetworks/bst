@@ -121,6 +121,16 @@ if not get_option('no-setcap-or-suid')
 	endif
 endif
 
+doc_files = [
+	'ChangeLog',
+	'README.md',
+	'LICENSE',
+]
+
+install_data(doc_files,
+	install_dir: '@0@/doc/bst'.format(get_option('datadir')),
+)
+
 if get_option('tests')
 	subdir('test')
 endif
