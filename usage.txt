@@ -8,44 +8,47 @@ Environment variables can be overriden for the spacetime process by
 specifying VAR=value before the executable to run.
 
 Options:
-	-h, --help:             Print this message.
-	--version:              Print the version number.
-	-r, --root <dir>:       Set root directory.
+  -h, --help:                       Print this message.
+      --version:                    Print the version number.
+  -r, --root <dir>                  Set root directory.
 
-	--argv0 <arg>:          Set argv[0] (defaults to <exe>).
-	--share <dir>,
-	--share <ns,...>[=path]:
-	                        Share the specified namespaces using target nsfs files
-	                        (default: share parent namespaces).
-	--unshare <ns,...>:     Unshare the specified namespaces (all namespaces
-	                        are unshared by default).
-	--persist <dir>,
-	--persist <ns,...>[=path]:
-	                        Persist process namespaces into target path for re-entry.
-	--workdir <directory>:  Set current work directory.
-	--mount <source,target,type,options>:
-	                        Mount source over target before executing the program.
-	--uid <uid>:            Set user ID.
-	--gid <gid>:            Set group ID.
-	--groups <gid,gid,...>: Set additional groups.
-	--arch <arch>:          Set the execution domain.
-	--hostname <host>:      Set the host name.
-	--domainname <domain>:  Set the domain name.
-	--time <name>=<s>[.ns]: Set the time of a specific clock.
-	--init=<init-argv>:     Use the specified outer path as init process.
-	--setup=<cmdline>:      Run the specified setup command with sh -euc.
-	--setup-exe=<path>:     Run the specified setup executable.
-	--uid-map=<map>:        Use the specified uid map for the user namespace mapping.
-	--gid-map=<map>:        Use the specified gid map for the user namespace mapping.
-	--nic <name,type,options>:
-	                        Create network interface in namespace.
+      --argv0 <arg>                 Set argv[0] (defaults to <exe>).
+      --share <dir>,
+      --share <ns,...>[=path]       Share the specified namespaces using target
+                                    nsfs files (default: share parent namespaces).
+      --unshare <ns,...>            Unshare the specified namespaces (all name-
+                                    spaces are unshared by default).
+      --persist <dir>,
+      --persist <ns,...>[=path]     Persist process namespaces into target path
+                                    for re-entry.
+      --workdir <directory>         Set current work directory.
+      --mount <mount>               Mount source over target before
+                                    executing the program.
+      --uid <uid>                   Set user ID.
+      --gid <gid>                   Set group ID.
+      --groups <gid,gid,...>        Set additional groups.
+      --arch <arch>                 Set the execution domain.
+      --hostname <host>             Set the host name.
+      --domainname <domain>         Set the domain name.
+      --time <name>=<s>[.ns]        Set the time of a specific clock.
+      --init=<init-argv>            Use the specified outer path as init process.
+      --setup=<cmdline>             Run the specified setup command with sh -euc.
+      --setup-exe=<path>            Run the specified setup executable.
+      --uid-map=<map>               Use the specified uid map for the user
+                                    namespace mapping.
+      --gid-map=<map>               Use the specified gid map for the user
+                                    namespace mapping.
+      --nic <nic>                   Create network interface in namespace.
+      --limit <res>=<hard>:<soft>,
+      --limit <res>=<value>         Set the specified resource to the provided
+                                    value(s).
 
-	--limit <resource>=<<value>|<hard>:<soft>>
-	                        Set the specified resource to the provided value(s).
-
-	--no-copy-hard-limits:  Don't copy hard limit values to soft limits.
-	--no-fake-devtmpfs:     Don't replace devtmpfs mounts with fake ones.
-	--no-derandomize:       Don't attempt to reduce randomness sources.
-	--no-proc-remount:      Don't remount the existing /proc in pid namespaces.
-	--no-loopback-setup:    Don't bring the lo interface up in network namespaces.
-	--no-env:               Clear the environment before running the executable.
+      --no-copy-hard-limits         Don't copy hard limit values to soft limits.
+      --no-fake-devtmpfs            Don't replace devtmpfs mounts with fake ones.
+      --no-derandomize              Don't attempt to reduce randomness sources.
+      --no-proc-remount             Don't remount the existing /proc in pid
+                                    namespaces.
+      --no-loopback-setup           Don't bring the lo interface up in network
+                                    namespaces.
+      --no-env                      Clear the environment before running the
+                                    executable.
