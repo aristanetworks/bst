@@ -58,9 +58,16 @@ There are two ways to install bst: downloading a prepackaged binary, or building
 
 #### Installing a binary package
 
-Go to the [release page](./releases) and download the binary archive of the latest release.
+Download the binary archive of the [latest release](https://github.com/aristanetworks/bst/releases/latest).
 
-Extract the archive into `/`. bst is installed into /usr/local.
+Extract the archive into `/`, making sure to preserve xattrs. bst is installed into /usr/local.
+
+```
+$ sudo tar --xattrs --xattrs-include='*' -xf bst-x86_64.tar.xz -C /
+$ export PATH=$PATH:/usr/local/bin
+$ bst --version
+v1.0.0-rc1
+```
 
 #### Building from source
 
