@@ -1,7 +1,7 @@
 project('bst', 'c',
 		meson_version   : '>= 0.51.0',
 		license         : 'MIT',
-		version         : '0.0.1',
+		version         : '1.0.0-rc1',
 		default_options : ['c_std=c11', 'warning_level=3'])
 
 prefix     = get_option('prefix')
