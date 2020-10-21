@@ -19,6 +19,7 @@ struct ipvlan {
 };
 
 struct nic_options {
+	unsigned idx;
 	char type[16];
 	char name[IF_NAMESIZE];
 	unsigned link_idx;
@@ -31,7 +32,7 @@ struct nic_options {
 
 int init_rtnetlink_socket();
 
-void net_if_add(int sockfd, const struct nic_options *nicopts);
+unsigned net_if_add(int sockfd, const struct nic_options *nicopts);
 void net_if_rename(int sockfd, int link, const char *to);
 void net_if_up(int sockfd, const char *name);
 

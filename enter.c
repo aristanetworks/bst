@@ -93,8 +93,28 @@ int enter(struct entry_settings *opts)
 	enum nsaction nsactions[MAX_NS];
 	opts_to_nsactions(opts->shares, nsactions);
 
-	if (nsactions[NS_NET] != NSACTION_UNSHARE && opts->nnics > 0) {
-		errx(1, "cannot create NICs when not in a network namespace");
+	/* Don't shoot ourselves in the foot. It's technically possible to
+	   let users mount things in the host mount namespace but in practice
+	   it's a terrible idea due to the sheer amount of things that can go
+	   wrong, like "what do I do if one of the mounts failed but the previous
+	   ones didn't?", or "how do I clean up things that I've (re)mounted?".
+	   The same argument applies for other system resources, like network
+	   interfaces.
+
+	   Instead of allowing this by default, we only skip validation when
+	   the user explicitly passed --no-safeguards. This is because there
+	   are legitimate use-cases in changing non-unshared namespaces, like
+	   using multiple calls to bst to setup an environment in multiple
+	   stages. */
+
+	if (!opts->no_safeguards) {
+		if (nsactions[NS_NET] != NSACTION_UNSHARE && opts->nnics > 0) {
+			errx(1, "cannot create NICs when not in a network namespace");
+		}
+
+		if (nsactions[NS_MNT] != NSACTION_UNSHARE && opts->nmounts > 0) {
+			errx(1, "cannot create mounts when not in a mount namespace");
+		}
 	}
 
 	struct outer_helper outer_helper;
@@ -279,15 +299,9 @@ int enter(struct entry_settings *opts)
 	int rtnl = init_rtnetlink_socket();
 
 	/* Rename interfaces according to their specifications */
-	if (net_unshare) {
-		for (size_t i = 0; i < opts->nnics; ++i) {
-			if (i > (size_t) INT_MAX - 2) {
-				errx(1, "cannot iterate over more than %d interfaces", INT_MAX - 2);
-			}
-			/* interface indices start from 1, and we want to ignore interface 1 (lo),
-			   so we slide our indices by 2. */
-			net_if_rename(rtnl, (int)i + 2, opts->nics[i].name);
-		}
+	for (size_t i = 0; i < outer_helper.nnics; ++i) {
+		struct nic_options *nic = &outer_helper.nics[i];
+		net_if_rename(rtnl, nic->idx, nic->name);
 	}
 
 	if (opts->setup_program) {
@@ -391,11 +405,11 @@ int enter(struct entry_settings *opts)
 		if (!opts->no_loopback_setup) {
 			net_if_up(rtnl, "lo");
 		}
+	}
 
-		/* Bring up the rest of the nics */
-		for (size_t i = 0; i < opts->nnics; ++i) {
-			net_if_up(rtnl, opts->nics[i].name);
-		}
+	/* Bring up the rest of the nics */
+	for (size_t i = 0; i < opts->nnics; ++i) {
+		net_if_up(rtnl, opts->nics[i].name);
 	}
 
 	/* We have a special case for pivot_root: the syscall wants the
@@ -410,15 +424,6 @@ int enter(struct entry_settings *opts)
 	   tmpfses in user namespaces forces the options uid=<real-uid> and
 	   gid=<real-gid>. */
 	if (opts->nmounts > 0) {
-		/* Don't shoot ourselves in the foot. It's technically possible to
-		   let users mount things in the host mount namespace but in practice
-		   it's a terrible idea due to the sheer amount of things that can go
-		   wrong, like "what do I do if one of the mounts failed but the previous
-		   ones didn't?", or "how do I clean up things that I've (re)mounted?". */
-		if (!mnt_unshare) {
-			errx(1, "attempted to mount things in an existing mount namespace.");
-		}
-
 		if (!opts->no_fake_devtmpfs) {
 			for (struct mount_entry *mnt = opts->mounts; mnt < opts->mounts + opts->nmounts; ++mnt) {
 				if (strcmp(mnt->type, "devtmpfs") == 0) {
