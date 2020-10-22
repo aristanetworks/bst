@@ -71,6 +71,7 @@ static void make_idmap(char *idmap, size_t size, const char *which,
 
 	id_map subids;
 	id_map_load_subids(subids, subid_path, id);
+	id_map_normalize(subids, false, true);
 
 	/* Project desired id maps onto permissible maps */
 	if (!id_map_empty(desired)) {
@@ -95,7 +96,6 @@ static void make_idmap(char *idmap, size_t size, const char *which,
 	}
 
 	/* Slice up subid maps according to current id mappings. */
-	id_map_normalize(subids, false, true);
 	id_map_project(subids, cur_id_map, subids);
 
 	id_map_format(subids, idmap, size);
