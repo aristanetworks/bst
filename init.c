@@ -39,13 +39,6 @@ int main(int argc, char *argv[], char *envp[])
 	}
 
 	if (!main_child_pid) {
-		if (setpgid(0, 0) == -1) {
-			err(1, "setpgid");
-		}
-		if (tcsetpgrp(STDIN_FILENO, getpgrp()) == -1 && errno != ENOTTY) {
-			err(1, "tcsetpgrp");
-		}
-
 		sigemptyset(&mask);
 		if (sigprocmask(SIG_SETMASK, &mask, NULL) == -1) {
 			err(1, "sigprocmask");
@@ -58,7 +51,7 @@ int main(int argc, char *argv[], char *envp[])
 	for (;;) {
 		siginfo_t info;
 		sig_wait(&mask, &info);
-		sig_forward(&info, -main_child_pid);
+		sig_forward(&info, main_child_pid);
 
 		if (info.si_signo != SIGCHLD) {
 			continue;
