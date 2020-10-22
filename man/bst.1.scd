@@ -259,6 +259,16 @@ _VAR=value_ before the executable to run.
 
 	Full details for each limit value can be found in *getrlimit*(2).
 
+\--pidfile <path>
+	Write the PID of the newly spawned *<executable>* in *<path>*.
+
+	If *<path>* is a regular file, it is exclusive-locked and truncated prior
+	to writing the PID. The lock is kept for the lifetime of the inner process,
+	and *bst* aborts if it cannot be acquired.
+
+	To avoid lock races with other processes sharing a common pidfile path, the
+	file is never removed.
+
 \--no-copy-hard-limits
 	Do not copy hard limit values to soft limits for all resources mentioned above.
 

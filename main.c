@@ -51,6 +51,7 @@ enum {
 	OPTION_UIDMAP,
 	OPTION_GIDMAP,
 	OPTION_NIC,
+	OPTION_PIDFILE,
 	OPTION_NO_FAKE_DEVTMPFS,
 	OPTION_NO_DERANDOMIZE,
 	OPTION_NO_PROC_REMOUNT,
@@ -272,6 +273,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ "uid-map",            required_argument, NULL, OPTION_UIDMAP          },
 		{ "gid-map",            required_argument, NULL, OPTION_GIDMAP          },
 		{ "nic",                required_argument, NULL, OPTION_NIC             },
+		{ "pidfile",            required_argument, NULL, OPTION_PIDFILE         },
 
 		/* Opt-out feature flags */
 		{ "no-copy-hard-limits", no_argument, NULL, OPTION_NO_COPY_HARD_LIMITS  },
@@ -514,6 +516,10 @@ int main(int argc, char *argv[], char *envp[])
 
 			case OPTION_GIDMAP:
 				id_map_parse(opts.gid_map, optarg);
+				break;
+
+			case OPTION_PIDFILE:
+				opts.pidfile = optarg;
 				break;
 
 			case OPTION_NO_FAKE_DEVTMPFS:

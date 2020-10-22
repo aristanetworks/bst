@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/file.h>
 #include <sys/mount.h>
 #include <sys/personality.h>
 #include <sys/prctl.h>
@@ -204,6 +205,43 @@ int enter(struct entry_settings *opts)
 	}
 
 	if (pid) {
+		if (opts->pidfile) {
+			int pidfile = open(opts->pidfile, O_WRONLY | O_CREAT | O_CLOEXEC | O_NOCTTY , 0666);
+			if (pidfile == -1) {
+				err(1, "open %s", opts->pidfile);
+			}
+
+			struct stat stat;
+			if (fstat(pidfile, &stat) == -1) {
+				err(1, "stat %s", opts->pidfile);
+			}
+
+			if (S_ISREG(stat.st_mode)) {
+				if (flock(pidfile, LOCK_EX | LOCK_NB) == -1) {
+					err(1, "flock %s", opts->pidfile);
+				}
+
+				if (ftruncate(pidfile, 0) == -1) {
+					err(1, "ftruncate %s, 0", opts->pidfile);
+				}
+			}
+
+			char data[64];
+			if ((size_t) snprintf(data, sizeof (data), "%d\n", pid) >= sizeof (data)) {
+				errx(1, "'%d\n' takes more than %zu bytes.", pid, sizeof (data));
+			}
+			size_t remain = sizeof (data);
+			char *ptr = data;
+			while (remain > 0) {
+				ssize_t written = write(pidfile, ptr, remain);
+				if (written == -1) {
+					err(1, "writing pid to %s", opts->pidfile);
+				}
+				remain -= written;
+				ptr += written;
+			}
+		}
+
 		outer_helper_sendpid(&outer_helper, pid);
 		outer_helper_close(&outer_helper);
 

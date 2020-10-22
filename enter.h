@@ -75,6 +75,8 @@ struct entry_settings {
 	const char *setup_program;
 	char *const *setup_argv;
 
+	const char *pidfile;
+
 	int no_copy_hard_limits;
 	int no_fake_devtmpfs;
 	int no_derandomize;
