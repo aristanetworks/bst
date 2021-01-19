@@ -152,6 +152,14 @@ int enter(struct entry_settings *opts)
 		workdir = "/";
 	}
 
+	int initfd = -1;
+	if (opts->init != NULL && opts->init[0] != '\0') {
+		initfd = open(opts->init, O_PATH | O_CLOEXEC);
+		if (initfd == -1) {
+			err(1, "open %s", opts->init);
+		}
+	}
+
 	ns_enter(nsactions);
 
 	int mnt_unshare  = nsactions[NS_MNT]  == NSACTION_UNSHARE;
@@ -466,14 +474,6 @@ int enter(struct entry_settings *opts)
 		}
 
 		mount_entries(root, opts->mounts, opts->nmounts, opts->no_derandomize);
-	}
-
-	int initfd = -1;
-	if (opts->init != NULL && opts->init[0] != '\0') {
-		initfd = open(opts->init, O_PATH | O_CLOEXEC);
-		if (initfd == -1) {
-			err(1, "open %s", opts->init);
-		}
 	}
 
 	/* Don't chroot if root is "/". This is a better default since it
