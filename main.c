@@ -59,6 +59,7 @@ enum {
 	OPTION_NO_INIT,
 	OPTION_NO_ENV,
 	OPTION_NO_COPY_HARD_LIMITS,
+	OPTION_NO_SAFEGUARDS,
 };
 
 static void process_nslist_entry(const char **out, const char *share, const char *path, int append_nsname)
@@ -283,6 +284,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ "no-loopback-setup",   no_argument, NULL, OPTION_NO_LOOPBACK_SETUP    },
 		{ "no-init",             no_argument, NULL, OPTION_NO_INIT              },
 		{ "no-env",              no_argument, NULL, OPTION_NO_ENV               },
+		{ "no-safeguards",       no_argument, NULL, OPTION_NO_SAFEGUARDS        },
 
 		{ 0, 0, 0, 0 }
 	};
@@ -562,6 +564,10 @@ int main(int argc, char *argv[], char *envp[])
 
 			case OPTION_NO_ENV:
 				opts.no_env = 1;
+				break;
+
+			case OPTION_NO_SAFEGUARDS:
+				opts.no_safeguards = 1;
 				break;
 
 			case 'r':

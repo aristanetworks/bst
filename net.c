@@ -40,7 +40,7 @@ int init_rtnetlink_socket()
 	return sockfd;
 }
 
-static int nl_sendmsg(int sockfd, const struct iovec *iov, size_t iovlen)
+static int nl_sendmsg(int sockfd, struct ifinfomsg *out, const struct iovec *iov, size_t iovlen)
 {
 	struct sockaddr_nl addr = {
 		.nl_family = AF_NETLINK,
@@ -62,13 +62,21 @@ static int nl_sendmsg(int sockfd, const struct iovec *iov, size_t iovlen)
 		struct nlmsgerr err;
 	} resp;
 
-	if (recv(sockfd, &resp, sizeof (resp), MSG_TRUNC) == -1) {
+	ssize_t size = recv(sockfd, &resp, sizeof (resp), MSG_TRUNC);
+	if (size == -1) {
 		err(1, "nl_sendmsg: recv");
+	}
+	if (size < sizeof (resp)) {
+		errx(1, "nl_sendmsg: recv: response too short");
 	}
 
 	if (resp.hdr.nlmsg_type == NLMSG_ERROR && resp.err.error != 0) {
 		errno = -resp.err.error;
 		return -1;
+	}
+
+	if (out) {
+		//*out = resp.ifinfo;
 	}
 	return 0;
 }
@@ -210,7 +218,7 @@ static struct nic_handler nic_handlers[] = {
 	{ NULL, NULL },
 };
 
-void net_if_add(int sockfd, const struct nic_options *nicopts)
+unsigned net_if_add(int sockfd, const struct nic_options *nicopts)
 {
 	struct nlpkt pkt;
 	nlpkt_init(&pkt);
@@ -229,13 +237,17 @@ void net_if_add(int sockfd, const struct nic_options *nicopts)
 	}
 	handler(&pkt, nicopts);
 
+	struct ifinfomsg ifinfo;
 	struct iovec iov = { .iov_base = pkt.data, .iov_len = pkt.hdr->nlhdr.nlmsg_len };
 
-	if (nl_sendmsg(sockfd, &iov, 1) == -1) {
+	if (nl_sendmsg(sockfd, &ifinfo, &iov, 1) == -1) {
 		err(1, "if_add %s %.*s", nicopts->type, IF_NAMESIZE, nicopts->name);
 	}
 
 	nlpkt_close(&pkt);
+
+	printf("idx for %s: %d\n", nicopts->name, ifinfo.ifi_index);
+	return (int) ifinfo.ifi_index;
 }
 
 void net_if_rename(int sockfd, int link, const char *to)
@@ -251,7 +263,7 @@ void net_if_rename(int sockfd, int link, const char *to)
 
 	struct iovec iov = { .iov_base = pkt.data, .iov_len = pkt.hdr->nlhdr.nlmsg_len };
 
-	if (nl_sendmsg(sockfd, &iov, 1) == -1) {
+	if (nl_sendmsg(sockfd, NULL, &iov, 1) == -1) {
 		char name[IF_NAMESIZE];
 		if_indextoname((unsigned int)link, name);
 		err(1, "if_rename %.*s -> %.*s", IF_NAMESIZE, name, IF_NAMESIZE, to);
@@ -283,7 +295,7 @@ void net_if_up(int sockfd, const char *name)
 		{ .iov_base = &ifinfo, .iov_len = sizeof (ifinfo) },
 	};
 
-	if (nl_sendmsg(sockfd, iov, sizeof (iov) / sizeof (struct iovec)) == -1) {
+	if (nl_sendmsg(sockfd, NULL, iov, sizeof (iov) / sizeof (struct iovec)) == -1) {
 		err(1, "if_up %.*s", IF_NAMESIZE, name);
 	}
 }

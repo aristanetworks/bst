@@ -84,6 +84,7 @@ struct entry_settings {
 	int no_init;
 	int no_loopback_setup;
 	int no_env;
+	int no_safeguards;
 };
 
 int enter(struct entry_settings *opts);

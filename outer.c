@@ -138,7 +138,7 @@ static void create_nics(pid_t child_pid, struct nic_options *nics, size_t nnics)
 
 	for (size_t i = 0; i < nnics; ++i) {
 		nics[i].netns_pid = child_pid;
-		net_if_add(rtnl, &nics[i]);
+		nics[i].idx = net_if_add(rtnl, &nics[i]);
 	}
 
 	reset_capabilities();
@@ -267,6 +267,18 @@ void outer_helper_spawn(struct outer_helper *helper)
 		create_nics(child_pid, helper->nics, helper->nnics);
 	}
 
+	/* Send some context back to the parent process */
+	size_t remain = sizeof (helper->nics[0]) * helper->nnics;
+	char *ptr = (char *) helper->nics;
+	while (remain > 0) {
+		ssize_t size = write(pipefds_in[1], ptr, remain);
+		if (size == -1) {
+			err(1, "outer_helper: send context to parent");
+		}
+		ptr += remain;
+		remain -= size;
+	}
+
 	/* Notify sibling that we're done persisting their proc files
 	   and/or changing their [ug]id map */
 	int ok = 1;
@@ -286,10 +298,22 @@ void outer_helper_sendpid(const struct outer_helper *helper, pid_t pid)
 
 void outer_helper_sync(const struct outer_helper *helper)
 {
+	/* Copy back some context from the outer helper */
+	size_t remain = sizeof (helper->nics[0]) * helper->nnics;
+	char *ptr = (char *) helper->nics;
+	while (remain > 0) {
+		ssize_t size = read(helper->in, ptr, remain);
+		if (size == -1) {
+			err(1, "outer_helper_sync: read");
+		}
+		ptr += remain;
+		remain -= size;
+	}
+
 	int ok;
 	switch (read(helper->in, &ok, sizeof (ok))) {
 	case -1:
-		err(1, "outer_helper_wait: read");
+		err(1, "outer_helper_sync: read");
 	case 0:
 		/* Outer helper died before setting all of our attributes. */
 		exit(1);
