@@ -13,7 +13,7 @@
    * removes duplicate slashes
    * removes . components
    * cancels inner .. components with preceding components */
-static void cleanpath(char *path) {
+void cleanpath(char *path) {
 	if (path[0] == '/') {
 		++path;
 	}

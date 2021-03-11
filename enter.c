@@ -123,6 +123,7 @@ int enter(struct entry_settings *opts)
 	if (realpath(root, resolved_root) == NULL) {
 		err(1, "realpath %s", root);
 	}
+	cleanpath(resolved_root);
 	root = resolved_root;
 
 	char cwd[PATH_MAX];
@@ -152,8 +153,11 @@ int enter(struct entry_settings *opts)
 		workdir = "/";
 	}
 
+	// Only open by fd the target init if it resides outside of the target root.
+	// If it resides inside the root, we need symlink resolution to be done
+	// within the root itself.
 	int initfd = -1;
-	if (opts->init != NULL && opts->init[0] != '\0') {
+	if (opts->init != NULL && opts->init[0] != '\0' && strncmp(opts->init, root, strlen(root)) != 0) {
 		initfd = open(opts->init, O_PATH | O_CLOEXEC);
 		if (initfd == -1) {
 			err(1, "open %s", opts->init);
@@ -561,7 +565,7 @@ int enter(struct entry_settings *opts)
 		}
 	}
 
-	if (initfd != -1) {
+	if (opts->init != NULL && opts->init[0] != '\0') {
 
 		if (!pid_unshare && prctl(PR_SET_CHILD_SUBREAPER, 1) == -1) {
 			err(1, "prctl: could not set init as child subreaper");
@@ -579,18 +583,33 @@ int enter(struct entry_settings *opts)
 		}
 		argv[argc] = NULL;
 
+		if (initfd != -1) {
 #ifdef SYS_execveat
-		syscall(SYS_execveat, initfd, "", argv, opts->envp, AT_EMPTY_PATH);
-		if (errno != ENOSYS) {
-			err(1, "execveat %s", opts->init);
-		}
+			syscall(SYS_execveat, initfd, "", argv, opts->envp, AT_EMPTY_PATH);
+			if (errno != ENOSYS) {
+				err(1, "execveat %s", opts->init);
+			}
 #endif
-		char fdpath[PATH_MAX];
-		if ((size_t) snprintf(fdpath, sizeof (fdpath), "/proc/self/fd/%d", initfd) >= sizeof (fdpath)) {
-			errx(1, "/proc/self/fd/%d takes more than PATH_MAX bytes.", initfd);
+			char fdpath[PATH_MAX];
+			if ((size_t) snprintf(fdpath, sizeof (fdpath), "/proc/self/fd/%d", initfd) >= sizeof (fdpath)) {
+				errx(1, "/proc/self/fd/%d takes more than PATH_MAX bytes.", initfd);
+			}
+			execve(fdpath, argv, opts->envp);
+			err(1, "execve %s", opts->init);
+		} else {
+			// If we hit this, it means the requested init is within the target root.
+			// We need init resolution to be done relative to the target root.
+			size_t rootlen = strlen(root);
+			assert(strncmp(opts->init, root, rootlen) == 0);
+
+			if (rootlen == 1 && root[0] == '/') {
+				rootlen = 0;
+			}
+			const char *init = opts->init + rootlen;
+
+			execve(init, argv, opts->envp);
+			err(1, "execve %s", init);
 		}
-		execve(fdpath, argv, opts->envp);
-		err(1, "execve %s", opts->init);
 	} else {
 		execvpe(opts->pathname, opts->argv, opts->envp);
 		err(1, "execvpe %s", opts->pathname);

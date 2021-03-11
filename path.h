@@ -7,6 +7,7 @@
 #ifndef PATH_H_
 # define PATH_H_
 
+void cleanpath(char *path);
 void makepath_r(char *out, char *fmt, ...);
 char *makepath(char *fmt, ...);
 
