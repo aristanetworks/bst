@@ -119,6 +119,28 @@ static void update_mount_flags_and_options(unsigned long *mountflags, char *opts
 	*newopts = 0;
 }
 
+static void do_mount(const char *source, const char *target, const char *type, unsigned long flags, const char *options)
+{
+	if (mount(source, target, type, flags, options) == -1) {
+		err(1, "mount_entries: mount(\"%s\", \"%s\", \"%s\", %lu, \"%s\")",
+				source ? source : "null",
+				target,
+				type ? type : "null",
+				flags,
+				options ? options : "null");
+	}
+
+	/* Special case: we can't just do read-only bind mounts in a single step.
+	   instead, we have to remount it with MS_RDONLY afterwards.
+	   See mount(2) § "Remounting an existing mount". */
+
+	int ro_bind = (flags & (MS_BIND | MS_RDONLY)) == (MS_BIND | MS_RDONLY)
+			&& !(flags & MS_REMOUNT);
+	if (ro_bind && mount("none", target, NULL, flags | MS_REMOUNT, NULL) == -1) {
+		err(1, "mount_entries: read-only remount of %s", target);
+	}
+}
+
 void mount_entries(const char *root, const struct mount_entry *mounts, size_t nmounts, int no_derandomize)
 {
 	mode_t old_mask = umask(0);
@@ -130,14 +152,9 @@ void mount_entries(const char *root, const struct mount_entry *mounts, size_t nm
 		if (mnt->target[0] != '/') {
 			errx(1, "mount_entries: target \"%s\" must be an absolute path.", mnt->target);
 		}
-		const char *target = makepath("%s%s", root, mnt->target);
+		const char *mnt_target = mnt->target;
+		const char *target = makepath("%s%s", root, mnt_target);
 		const char *type = mnt->type;
-
-		/* Special case: we might want to construct a fake devtmpfs. We indicate that
-		   through a special mount fstype that we recognize. */
-		if (strcmp(mnt->type, "bst_devtmpfs") == 0) {
-			type = "tmpfs";
-		}
 
 		/* --mount options always override whatever default mounts we might have
 		   done prior to calling mount_entries. This is done to avoid EBUSY when
@@ -149,23 +166,20 @@ void mount_entries(const char *root, const struct mount_entry *mounts, size_t nm
 			umount2(target, MNT_DETACH);
 		}
 
-		if (mount(mnt->source, target, type, flags, mnt->options) == -1) {
-			err(1, "mount_entries: mount(\"%s\", \"%s\", \"%s\", %lu, \"%s\")",
-					mnt->source,
-					mnt->target,
-					type,
-					flags,
-					mnt->options);
+		/* Special case: we might want to construct a fake devtmpfs. We indicate that
+		   through a special mount fstype that we recognize. */
+		if (strcmp(mnt->type, "bst_devtmpfs") == 0) {
+			type = "tmpfs";
+
+			/* Use /tmp as temporary destination for our setup if our target
+			   is /dev. This is because we might bind-mount devices from /dev. */
+			if (strcmp(target, "/dev") == 0) {
+				target = "/tmp";
+				mnt_target = "/tmp";
+			}
 		}
 
-		/* Special case: we can't just do read-only bind mounts in a single step.
-		   instead, we have to remount it with MS_RDONLY afterwards. */
-
-		int ro_bind = (flags & (MS_BIND | MS_RDONLY)) == (MS_BIND | MS_RDONLY)
-				&& !(flags & MS_REMOUNT);
-		if (ro_bind && mount("none", target, NULL, flags | MS_REMOUNT, NULL) == -1) {
-			err(1, "mount_entries: read-only remount of %s", mnt->target);
-		}
+		do_mount(mnt->source, target, type, flags, mnt->options);
 
 		/* Construct the contents of our fake devtmpfs. */
 		if (strcmp(mnt->type, "bst_devtmpfs") == 0) {
@@ -180,7 +194,7 @@ void mount_entries(const char *root, const struct mount_entry *mounts, size_t nm
 			};
 
 			for (size_t i = 0; i < lengthof(directories); ++i) {
-				const char *path = makepath("%s%s/%s", root, mnt->target, directories[i].path);
+				const char *path = makepath("%s%s/%s", root, mnt_target, directories[i].path);
 
 				if (mkdir(path, directories[i].mode) == -1) {
 					err(1, "mount_entries: bst_devtmpfs: mkdir %s", path);
@@ -207,25 +221,24 @@ void mount_entries(const char *root, const struct mount_entry *mounts, size_t nm
 					continue;
 				}
 
-				const char *path = makepath("%s%s/%s", root, mnt->target, devices[i].path);
+				const char *path = makepath("%s%s/%s", root, mnt_target, devices[i].path);
 
 				if (mknod(path, devices[i].mode, devices[i].dev) == 0) {
 					continue;
 				}
 
-				/* Fallback: bind-mount device from host. This is only possible iff
-				   The source and destination don't overlap. */
+				/* Fallback: bind-mount device from host. */
 
-				char source[PATH_MAX];
-				makepath_r(source, "/dev/%s", devices[i].path);
-
-				if (errno != EPERM || strncmp(source, path, PATH_MAX) == 0) {
+				if (errno != EPERM) {
 					err(1, "mount_entries: bst_devtmpfs: mknod %s mode 0%o dev {%d, %d})",
 							path,
 							devices[i].mode,
 							major(devices[i].dev),
 							minor(devices[i].dev));
 				}
+
+				char source[PATH_MAX];
+				makepath_r(source, "/dev/%s", devices[i].path);
 
 				if (mknod(path, S_IFREG | (devices[i].mode & 0777), 0) == -1) {
 					err(1, "mount_entries: bst_devtmpfs: mknod %s mode 0%o",
@@ -253,11 +266,20 @@ void mount_entries(const char *root, const struct mount_entry *mounts, size_t nm
 			};
 
 			for (size_t i = 0; i < lengthof(symlinks); ++i) {
-				const char *path = makepath("%s%s/%s", root, mnt->target, symlinks[i].path);
+				const char *path = makepath("%s%s/%s", root, mnt_target, symlinks[i].path);
 
 				if (symlink(symlinks[i].target, path) == -1 && errno != EEXIST) {
 					err(1, "mount_entries: bst_devtmpfs: symlink %s -> %s",
 							symlinks[i].target, path);
+				}
+			}
+
+			const char *real_target = makepath("%s%s", root, mnt->target);
+			if (strcmp(real_target, "/dev") == 0) {
+				do_mount("/tmp", "/dev", NULL, MS_BIND | MS_REC, NULL);
+
+				if (umount2("/tmp", MNT_DETACH) == -1) {
+					err(1, "umount /tmp");
 				}
 			}
 		}
