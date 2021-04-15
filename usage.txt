@@ -40,6 +40,7 @@ Options:
                                     namespace mapping.
       --nic <nic>                   Create network interface in namespace.
       --ip <address>,<dev>          Add an IP address to the specified interface.
+      --route <route>               Add a route in the network namespace.
       --limit <res>=<hard>:<soft>,
       --limit <res>=<value>         Set the specified resource to the provided
                                     value(s).

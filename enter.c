@@ -451,6 +451,11 @@ int enter(struct entry_settings *opts)
 		for (size_t i = 0; i < opts->nnics; ++i) {
 			net_if_up(rtnl, opts->nics[i].name);
 		}
+
+		/* Add routes */
+		for (size_t i = 0; i < opts->nroutes; ++i) {
+			net_route_add(rtnl, &opts->routes[i]);
+		}
 	}
 
 	/* We have a special case for pivot_root: the syscall wants the

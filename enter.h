@@ -29,6 +29,7 @@ enum {
 	MAX_MOUNT = 4096,
 	MAX_NICS = 4096,
 	MAX_ADDRS = 4096,
+	MAX_ROUTES = 4096,
 };
 
 /* SHARE_WITH_PARENT is a special value for entry_settings.shares[ns]. */
@@ -68,6 +69,8 @@ struct entry_settings {
 	size_t nnics;
 	struct addr_options addrs[MAX_ADDRS];
 	size_t naddrs;
+	struct route_options routes[MAX_ROUTES];
+	size_t nroutes;
 
 	mode_t umask;
 

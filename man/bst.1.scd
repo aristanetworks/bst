@@ -222,6 +222,13 @@ _VAR=value_ before the executable to run.
 
 	You cannot use this option with _--share=net_.
 
+\--route [dst=(<ip>/<subnet>|default)][,src=<ip>][gateway=<ip>][,[options]]
+	Add a route in the inner process' network namespace.
+
+	You cannot use this option with _--share=net_.
+
+	Supported options are described in more detail in the *NETWORKING* section.
+
 \--limit <resource>=<value>++
 \--limit <resource>=[hard]:[soft]
 	Set the specified hard and soft resource limits of the specified resource
@@ -441,6 +448,26 @@ Supported interface types are:
 	- *l2* (default)
 	- *l3*
 	- *l3s*
+
+## Adding routes
+
+This section describes the options that _--route_ supports.
+
+*src*=<ip>
+	Set the source IP.
+
+*dst*=<ip>/<subnet>
+*dst*=default
+	Set the destination subnet. If _"default"_, the destination is /0.
+
+*gateway*=<ip>
+	Set the IP of the gateway.
+
+*dev*=<intf>
+	Use the specified interface as the output device.
+
+*metric*=<n>
+	Set the metric (or priority) of the route.
 
 # EXAMPLES
 

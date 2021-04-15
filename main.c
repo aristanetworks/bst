@@ -55,6 +55,7 @@ enum {
 	OPTION_NIC,
 	OPTION_PIDFILE,
 	OPTION_IP,
+	OPTION_ROUTE,
 	OPTION_NO_FAKE_DEVTMPFS,
 	OPTION_NO_DERANDOMIZE,
 	OPTION_NO_PROC_REMOUNT,
@@ -291,6 +292,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ "nic",                required_argument, NULL, OPTION_NIC             },
 		{ "pidfile",            required_argument, NULL, OPTION_PIDFILE         },
 		{ "ip",                 required_argument, NULL, OPTION_IP              },
+		{ "route",              required_argument, NULL, OPTION_ROUTE           },
 
 		/* Opt-out feature flags */
 		{ "no-copy-hard-limits", no_argument, NULL, OPTION_NO_COPY_HARD_LIMITS  },
@@ -588,6 +590,32 @@ int main(int argc, char *argv[], char *envp[])
 				}
 
 				opts.naddrs++;
+				break;
+			}
+
+			case OPTION_ROUTE:
+			{
+				if (opts.nroutes >= MAX_ADDRS) {
+					errx(1, "can only create a maximum of %d routes", MAX_ADDRS);
+				}
+				struct route_options *route = &opts.routes[opts.nroutes];
+
+				/* 16 is enough to support everything */
+				struct kvlist kvlist[16];
+				size_t nopts = sizeof (kvlist) / sizeof (*kvlist);
+				kvlist_parse(optarg, kvlist, nopts, NULL);
+
+				for (size_t i = 0; i < nopts; ++i) {
+					if (kvlist[i].key == NULL) {
+						continue;
+					}
+
+					if (kvlist[i].key != NULL) {
+						route_parse(route, kvlist[i].key, kvlist[i].value);
+					}
+				}
+
+				opts.nroutes++;
 				break;
 			}
 

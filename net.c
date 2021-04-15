@@ -82,6 +82,7 @@ struct nlpkt {
 		union {
 			struct ifinfomsg ifinfo;
 			struct ifaddrmsg ifaddr;
+			struct rtmsg rt;
 		};
 	} *hdr;
 	char *data;
@@ -296,6 +297,89 @@ void net_if_up(int sockfd, const char *name)
 	}
 }
 
+void net_route_add(int sockfd, const struct route_options *route)
+{
+	struct nlpkt pkt;
+	nlpkt_init(&pkt, sizeof (struct rtmsg));
+
+	pkt.hdr->nlhdr.nlmsg_type = RTM_NEWROUTE;
+	pkt.hdr->nlhdr.nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_EXCL | NLM_F_CREATE;
+
+	pkt.hdr->rt.rtm_family = route->type;
+	pkt.hdr->rt.rtm_dst_len = route->dst.prefix_length;
+	pkt.hdr->rt.rtm_src_len = route->src.prefix_length;
+	pkt.hdr->rt.rtm_table = RT_TABLE_MAIN;
+	pkt.hdr->rt.rtm_protocol = RTPROT_BOOT;
+	pkt.hdr->rt.rtm_scope = RT_SCOPE_UNIVERSE;
+	pkt.hdr->rt.rtm_type = RTN_UNICAST;
+
+	const void *dst_ptr, *src_ptr, *gateway_ptr;
+	size_t ip_sz;
+
+	switch (route->type) {
+	case AF_INET6:
+		ip_sz = sizeof (route->src.v6);
+		gateway_ptr = &route->gateway.v6;
+		dst_ptr = &route->dst.v6;
+		src_ptr = &route->src.v6;
+		break;
+	case AF_INET:
+		ip_sz = sizeof (route->src.v4);
+		gateway_ptr = &route->gateway.v4;
+		dst_ptr = &route->dst.v4;
+		src_ptr = &route->src.v4;
+		break;
+	default:
+		err(1, "route must either be ipv6 or ipv4");
+	}
+
+	if (route->gateway.type != 0) {
+		nlpkt_add_attr_sz(&pkt, RTA_GATEWAY, gateway_ptr, ip_sz, 0);
+	}
+	if (route->src.type != 0) {
+		nlpkt_add_attr_sz(&pkt, RTA_SRC, src_ptr, ip_sz, 0);
+	}
+	if (route->dst.type != 0) {
+		nlpkt_add_attr_sz(&pkt, RTA_DST, dst_ptr, ip_sz, 0);
+	}
+	if (route->metric > 0) {
+		nlpkt_add_attr(&pkt, RTA_PRIORITY, route->metric);
+	}
+	if (route->intf[0] != '\0') {
+		uint32_t link_idx = if_nametoindex(route->intf);
+		if (link_idx == 0) {
+			err(1, "if_nametoindex %s", route->intf);
+		}
+		nlpkt_add_attr(&pkt, RTA_OIF, link_idx);
+	}
+
+	struct iovec iov = { .iov_base = pkt.data, .iov_len = pkt.hdr->nlhdr.nlmsg_len };
+
+	if (nl_sendmsg(sockfd, &iov, 1) == -1) {
+		char dst[INET6_ADDRSTRLEN+1];
+		char src[INET6_ADDRSTRLEN+1];
+		char gateway[INET6_ADDRSTRLEN+1];
+
+		inet_ntop(route->type, dst_ptr, dst, sizeof (dst));
+		dst[INET6_ADDRSTRLEN] = '\0';
+
+		inet_ntop(route->type, src_ptr, src, sizeof (src));
+		src[INET6_ADDRSTRLEN] = '\0';
+
+		inet_ntop(route->type, gateway_ptr, gateway, sizeof (gateway));
+		gateway[INET6_ADDRSTRLEN] = '\0';
+
+		err(1, "route_add %s/%d via %s/%d src %s/%d dev %.*s metric %d",
+				dst, route->dst.prefix_length,
+				gateway, route->gateway.prefix_length,
+				src, route->src.prefix_length,
+				IF_NAMESIZE, route->intf,
+				route->metric);
+	}
+
+	nlpkt_close(&pkt);
+}
+
 void net_addr_add(int sockfd, const struct addr_options *addr)
 {
 	struct nlpkt pkt;
@@ -439,7 +523,7 @@ void nic_parse(struct nic_options *nic, const char *key, const char *val)
 	errx(1, "unknown option '%s' for interface type '%s'", key, nic->type);
 }
 
-static void addr_parse_ip(struct addr_options *addr, const char *data)
+static void parse_ip(struct ip *ip, const char *data)
 {
 	char copy[64];
 	if (strlcpy(copy, data, sizeof(copy)) != strlen(data)) {
@@ -454,16 +538,16 @@ static void addr_parse_ip(struct addr_options *addr, const char *data)
 
 	void *buf;
 	if (strchr(copy, ':') != NULL) {
-		addr->ip.type = AF_INET6;
-		addr->ip.prefix_length = 128;
-		buf = &addr->ip.v6;
+		ip->type = AF_INET6;
+		ip->prefix_length = 128;
+		buf = &ip->v6;
 	} else {
-		addr->ip.type = AF_INET;
-		addr->ip.prefix_length = 32;
-		buf = &addr->ip.v4;
+		ip->type = AF_INET;
+		ip->prefix_length = 32;
+		buf = &ip->v4;
 	}
 
-	if (inet_pton(addr->ip.type, copy, buf) == -1) {
+	if (inet_pton(ip->type, copy, buf) == -1) {
 		err(1, "invalid IP address '%s'", copy);
 	}
 
@@ -473,13 +557,18 @@ static void addr_parse_ip(struct addr_options *addr, const char *data)
 
 	errno = 0;
 	long val = strtol(prefix_length, NULL, 10);
-	if (val < 0 || (addr->ip.type == AF_INET && val > 32) || (addr->ip.type == AF_INET6 && val > 128)) {
+	if (val < 0 || (ip->type == AF_INET && val > 32) || (ip->type == AF_INET6 && val > 128)) {
 		errno = ERANGE;
 	}
 	if (errno != 0) {
 		err(1, "invalid prefix length '%s'", prefix_length);
 	}
-	addr->ip.prefix_length = (uint8_t) val;
+	ip->prefix_length = (uint8_t) val;
+}
+
+static void addr_parse_ip(struct addr_options *addr, const char *data)
+{
+	parse_ip(&addr->ip, data);
 }
 
 static void addr_parse_link(struct addr_options *addr, const char *v)
@@ -508,4 +597,78 @@ void addr_parse(struct addr_options *addr, const char *key, const char *val)
 		return;
 	}
 	errx(1, "unknown option '%s' for address", key);
+}
+
+static void route_parse_ip(struct route_options *route, struct ip *ip, const char *data)
+{
+	parse_ip(ip, data);
+	if (route->type == 0) {
+		route->type = ip->type;
+	}
+	if (route->type != ip->type) {
+		errx(1, "route IPs must either all be IPv4, or all be IPv6.");
+	}
+}
+
+static void route_parse_src(struct route_options *route, const char *data)
+{
+	route_parse_ip(route, &route->src, data);
+}
+
+static void route_parse_dst(struct route_options *route, const char *data)
+{
+	if (strcmp(data, "default") == 0) {
+		// Equivalent to parsing 0.0.0.0/0 or ::/128
+		return;
+	}
+	route_parse_ip(route, &route->dst, data);
+}
+
+static void route_parse_gateway(struct route_options *route, const char *data)
+{
+	route_parse_ip(route, &route->gateway, data);
+}
+
+static void route_parse_dev(struct route_options *route, const char *data)
+{
+	strlcpy(route->intf, data, IF_NAMESIZE);
+}
+
+static void route_parse_metric(struct route_options *route, const char *data)
+{
+	errno = 0;
+	long long val = strtoll(data, NULL, 10);
+	if (val < 0) {
+		errno = ERANGE;
+	}
+	if (errno != 0) {
+		err(1, "invalid metric");
+	}
+	route->metric = (uint32_t) val;
+}
+
+void route_parse(struct route_options *route, const char *key, const char *val)
+{
+	struct optmap {
+		const char *opt;
+		void (*fn)(struct route_options *, const char *);
+	};
+
+	static struct optmap opts[] = {
+		{ "src",     route_parse_src },
+		{ "dst",     route_parse_dst },
+		{ "gateway", route_parse_gateway },
+		{ "dev",     route_parse_dev },
+		{ "metric",  route_parse_metric },
+		{ NULL, NULL },
+	};
+
+	for (struct optmap *e = &opts[0]; e->opt != NULL; ++e) {
+		if (strcmp(key, e->opt) != 0) {
+			continue;
+		}
+		e->fn(route, val);
+		return;
+	}
+	errx(1, "unknown option '%s' for route", key);
 }
