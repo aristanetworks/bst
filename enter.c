@@ -442,6 +442,11 @@ int enter(struct entry_settings *opts)
 			net_if_up(rtnl, "lo");
 		}
 
+		/* Add addresses */
+		for (size_t i = 0; i < opts->naddrs; ++i) {
+			net_addr_add(rtnl, &opts->addrs[i]);
+		}
+
 		/* Bring up the rest of the nics */
 		for (size_t i = 0; i < opts->nnics; ++i) {
 			net_if_up(rtnl, opts->nics[i].name);

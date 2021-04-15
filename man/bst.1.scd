@@ -214,6 +214,14 @@ _VAR=value_ before the executable to run.
 	Supported interface types and valid options are described in more detail
 	in the *NETWORKING* section.
 
+\--ip [ip=]<ip-address>[/<subnet>],[dev=]<device-name>
+	Add the specified IPv4 or IPv6 address to the specified device in the inner
+	process' network namespace.
+
+	Specifying a subnet to an IPv4 address sets the corresponding broadcast address.
+
+	You cannot use this option with _--share=net_.
+
 \--limit <resource>=<value>++
 \--limit <resource>=[hard]:[soft]
 	Set the specified hard and soft resource limits of the specified resource
@@ -404,6 +412,8 @@ The following environment variables are accessible to the setup program:
 
 # NETWORKING
 
+## Creating network interfaces
+
 This section describes the supported interface types and options that can
 be used with _--nic_ in a network namespace.
 
@@ -411,8 +421,6 @@ Supported interface types are:
 - *dummy*
 - *macvlan*
 - *ipvlan*
-
-## Options
 
 *macvlan*
 	*link=<host-interface>*: attach the MACVLAN interface to the specified

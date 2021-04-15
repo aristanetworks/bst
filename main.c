@@ -54,6 +54,7 @@ enum {
 	OPTION_GIDMAP,
 	OPTION_NIC,
 	OPTION_PIDFILE,
+	OPTION_IP,
 	OPTION_NO_FAKE_DEVTMPFS,
 	OPTION_NO_DERANDOMIZE,
 	OPTION_NO_PROC_REMOUNT,
@@ -289,6 +290,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ "gid-map",            required_argument, NULL, OPTION_GIDMAP          },
 		{ "nic",                required_argument, NULL, OPTION_NIC             },
 		{ "pidfile",            required_argument, NULL, OPTION_PIDFILE         },
+		{ "ip",                 required_argument, NULL, OPTION_IP              },
 
 		/* Opt-out feature flags */
 		{ "no-copy-hard-limits", no_argument, NULL, OPTION_NO_COPY_HARD_LIMITS  },
@@ -537,6 +539,55 @@ int main(int argc, char *argv[], char *envp[])
 				}
 
 				opts.nnics++;
+				break;
+			}
+
+			case OPTION_IP:
+			{
+				if (opts.naddrs >= MAX_ADDRS) {
+					errx(1, "can only create a maximum of %d addresses", MAX_ADDRS);
+				}
+				struct addr_options *addr = &opts.addrs[opts.naddrs];
+
+				/* 16 is enough to support everything */
+				struct kvlist kvlist[16];
+				size_t nopts = sizeof (kvlist) / sizeof (*kvlist);
+				kvlist_parse(optarg, kvlist, nopts, NULL);
+
+				/* Only the first two argument need not be key-value pairs */
+				size_t start = 0;
+				if (kvlist[start].key != NULL && kvlist[start].value == NULL) {
+					kvlist[start].value = kvlist[start].key;
+					kvlist[start++].key = "ip";
+				}
+				if (kvlist[start].key != NULL && kvlist[start].value == NULL) {
+					kvlist[start].value = kvlist[start].key;
+					kvlist[start++].key = "dev";
+				}
+
+				int has_link = 0;
+				int has_addr = 0;
+				for (size_t i = 0; i < nopts; ++i) {
+					if (kvlist[i].key == NULL) {
+						continue;
+					}
+
+					has_link = has_link || strcmp(kvlist[i].key, "dev") == 0;
+					has_addr = has_addr || strcmp(kvlist[i].key, "ip") == 0;
+
+					if (kvlist[i].key != NULL) {
+						addr_parse(addr, kvlist[i].key, kvlist[i].value);
+					}
+				}
+
+				if (!has_link) {
+					errx(1, "ip: must at least specify an interface to add the address to");
+				}
+				if (!has_addr) {
+					errx(1, "ip: must at least specify an IP address");
+				}
+
+				opts.naddrs++;
 				break;
 			}
 

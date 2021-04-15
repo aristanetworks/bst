@@ -4,6 +4,7 @@
  * in the LICENSE file.
  */
 
+#include <arpa/inet.h>
 #include <assert.h>
 #include <err.h>
 #include <errno.h>
@@ -18,6 +19,7 @@
 #include <string.h>
 #include <sys/socket.h>
 
+#include "compat.h"
 #include "net.h"
 
 // NLA_HDRLEN is defined with -Wsign-conversion errors, so just define our own here,
@@ -77,18 +79,21 @@ static int nl_sendmsg(int sockfd, const struct iovec *iov, size_t iovlen)
 struct nlpkt {
 	struct {
 		struct nlmsghdr nlhdr;
-		struct ifinfomsg ifinfo;
+		union {
+			struct ifinfomsg ifinfo;
+			struct ifaddrmsg ifaddr;
+		};
 	} *hdr;
 	char *data;
 	size_t capacity;
 };
 
-static void nlpkt_init(struct nlpkt *pkt)
+static void nlpkt_init(struct nlpkt *pkt, size_t hdr_extra_size)
 {
 	pkt->data = calloc(1, 4096);
 	pkt->capacity = 4096;
 	pkt->hdr = (void *) pkt->data;
-	pkt->hdr->nlhdr.nlmsg_len = NLMSG_HDRLEN + NLMSG_ALIGN(sizeof (struct ifinfomsg));
+	pkt->hdr->nlhdr.nlmsg_len = NLMSG_HDRLEN + NLMSG_ALIGN(hdr_extra_size);
 }
 
 static void nlpkt_close(struct nlpkt *pkt)
@@ -214,7 +219,7 @@ static struct nic_handler nic_handlers[] = {
 void net_if_add(int sockfd, const struct nic_options *nicopts)
 {
 	struct nlpkt pkt;
-	nlpkt_init(&pkt);
+	nlpkt_init(&pkt, sizeof (struct ifinfomsg));
 
 	pkt.hdr->nlhdr.nlmsg_type = RTM_NEWLINK;
 	pkt.hdr->nlhdr.nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_EXCL | NLM_F_CREATE;
@@ -244,7 +249,7 @@ void net_if_add(int sockfd, const struct nic_options *nicopts)
 void net_if_rename(int sockfd, int link, const char *to)
 {
 	struct nlpkt pkt;
-	nlpkt_init(&pkt);
+	nlpkt_init(&pkt, sizeof (struct ifinfomsg));
 
 	pkt.hdr->nlhdr.nlmsg_type = RTM_NEWLINK;
 	pkt.hdr->nlhdr.nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK;
@@ -289,6 +294,51 @@ void net_if_up(int sockfd, const char *name)
 	if (nl_sendmsg(sockfd, iov, sizeof (iov) / sizeof (struct iovec)) == -1) {
 		err(1, "if_up %.*s", IF_NAMESIZE, name);
 	}
+}
+
+void net_addr_add(int sockfd, const struct addr_options *addr)
+{
+	struct nlpkt pkt;
+	nlpkt_init(&pkt, sizeof (struct ifaddrmsg));
+
+	pkt.hdr->nlhdr.nlmsg_type = RTM_NEWADDR;
+	pkt.hdr->nlhdr.nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_EXCL | NLM_F_CREATE;
+
+	uint32_t link_idx = if_nametoindex(addr->intf);
+	if (link_idx == 0) {
+		err(1, "if_nametoindex %s", addr->intf);
+	}
+
+	pkt.hdr->ifaddr.ifa_family = addr->ip.type;
+	pkt.hdr->ifaddr.ifa_prefixlen = addr->ip.prefix_length;
+	pkt.hdr->ifaddr.ifa_scope = RT_SCOPE_UNIVERSE;
+	pkt.hdr->ifaddr.ifa_index = link_idx;
+
+	switch (addr->ip.type) {
+	case AF_INET6:
+		nlpkt_add_attr(&pkt, IFA_LOCAL, addr->ip.v6);
+		nlpkt_add_attr(&pkt, IFA_ADDRESS, addr->ip.v6);
+		break;
+	case AF_INET:
+		{
+			nlpkt_add_attr(&pkt, IFA_LOCAL, addr->ip.v4);
+			uint32_t broadcast = htonl(ntohl(*(uint32_t*)&addr->ip.v4) | (uint32_t) ((1 << (32 - addr->ip.prefix_length)) - 1));
+			nlpkt_add_attr(&pkt, IFA_BROADCAST, broadcast);
+			nlpkt_add_attr(&pkt, IFA_ADDRESS, addr->ip.v4);
+		}
+		break;
+	}
+
+	struct iovec iov = { .iov_base = pkt.data, .iov_len = pkt.hdr->nlhdr.nlmsg_len };
+
+	if (nl_sendmsg(sockfd, &iov, 1) == -1) {
+		char ip[INET6_ADDRSTRLEN+1];
+		inet_ntop(addr->ip.type, &addr->ip.v6, ip, sizeof (ip));
+		ip[INET6_ADDRSTRLEN] = '\0';
+		err(1, "addr_add %s/%d %.*s", ip, addr->ip.prefix_length, IF_NAMESIZE, addr->intf);
+	}
+
+	nlpkt_close(&pkt);
 }
 
 struct valmap {
@@ -387,4 +437,75 @@ void nic_parse(struct nic_options *nic, const char *key, const char *val)
 		return;
 	}
 	errx(1, "unknown option '%s' for interface type '%s'", key, nic->type);
+}
+
+static void addr_parse_ip(struct addr_options *addr, const char *data)
+{
+	char copy[64];
+	if (strlcpy(copy, data, sizeof(copy)) != strlen(data)) {
+		errx(1, "invalid IP address '%s': string too large", data);
+	}
+
+	/* Split the ip into its address and prefix length component */
+	char *prefix_length = strchr(copy, '/');
+	if (prefix_length != NULL) {
+		*(prefix_length++) = 0;
+	}
+
+	void *buf;
+	if (strchr(copy, ':') != NULL) {
+		addr->ip.type = AF_INET6;
+		addr->ip.prefix_length = 128;
+		buf = &addr->ip.v6;
+	} else {
+		addr->ip.type = AF_INET;
+		addr->ip.prefix_length = 32;
+		buf = &addr->ip.v4;
+	}
+
+	if (inet_pton(addr->ip.type, copy, buf) == -1) {
+		err(1, "invalid IP address '%s'", copy);
+	}
+
+	if (prefix_length == NULL) {
+		return;
+	}
+
+	errno = 0;
+	long val = strtol(prefix_length, NULL, 10);
+	if (val < 0 || (addr->ip.type == AF_INET && val > 32) || (addr->ip.type == AF_INET6 && val > 128)) {
+		errno = ERANGE;
+	}
+	if (errno != 0) {
+		err(1, "invalid prefix length '%s'", prefix_length);
+	}
+	addr->ip.prefix_length = (uint8_t) val;
+}
+
+static void addr_parse_link(struct addr_options *addr, const char *v)
+{
+	strlcpy(addr->intf, v, IF_NAMESIZE);
+}
+
+void addr_parse(struct addr_options *addr, const char *key, const char *val)
+{
+	struct optmap {
+		const char *opt;
+		void (*fn)(struct addr_options *, const char *);
+	};
+
+	static struct optmap opts[] = {
+		{ "ip",  addr_parse_ip },
+		{ "dev", addr_parse_link },
+		{ NULL, NULL },
+	};
+
+	for (struct optmap *e = &opts[0]; e->opt != NULL; ++e) {
+		if (strcmp(key, e->opt) != 0) {
+			continue;
+		}
+		e->fn(addr, val);
+		return;
+	}
+	errx(1, "unknown option '%s' for address", key);
 }

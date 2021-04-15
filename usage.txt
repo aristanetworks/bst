@@ -39,6 +39,7 @@ Options:
       --gid-map=<map>               Use the specified gid map for the user
                                     namespace mapping.
       --nic <nic>                   Create network interface in namespace.
+      --ip <address>,<dev>          Add an IP address to the specified interface.
       --limit <res>=<hard>:<soft>,
       --limit <res>=<value>         Set the specified resource to the provided
                                     value(s).
