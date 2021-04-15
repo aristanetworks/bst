@@ -23,6 +23,7 @@
 
 #include "bst_limits.h"
 #include "capable.h"
+#include "compat.h"
 #include "enter.h"
 #include "kvlist.h"
 #include "util.h"
@@ -479,20 +480,24 @@ int main(int argc, char *argv[], char *envp[])
 
 				/* Only the first two argument need not be key-value pairs */
 				size_t start = 0;
-				if (kvlist[start].value == NULL)
-					strncpy(nic->name, kvlist[start++].key, sizeof (nic->name));
-				if (kvlist[start].value == NULL)
-					strncpy(nic->type, kvlist[start++].key, sizeof (nic->type));
+				if (kvlist[start].key != NULL && kvlist[start].value == NULL) {
+					kvlist[start].value = kvlist[start].key;
+					kvlist[start++].key = "name";
+				}
+				if (kvlist[start].key != NULL && kvlist[start].value == NULL) {
+					kvlist[start].value = kvlist[start].key;
+					kvlist[start++].key = "type";
+				}
 
 				/* Do a first pass to find name= and type= keys */
-				for (size_t i = start; i < nopts; ++i) {
+				for (size_t i = 0; i < nopts; ++i) {
 					if (kvlist[i].key == NULL) {
 						continue;
 					}
 					if (strcmp(kvlist[i].key, "name") == 0) {
-						strncpy(nic->name, kvlist[i].value, sizeof (nic->name));
+						strlcpy(nic->name, kvlist[i].value, sizeof (nic->name));
 					} else if (strcmp(kvlist[i].key, "type") == 0) {
-						strncpy(nic->type, kvlist[i].value, sizeof (nic->type));
+						strlcpy(nic->type, kvlist[i].value, sizeof (nic->type));
 					} else {
 						continue;
 					}

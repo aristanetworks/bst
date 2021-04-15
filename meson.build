@@ -75,6 +75,7 @@ unpersist = executable('bst-unpersist', bst_unpersist_sources, install: true)
 bst_sources = [
 	'bst_limits.c',
 	'capable.c',
+	'compat.c',
 	'enter.c',
 	'kvlist.c',
 	'main.c',
