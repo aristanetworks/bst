@@ -63,20 +63,44 @@ what=$1
 if [ -f "$what" -a -x "$what" ]; then
 
 	# reset environment, and define sensible defaults
-	env -i PATH="$PATH" LC_ALL=C TERM=dumb CRAM_PATH=$(dirname $0) \
+	env -i PATH="$PATH:$(dirname $0)" LC_ALL=C TERM=dumb CRAM_PATH=$(dirname $0) \
 		gawk -v what="$what" <"$what" >"$what".err '
-	match($0, /^([[:space:]]+)\$(.*)$/, m) {
-		print $0
-		while ( ( "(" m[2] "\n) 2>&1 || echo [$?]" | getline ln ) > 0 ) {
-			print m[1] ln
+	function maybe_exec() {
+		if (cmd != "") {
+			while ( ( "( set -eu\n" cmd "\n) 2>&1 || echo \\[$?\\]" | getline ln ) > 0 ) {
+				print indent ln
+			}
+			cmd = ""
+			indent = ""
+			next_re = ""
 		}
 	}
-	/^([^[:space:]].*)$/ {
+
+	match($0, /^([[:space:]]+)\$([[:space:]])(.*)$/, m) {
+		maybe_exec()
 		print $0
-		print $0 | "cat 1>&2"
+
+		cmd = m[3]
+		indent = m[1]
+        next_re = "^" indent ">(" m[2] ")?(.*)$"
 	}
-	/^$/ {
+
+	{
+		if (next_re != "") {
+			if (match($0, next_re, m)) {
+				print $0
+				cmd = cmd "\n" m[2]
+			}
+		}
+	}
+
+	/^([^[:space:]].*|)$/ {
+		maybe_exec()
 		print $0
+	}
+
+	END {
+		maybe_exec()
 	}
 	'
 
@@ -96,6 +120,7 @@ if [ -f "$what" -a -x "$what" ]; then
 		>&2 echo "patched $what with new changes."
 	fi
 
+	rm -f "$what.err"
 	exit "$status"
 fi
 
