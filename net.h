@@ -7,6 +7,7 @@
 #ifndef NET_H
 # define NET_H
 
+# include <net/ethernet.h>
 # include <net/if.h>
 # include <stdint.h>
 
@@ -23,6 +24,8 @@ struct nic_options {
 	char name[IF_NAMESIZE];
 	unsigned link_idx;
 	pid_t netns_pid;
+	struct ether_addr address;
+	struct ether_addr broadcast;
 	union {
 		struct macvlan macvlan;
 		struct ipvlan ipvlan;

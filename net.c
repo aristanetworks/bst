@@ -11,6 +11,7 @@
 #include <limits.h>
 #include <linux/rtnetlink.h>
 #include <net/if.h>
+#include <netinet/ether.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -219,6 +220,8 @@ void net_if_add(int sockfd, const struct nic_options *nicopts)
 	pkt.hdr->nlhdr.nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_EXCL | NLM_F_CREATE;
 
 	nlpkt_add_attr(&pkt, IFLA_NET_NS_PID, nicopts->netns_pid);
+	nlpkt_add_attr(&pkt, IFLA_ADDRESS, nicopts->address);
+	nlpkt_add_attr(&pkt, IFLA_BROADCAST, nicopts->broadcast);
 
 	nic_handler_func *handler = add_default_attrs;
 	for (struct nic_handler *h = nic_handlers; h->name; ++h) {
@@ -341,6 +344,20 @@ static void nic_parse_link(struct nic_options *nic, const char *v)
 	}
 }
 
+static void nic_parse_address(struct nic_options *nic, const char *v)
+{
+	if (ether_aton_r(v, &nic->address) == NULL) {
+		errx(1, "%s is not a valid MAC address (must be in format aa:bb:cc:dd:ee:ff).", v);
+	}
+}
+
+static void nic_parse_brd(struct nic_options *nic, const char *v)
+{
+	if (ether_aton_r(v, &nic->address) == NULL) {
+		errx(1, "%s is not a valid MAC address (must be in format aa:bb:cc:dd:ee:ff).", v);
+	}
+}
+
 void nic_parse(struct nic_options *nic, const char *key, const char *val)
 {
 	struct optmap {
@@ -350,15 +367,17 @@ void nic_parse(struct nic_options *nic, const char *key, const char *val)
 	};
 
 	static struct optmap opts[] = {
-		{ "macvlan", "mode", nic_parse_macvlan_mode },
-		{ "macvlan", "link", nic_parse_link },
-		{ "ipvlan",  "mode", nic_parse_ipvlan_mode  },
-		{ "ipvlan",  "link", nic_parse_link },
+		{ "macvlan", "mode",    nic_parse_macvlan_mode },
+		{ "macvlan", "link",    nic_parse_link },
+		{ "ipvlan",  "mode",    nic_parse_ipvlan_mode  },
+		{ "ipvlan",  "link",    nic_parse_link },
+		{ "",        "address", nic_parse_address },
+		{ "",        "brd",     nic_parse_brd },
 		{ NULL, NULL, NULL },
 	};
 
 	for (struct optmap *e = &opts[0]; e->nictype != NULL; ++e) {
-		if (strncmp(nic->type, e->nictype, sizeof (nic->type)) != 0) {
+		if (e->nictype[0] != '\0' && strncmp(nic->type, e->nictype, sizeof (nic->type)) != 0) {
 			continue;
 		}
 		if (strcmp(key, e->opt) != 0) {
