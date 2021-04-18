@@ -67,5 +67,6 @@ void net_route_add(int sockfd, const struct route_options *route);
 void route_parse(struct route_options *route, const char *key, const char *val);
 void addr_parse(struct addr_options *addr, const char *key, const char *val);
 void nic_parse(struct nic_options *nic, const char *key, const char *val);
+void nic_set_defaults(struct nic_options *nic, size_t num);
 
 #endif /* !NET_H */

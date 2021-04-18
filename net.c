@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 
 #include "compat.h"
 #include "net.h"
@@ -487,7 +488,7 @@ static void nic_parse_address(struct nic_options *nic, const char *v)
 
 static void nic_parse_brd(struct nic_options *nic, const char *v)
 {
-	if (ether_aton_r(v, &nic->address) == NULL) {
+	if (ether_aton_r(v, &nic->broadcast) == NULL) {
 		errx(1, "%s is not a valid MAC address (must be in format aa:bb:cc:dd:ee:ff).", v);
 	}
 }
@@ -521,6 +522,35 @@ void nic_parse(struct nic_options *nic, const char *key, const char *val)
 		return;
 	}
 	errx(1, "unknown option '%s' for interface type '%s'", key, nic->type);
+}
+
+static uint32_t get_netns_id(void)
+{
+	static uint32_t id;
+	if (id == 0) {
+		struct stat info;
+		if (stat("/proc/self/ns/net", &info) == -1) {
+			err(1, "stat /proc/self/ns/net");
+		}
+		id = (uint32_t) info.st_ino;
+	}
+	return id;
+}
+
+void nic_set_defaults(struct nic_options *nic, size_t num)
+{
+	// Generate a deterministic local unicast MAC address based off
+	// the interface number and the netns id.
+	uint16_t id = (uint16_t) num;
+	uint32_t netns_id = get_netns_id();
+	nic->address.ether_addr_octet[0] = (uint8_t) 0xb2;
+	nic->address.ether_addr_octet[1] = (uint8_t) 0x57;
+	nic->address.ether_addr_octet[2] = (uint8_t) ((netns_id >> 8) & 0xff);
+	nic->address.ether_addr_octet[3] = (uint8_t) ((netns_id >> 0) & 0xff);
+	nic->address.ether_addr_octet[4] = (uint8_t) ((id >>  8) & 0xff);
+	nic->address.ether_addr_octet[5] = (uint8_t) ((id >>  0) & 0xff);
+
+	memset(&nic->broadcast, 0xff, sizeof (nic->broadcast));
 }
 
 static void parse_ip(struct ip *ip, const char *data)
