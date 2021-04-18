@@ -428,10 +428,10 @@ void net_addr_add(int sockfd, const struct addr_options *addr)
 
 struct valmap {
 	const char *name;
-	void *val;
+	const void *val;
 };
 
-static int nic_parse_val(void *dst, size_t size, const struct valmap *map, const char *name)
+static int parse_val(void *dst, size_t size, const struct valmap *map, const char *name)
 {
 	for (const struct valmap *e = &map[0]; e->name != NULL; ++e) {
 		if (strcmp(name, e->name) != 0) {
@@ -443,30 +443,32 @@ static int nic_parse_val(void *dst, size_t size, const struct valmap *map, const
 	return -1;
 }
 
+static const struct valmap macvlan_mode_values[] = {
+	{ "private",  &(const uint32_t) { MACVLAN_MODE_PRIVATE  } },
+	{ "vepa",     &(const uint32_t) { MACVLAN_MODE_VEPA     } },
+	{ "bridge",   &(const uint32_t) { MACVLAN_MODE_BRIDGE   } },
+	{ "passthru", &(const uint32_t) { MACVLAN_MODE_PASSTHRU } },
+	{ "source",   &(const uint32_t) { MACVLAN_MODE_SOURCE   } },
+	{ NULL, NULL },
+};
+
 static void nic_parse_macvlan_mode(struct nic_options *nic, const char *v)
 {
-	struct valmap map[] = {
-		{ "private",  &(uint32_t) { MACVLAN_MODE_PRIVATE  } },
-		{ "vepa",     &(uint32_t) { MACVLAN_MODE_VEPA     } },
-		{ "bridge",   &(uint32_t) { MACVLAN_MODE_BRIDGE   } },
-		{ "passthru", &(uint32_t) { MACVLAN_MODE_PASSTHRU } },
-		{ "source",   &(uint32_t) { MACVLAN_MODE_SOURCE   } },
-		{ NULL, NULL },
-	};
-	if (nic_parse_val(&nic->macvlan.mode, sizeof (nic->macvlan.mode), map, v) == -1) {
+	if (parse_val(&nic->macvlan.mode, sizeof (nic->macvlan.mode), macvlan_mode_values, v) == -1) {
 		errx(1, "invalid MACVLAN mode %s", v);
 	}
 }
 
+static const struct valmap ipvlan_mode_values[] = {
+	{ "l2",  &(const uint32_t) { IPVLAN_MODE_L2  } },
+	{ "l3",  &(const uint32_t) { IPVLAN_MODE_L3  } },
+	{ "l3s", &(const uint32_t) { IPVLAN_MODE_L3S } },
+	{ NULL, NULL },
+};
+
 static void nic_parse_ipvlan_mode(struct nic_options *nic, const char *v)
 {
-	struct valmap map[] = {
-		{ "l2",  &(uint32_t) { IPVLAN_MODE_L2  } },
-		{ "l3",  &(uint32_t) { IPVLAN_MODE_L3  } },
-		{ "l3s", &(uint32_t) { IPVLAN_MODE_L3S } },
-		{ NULL, NULL },
-	};
-	if (nic_parse_val(&nic->ipvlan.mode, sizeof (nic->ipvlan.mode), map, v) == -1) {
+	if (parse_val(&nic->ipvlan.mode, sizeof (nic->ipvlan.mode), ipvlan_mode_values, v) == -1) {
 		errx(1, "invalid IPVLAN mode %s", v);
 	}
 }
