@@ -39,3 +39,24 @@ Adding addresses
 	       valid_lft forever preferred_lft forever
 	    inet6 fe80::fced:deff:fead:beef/64 scope link tentative 
 	       valid_lft forever preferred_lft forever
+
+Adding routes
+
+	$ bst --route gateway=1.1.1.1 -- ip route show
+	bst: route_add 0.0.0.0/0 via 1.1.1.1/32 src 0.0.0.0/0 dev  metric 0: Network is unreachable
+	[1]
+
+	$ bst --ip 172.20.0.2/16,lo --route src=172.20.0.2,dst=10.0.0.0/8,gateway=172.20.0.1 -- ip route show
+	10.0.0.0/8 via 172.20.0.1 dev lo 
+
+	$ bst --ip 172.20.0.2/16,lo --route src=172.20.0.2,gateway=172.20.0.1 -- ip route show
+	default via 172.20.0.1 dev lo 
+
+	$ bst --ip 172.20.0.2/16,lo --route dst=10.0.0.0/8,gateway=172.20.0.1 -- ip route show
+	10.0.0.0/8 via 172.20.0.1 dev lo 
+
+	$ bst --ip 172.20.0.2/16,lo --route gateway=172.20.0.1 -- ip route show
+	default via 172.20.0.1 dev lo 
+
+	$ bst --route dev=lo -- ip route show
+	default dev lo 
