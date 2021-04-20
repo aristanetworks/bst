@@ -48,11 +48,15 @@ struct addr_options {
 };
 
 struct route_options {
-	uint8_t type; // Either AF_INET or AF_INET6
+	uint8_t family; // Either AF_INET or AF_INET6
 	struct ip src;
 	struct ip dst;
 	struct ip gateway;
 	char intf[IF_NAMESIZE];
+	uint16_t scope;
+	uint8_t protocol;
+	uint8_t table;
+	uint8_t type;
 	uint32_t metric;
 };
 
@@ -65,6 +69,8 @@ void net_if_up(int sockfd, const char *name);
 void net_route_add(int sockfd, const struct route_options *route);
 
 void route_parse(struct route_options *route, const char *key, const char *val);
+void route_set_defaults(struct route_options *route);
+void route_set_defaults_post(struct route_options *route);
 void addr_parse(struct addr_options *addr, const char *key, const char *val);
 void nic_parse(struct nic_options *nic, const char *key, const char *val);
 void nic_set_defaults(struct nic_options *nic, size_t num);

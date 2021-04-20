@@ -306,18 +306,18 @@ void net_route_add(int sockfd, const struct route_options *route)
 	pkt.hdr->nlhdr.nlmsg_type = RTM_NEWROUTE;
 	pkt.hdr->nlhdr.nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_EXCL | NLM_F_CREATE;
 
-	pkt.hdr->rt.rtm_family = route->type;
+	pkt.hdr->rt.rtm_family = route->family;
 	pkt.hdr->rt.rtm_dst_len = route->dst.prefix_length;
 	pkt.hdr->rt.rtm_src_len = route->src.prefix_length;
-	pkt.hdr->rt.rtm_table = RT_TABLE_MAIN;
-	pkt.hdr->rt.rtm_protocol = RTPROT_BOOT;
-	pkt.hdr->rt.rtm_scope = RT_SCOPE_UNIVERSE;
-	pkt.hdr->rt.rtm_type = RTN_UNICAST;
+	pkt.hdr->rt.rtm_table = route->table;
+	pkt.hdr->rt.rtm_protocol = route->protocol;
+	pkt.hdr->rt.rtm_scope = (uint8_t) route->scope;
+	pkt.hdr->rt.rtm_type = route->type;
 
 	const void *dst_ptr, *src_ptr, *gateway_ptr;
 	size_t ip_sz;
 
-	switch (route->type) {
+	switch (route->family) {
 	case AF_INET6:
 		ip_sz = sizeof (route->src.v6);
 		gateway_ptr = &route->gateway.v6;
@@ -361,13 +361,13 @@ void net_route_add(int sockfd, const struct route_options *route)
 		char src[INET6_ADDRSTRLEN+1];
 		char gateway[INET6_ADDRSTRLEN+1];
 
-		inet_ntop(route->type, dst_ptr, dst, sizeof (dst));
+		inet_ntop(route->family, dst_ptr, dst, sizeof (dst));
 		dst[INET6_ADDRSTRLEN] = '\0';
 
-		inet_ntop(route->type, src_ptr, src, sizeof (src));
+		inet_ntop(route->family, src_ptr, src, sizeof (src));
 		src[INET6_ADDRSTRLEN] = '\0';
 
-		inet_ntop(route->type, gateway_ptr, gateway, sizeof (gateway));
+		inet_ntop(route->family, gateway_ptr, gateway, sizeof (gateway));
 		gateway[INET6_ADDRSTRLEN] = '\0';
 
 		err(1, "route_add %s/%d via %s/%d src %s/%d dev %.*s metric %d",
@@ -634,10 +634,10 @@ void addr_parse(struct addr_options *addr, const char *key, const char *val)
 static void route_parse_ip(struct route_options *route, struct ip *ip, const char *data)
 {
 	parse_ip(ip, data);
-	if (route->type == 0) {
-		route->type = ip->type;
+	if (route->family == 0) {
+		route->family = ip->type;
 	}
-	if (route->type != ip->type) {
+	if (route->family != ip->type) {
 		errx(1, "route IPs must either all be IPv4, or all be IPv6.");
 	}
 }
@@ -679,6 +679,97 @@ static void route_parse_metric(struct route_options *route, const char *data)
 	route->metric = (uint32_t) val;
 }
 
+static const struct valmap route_scope_values[] = {
+	{ "universe",  &(const uint8_t) { RT_SCOPE_UNIVERSE } },
+	{ "site",      &(const uint8_t) { RT_SCOPE_SITE     } },
+	{ "link",      &(const uint8_t) { RT_SCOPE_LINK     } },
+	{ "host",      &(const uint8_t) { RT_SCOPE_HOST     } },
+	{ "nowhere",   &(const uint8_t) { RT_SCOPE_NOWHERE  } },
+	{ NULL, NULL },
+};
+
+static void route_parse_scope(struct route_options *route, const char *v)
+{
+	if (parse_val(&route->scope, sizeof (route->scope), route_scope_values, v) == -1) {
+		errno = 0;
+		unsigned long long val = strtoull(v, NULL, 10);
+		if (val == 0 || val >= RT_SCOPE_SITE) {
+			errno = ERANGE;
+		}
+		if (errno != 0) {
+			errx(1, "invalid scope %s: must be one of universe, site, link, host, nowhere, or a number in [1, 200).", v);
+		}
+		route->scope = (uint8_t) val;
+	}
+}
+
+static const struct valmap route_proto_values[] = {
+	{ "redirect",   &(const uint8_t) { RTPROT_REDIRECT   } },
+	{ "kernel",     &(const uint8_t) { RTPROT_KERNEL     } },
+	{ "boot",       &(const uint8_t) { RTPROT_BOOT       } },
+	{ "static",     &(const uint8_t) { RTPROT_STATIC     } },
+	{ NULL, NULL },
+};
+
+static void route_parse_proto(struct route_options *route, const char *v)
+{
+	if (parse_val(&route->protocol, sizeof (route->protocol), route_proto_values, v) == -1) {
+		errno = 0;
+		unsigned long long val = strtoull(v, NULL, 10);
+		if (val < 5 || val >= 256) {
+			errno = ERANGE;
+		}
+		if (errno != 0) {
+			errx(1, "invalid protocol %s: must be one of redirect, kernel, boot, static, or a number in [5, 256).", v);
+		}
+		route->protocol = (uint8_t) val;
+	}
+}
+
+static const struct valmap route_table_values[] = {
+	{ "main",    &(const uint8_t) { RT_TABLE_MAIN    } },
+	{ "local",   &(const uint8_t) { RT_TABLE_LOCAL   } },
+	{ "default", &(const uint8_t) { RT_TABLE_DEFAULT } },
+	{ NULL, NULL },
+};
+
+static void route_parse_table(struct route_options *route, const char *v)
+{
+	if (parse_val(&route->table, sizeof (route->table), route_table_values, v) == -1) {
+		errno = 0;
+		unsigned long long val = strtoull(v, NULL, 10);
+		if (val == 0 || val >= 253) {
+			errno = ERANGE;
+		}
+		if (errno != 0) {
+			errx(1, "invalid table %s: must be one of main, local, default, or a number in [1, 253).", v);
+		}
+		route->table = (uint8_t) val;
+	}
+}
+
+static const struct valmap route_type_values[] = {
+	{ "unicast",     &(const uint8_t) { RTN_UNICAST     } },
+	{ "local",       &(const uint8_t) { RTN_LOCAL       } },
+	{ "broadcast",   &(const uint8_t) { RTN_BROADCAST   } },
+	{ "anycast",     &(const uint8_t) { RTN_ANYCAST     } },
+	{ "multicast",   &(const uint8_t) { RTN_MULTICAST   } },
+	{ "blackhole",   &(const uint8_t) { RTN_BLACKHOLE   } },
+	{ "unreachable", &(const uint8_t) { RTN_UNREACHABLE } },
+	{ "prohibit",    &(const uint8_t) { RTN_PROHIBIT    } },
+	{ "throw",       &(const uint8_t) { RTN_THROW       } },
+	{ "nat",         &(const uint8_t) { RTN_NAT         } },
+	{ "xresolve",    &(const uint8_t) { RTN_XRESOLVE    } },
+	{ NULL, NULL },
+};
+
+static void route_parse_type(struct route_options *route, const char *v)
+{
+	if (parse_val(&route->type, sizeof (route->type), route_type_values, v) == -1) {
+		errx(1, "invalid type %s: must be one of unicast, local, broadcast, anycast, multicast, blackhole, unreachable, prohibit, throw, nat or xresolve.", v);
+	}
+}
+
 void route_parse(struct route_options *route, const char *key, const char *val)
 {
 	struct optmap {
@@ -692,6 +783,10 @@ void route_parse(struct route_options *route, const char *key, const char *val)
 		{ "gateway", route_parse_gateway },
 		{ "dev",     route_parse_dev },
 		{ "metric",  route_parse_metric },
+		{ "scope",   route_parse_scope },
+		{ "proto",   route_parse_proto },
+		{ "type",    route_parse_type },
+		{ "table",   route_parse_table },
 		{ NULL, NULL },
 	};
 
@@ -703,4 +798,60 @@ void route_parse(struct route_options *route, const char *key, const char *val)
 		return;
 	}
 	errx(1, "unknown option '%s' for route", key);
+}
+
+void route_set_defaults(struct route_options *route)
+{
+	route->protocol = RTPROT_BOOT;
+	if (route->family == AF_INET) {
+		route->scope = 0xffff;
+	}
+	route->type = RTN_UNICAST;
+}
+
+void route_set_defaults_post(struct route_options *route)
+{
+	if (route->table == 0) {
+		switch (route->type) {
+		case RTN_LOCAL:
+		case RTN_BROADCAST:
+		case RTN_ANYCAST:
+		case RTN_NAT:
+			route->table = RT_TABLE_LOCAL;
+			break;
+		default:
+			route->table = RT_TABLE_MAIN;
+			break;
+		}
+	}
+
+	if (route->scope == 0xffff) {
+		switch (route->type) {
+		case RTN_UNICAST:
+			if (route->gateway.type == 0) {
+				route->scope = RT_SCOPE_LINK;
+			} else {
+				route->scope = RT_SCOPE_UNIVERSE;
+			}
+			break;
+		case RTN_MULTICAST:
+			route->scope = RT_SCOPE_UNIVERSE;
+			break;
+		case RTN_BROADCAST:
+		case RTN_ANYCAST:
+			route->scope = RT_SCOPE_LINK;
+			break;
+		case RTN_LOCAL:
+		case RTN_NAT:
+			route->scope = RT_SCOPE_HOST;
+			break;
+		}
+	}
+	if (route->scope == 0xffff) {
+		errx(1, "route: must specify a scope");
+	}
+
+	if (route->family == 0) {
+		route->family = AF_INET;
+	}
 }

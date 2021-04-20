@@ -571,6 +571,8 @@ int main(int argc, char *argv[], char *envp[])
 				}
 				struct route_options *route = &opts.routes[opts.nroutes];
 
+				route_set_defaults(route);
+
 				/* 16 is enough to support everything */
 				struct kvlist kvlist[16];
 				size_t nopts = sizeof (kvlist) / sizeof (*kvlist);
@@ -586,6 +588,7 @@ int main(int argc, char *argv[], char *envp[])
 					}
 				}
 
+				route_set_defaults_post(route);
 				opts.nroutes++;
 				break;
 			}

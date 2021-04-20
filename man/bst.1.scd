@@ -456,7 +456,7 @@ This section describes the options that _--route_ supports.
 *src*=<ip>
 	Set the source IP.
 
-*dst*=<ip>/<subnet>
+*dst*=<ip>/<subnet>++
 *dst*=default
 	Set the destination subnet. If _"default"_, the destination is /0.
 
@@ -468,6 +468,55 @@ This section describes the options that _--route_ supports.
 
 *metric*=<n>
 	Set the metric (or priority) of the route.
+
+*scope*=<scope>++
+*scope*=<number>
+	Set the scope of (or distance to) the destination of the route. Can be a scope
+	name or a number.
+
+	The following values for *<scope>* are supported:
+	- *universe* -- Destination is more than one hop away (default for gatewayed unicast routes).
+	- *site*     -- Destination is in the local autonomous system.
+	- *link*     -- Destination is in the local network, one hop away (default for broadcast and direct unicast routes).
+	- *host*     -- Destination is on the local host (default for local routes).
+	- *nowhere*  -- Destination does not exist.
+
+*type*=<type>
+	Specify the type of the route.
+
+	The following values for *<type>* are supported:
+	- *unicast*     -- A regular route from source to destination (default).
+	- *local*       -- A local interface route.
+	- *broadcast*   -- A local broadcast route.
+	- *anycast*     -- A local broadcast route, sent as unicast.
+	- *multicast*   -- A multicast route.
+	- *blackhole*   -- A packet-dropping route (packets are dropped silently).
+	- *unreachable* -- A packet-dropping route (ICMP Host Unreachable message generated).
+	- *prohibit*    -- A packet-dropping route (ICMP Communication Administratively Prohibited message generated).
+	- *throw*       -- Continue routing lookup in another table.
+	- *nat*         -- A Network Address Translation rule.
+	- *xresolve*    -- Defer routing lookup to an external resolver.
+
+*table*=<table>++
+*table*=<number>
+	Specify the table on which the route should be configured. Can be a table name
+	or a number.
+
+	The following values for *<table>* are supported:
+	- *main*    -- The main table (default for most routes)
+	- *local*   -- The local table (default for local, broadcast, anycast, and nat routes)
+	- *default* -- The default table.
+
+*proto*=<proto>++
+*proto*=<number>
+	Set the route protocol (or origin). Can be a protocol name, or an 8-bit number above
+	4 (which will not be interpreted by the kernel).
+
+	The following values for *<proto>* are supported:
+	- *redirect* -- Route was installed by ICMP redirect.
+	- *kernel*   -- Route was installed by the kernel.
+	- *boot*     -- Route was installed as part of the boot sequence (default).
+	- *static*   -- Route was installed by the administrator.
 
 # EXAMPLES
 
