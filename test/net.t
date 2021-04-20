@@ -59,4 +59,4 @@ Adding routes
 	default via 172.20.0.1 dev lo 
 
 	$ bst --route dev=lo -- ip route show
-	default dev lo 
+	default dev lo scope link 
