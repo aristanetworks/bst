@@ -468,8 +468,6 @@ int main(int argc, char *argv[], char *envp[])
 				}
 				struct nic_options *nic = &opts.nics[opts.nnics];
 
-				nic_set_defaults(nic, opts.nnics + 1);
-
 				/* 16 is enough to support everything */
 				struct kvlist kvlist[16];
 				size_t nopts = sizeof (kvlist) / sizeof (*kvlist);

@@ -227,8 +227,12 @@ void net_if_add(int sockfd, const struct nic_options *nicopts)
 	pkt.hdr->nlhdr.nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_EXCL | NLM_F_CREATE;
 
 	nlpkt_add_attr(&pkt, IFLA_NET_NS_PID, nicopts->netns_pid);
-	nlpkt_add_attr(&pkt, IFLA_ADDRESS, nicopts->address);
-	nlpkt_add_attr(&pkt, IFLA_BROADCAST, nicopts->broadcast);
+
+	static struct ether_addr zeromac;
+	if (memcmp(&nicopts->address, &zeromac, sizeof (nicopts->address)) != 0)
+		nlpkt_add_attr(&pkt, IFLA_ADDRESS, nicopts->address);
+	if (memcmp(&nicopts->broadcast, &zeromac, sizeof (nicopts->broadcast)) != 0)
+		nlpkt_add_attr(&pkt, IFLA_BROADCAST, nicopts->broadcast);
 
 	nic_handler_func *handler = add_default_attrs;
 	for (struct nic_handler *h = nic_handlers; h->name; ++h) {
@@ -524,35 +528,6 @@ void nic_parse(struct nic_options *nic, const char *key, const char *val)
 		return;
 	}
 	errx(1, "unknown option '%s' for interface type '%s'", key, nic->type);
-}
-
-static uint32_t get_netns_id(void)
-{
-	static uint32_t id;
-	if (id == 0) {
-		struct stat info;
-		if (stat("/proc/self/ns/net", &info) == -1) {
-			err(1, "stat /proc/self/ns/net");
-		}
-		id = (uint32_t) info.st_ino;
-	}
-	return id;
-}
-
-void nic_set_defaults(struct nic_options *nic, size_t num)
-{
-	// Generate a deterministic local unicast MAC address based off
-	// the interface number and the netns id.
-	uint16_t id = (uint16_t) num;
-	uint32_t netns_id = get_netns_id();
-	nic->address.ether_addr_octet[0] = (uint8_t) 0xb2;
-	nic->address.ether_addr_octet[1] = (uint8_t) 0x57;
-	nic->address.ether_addr_octet[2] = (uint8_t) ((netns_id >> 8) & 0xff);
-	nic->address.ether_addr_octet[3] = (uint8_t) ((netns_id >> 0) & 0xff);
-	nic->address.ether_addr_octet[4] = (uint8_t) ((id >>  8) & 0xff);
-	nic->address.ether_addr_octet[5] = (uint8_t) ((id >>  0) & 0xff);
-
-	memset(&nic->broadcast, 0xff, sizeof (nic->broadcast));
 }
 
 static void parse_ip(struct ip *ip, const char *data)
