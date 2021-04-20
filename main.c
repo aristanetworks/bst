@@ -243,11 +243,16 @@ int main(int argc, char *argv[], char *envp[])
 {
 	init_capabilities();
 
-	static struct entry_settings opts = {
-		.uid   = (uid_t) -1,
-		.gid   = (gid_t) -1,
-		.umask = (mode_t) -1,
-	};
+	static struct entry_settings opts;
+
+	/* Do not use a designated initializer for opts -- opts is already a zero
+	   value in .bss, which benefits from not having to physically exist in
+	   the ELF file. Setting the defaults individually here reduces the size
+	   of the binary by a factor of 20. */
+
+	opts.uid   = (uid_t) -1;
+	opts.gid   = (gid_t) -1;
+	opts.umask = (mode_t) -1;
 
 	static struct option options[] = {
 		{ "help",       no_argument,        NULL,           'h' },
