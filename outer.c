@@ -57,6 +57,21 @@ static void burn(int dirfd, char *path, char *data)
 	}
 }
 
+/* burn_err is like burn, but returns -1 on error rather than exiting, and 0 success. */
+static int burn_err(int dirfd, char *path, char *data)
+{
+	int fd = openat(dirfd, path, O_WRONLY, 0);
+	if (fd == -1) {
+		return -1;
+	}
+
+	if (write(fd, data, strlen(data)) == -1) {
+		return -1;
+	}
+
+	return close(fd);
+}
+
 static void make_idmap(char *idmap, size_t size, const char *which,
 		const char *subid_path,
 		const char *procmap_path,
@@ -126,6 +141,12 @@ static void burn_uidmap_gidmap(pid_t child_pid, id_map uid_desired, id_map gid_d
 
 	burn(procfd, "uid_map", uid_map);
 	burn(procfd, "gid_map", gid_map);
+
+	if (burn_err(procfd, "setgroups", "shadow") == -1 && errno != EINVAL) {
+		/* EINVAL is allowed, it just means that the kernel does not have that
+		   feature yet. */
+		err(1, "burn setgroups \"shadow\"");
+	}
 
 	reset_capabilities();
 }
