@@ -28,7 +28,7 @@ void cleanpath(char *path) {
 		} else if (*path == '.' && (!*(path+1) || *(path+1) == '/')) {
 			// . component
 			++path;
-		} else if (*path == '.' && *(path+1) == '.' && (!*(path+1) || *(path+1) == '/')) {
+		} else if (*path == '.' && *(path+1) == '.' && (!*(path+2) || *(path+2) == '/')) {
 			// .. component
 			path += 2;
 
