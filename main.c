@@ -120,7 +120,7 @@ static void process_share(const char **out, const char *optarg)
 		append_nsname = false;
 	}
 
-	for (; share; share = strtok(NULL, ",")) {
+	for (; share != NULL; share = strtok(NULL, ",")) {
 		process_nslist_entry(out, share, path, append_nsname);
 	}
 }
@@ -136,7 +136,7 @@ static void process_persist(const char **out, const char *optarg)
 	/* Specifying a standalone path means that all namespaces should be persisted
 	   into nsfs files relative to that directory path. */
 	char all_namespaces[] = ALL_NAMESPACES;
-	if (!path) {
+	if (path == NULL) {
 		path = nsnames;
 		nsnames = all_namespaces;
 	}
@@ -148,7 +148,7 @@ static void process_persist(const char **out, const char *optarg)
 	const char *share = strtok(nsnames, ",");
 	bool multiple = share + strlen(share) != nsnames + nsnames_len;
 
-	for (; share; share = strtok(NULL, ",")) {
+	for (; share != NULL; share = strtok(NULL, ",")) {
 		process_nslist_entry(out, share, path, multiple);
 	}
 }
@@ -162,7 +162,7 @@ static void process_unshare(const char **out, char *nsnames)
 		nsnames = all_namespaces;
 	}
 
-	for (const char *ns = strtok(nsnames, ","); ns; ns = strtok(NULL, ",")) {
+	for (const char *ns = strtok(nsnames, ","); ns != NULL; ns = strtok(NULL, ",")) {
 		process_nslist_entry(out, ns, NULL, false);
 	}
 }
@@ -370,7 +370,7 @@ int main(int argc, char *argv[], char *envp[])
 				break;
 
 			case OPTION_GROUPS:
-				for (char *grp = strtok(optarg, ","); grp; grp = strtok(NULL, ",")) {
+				for (char *grp = strtok(optarg, ","); grp != NULL; grp = strtok(NULL, ",")) {
 					if (opts.ngroups >= NGROUPS_MAX) {
 						errx(1, "can only be part of a maximum of %d groups", NGROUPS_MAX);
 					}
@@ -746,7 +746,7 @@ end:
 		++argv0;
 	}
 
-	new_argv[0] = argv0 ? argv0 : argv[optind];
+	new_argv[0] = (argv0 != NULL) ? argv0 : argv[optind];
 	for (int i = 1; i < argc - optind; ++i) {
 		new_argv[i] = argv[optind + i];
 	}
@@ -756,7 +756,7 @@ end:
 	opts.argv = new_argv;
 	opts.envp = newenv;
 
-	if (opts.workdir && opts.workdir[0] != '\0' && opts.workdir[0] != '/') {
+	if (opts.workdir != NULL && opts.workdir[0] != '\0' && opts.workdir[0] != '/') {
 		errx(1, "workdir must be an absolute path.");
 	}
 

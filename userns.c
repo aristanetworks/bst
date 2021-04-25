@@ -68,7 +68,7 @@ void id_map_parse(id_map map, char *opt)
 	size_t i = 0;
 	char *saveptr;
 	char *rangestr = strtok_r(opt, ",", &saveptr);
-	for (; rangestr; rangestr = strtok_r(NULL, ",", &saveptr)) {
+	for (; rangestr != NULL; rangestr = strtok_r(NULL, ",", &saveptr)) {
 		uint32_t inner = id_parse(strtok(rangestr, ":"), "inner id range start");
 		uint32_t outer = id_parse(strtok(NULL, ":"), "outer id range start");
 		uint32_t length = id_parse(strtok(NULL, ""), "id range length");
@@ -106,7 +106,7 @@ void id_map_load_subids(id_map map, const char *subid_path, const struct id *id)
 	size_t range = id_map_append(map, 0, 0, id->id, 1);
 
 	FILE *subids = fopen(subid_path, "r");
-	if (!subids) {
+	if (subids == NULL) {
 		return;
 	}
 
@@ -121,7 +121,7 @@ void id_map_load_subids(id_map map, const char *subid_path, const struct id *id)
 	   size assumptions tend to bite back, and pages are extremely cheap. */
 	char line[4096];
 
-	while (fgets(line, sizeof (line), subids)) {
+	while (fgets(line, sizeof (line), subids) != NULL) {
 		char entryname[ID_STR_MAX + 1];
 		entryname[ID_STR_MAX] = 0;
 
@@ -220,7 +220,7 @@ void id_map_load_procids(id_map map, const char *procid_path)
 	memset(map, 0, sizeof (id_map));
 
 	char line[4096];
-	while (fgets(line, sizeof (line), subids)) {
+	while (fgets(line, sizeof (line), subids) != NULL) {
 		uint32_t inner, outer, len;
 
 		int items = sscanf(line, "%" PRIu32 "%" PRIu32 "%" PRIu32 "\n", &inner, &outer, &len);
@@ -458,7 +458,7 @@ struct id id_load_user(uid_t uid)
 	struct id id;
 	struct passwd *passwd = getpwuid(uid);
 	id.id = (uint32_t) uid;
-	id.name = passwd ? passwd->pw_name : NULL;
+	id.name = (passwd != NULL) ? passwd->pw_name : NULL;
 	return id;
 }
 
@@ -467,6 +467,6 @@ struct id id_load_group(gid_t gid)
 	struct id id;
 	struct group *group = getgrgid(gid);
 	id.id = (uint32_t) gid;
-	id.name = group ? group->gr_name : NULL;
+	id.name = (group != NULL) ? group->gr_name : NULL;
 	return id;
 }
