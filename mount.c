@@ -81,30 +81,30 @@ static void update_mount_flags_and_options(unsigned long *mountflags, char *opts
 		{ "suid",          MS_NOSUID },
 	};
 
-	if (!opts) {
+	if (opts == NULL) {
 		return;
 	}
 
 	char sentinel;
 	char *newopts = opts;
-	for (char *opt = opts, *delim = &sentinel; delim && *opt; opt = delim + 1) {
+	for (char *opt = opts, *delim = &sentinel; delim != NULL && *opt != '\0'; opt = delim + 1) {
 
 		*delim = ',';
 		delim = strchr(opt, ',');
-		if (delim) {
-			*delim = 0;
+		if (delim != NULL) {
+			*delim = '\0';
 		}
 
 		struct mntflag *found;
 
 		found = bsearch(opt, flags, lengthof(flags), sizeof (*flags), cmpflags);
-		if (found) {
+		if (found != NULL) {
 			*mountflags |= found->flag;
 			continue;
 		}
 
 		found = bsearch(opt, neg_flags, lengthof(neg_flags), sizeof (*neg_flags), cmpflags);
-		if (found) {
+		if (found != NULL) {
 			*mountflags &= ~found->flag;
 			continue;
 		}
@@ -112,7 +112,7 @@ static void update_mount_flags_and_options(unsigned long *mountflags, char *opts
 		if (newopts > opts) {
 			*(newopts++) = ',';
 		}
-		for (char *s = opt; *s; ++s, ++newopts) {
+		for (char *s = opt; *s != '\0'; ++s, ++newopts) {
 			*newopts = *s;
 		}
 	}

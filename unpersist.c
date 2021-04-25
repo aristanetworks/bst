@@ -188,7 +188,7 @@ int main(int argc, char *argv[])
 	static struct option options[] = {
 		{ "help",       no_argument,        NULL,   'h' },
 		{ "no-unlink",  no_argument,        NULL,   OPTION_NO_UNLINK },
-		{ 0, 0, 0, 0 }
+		{ NULL, 0, NULL, 0 }
 	};
 
 	static struct {

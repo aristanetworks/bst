@@ -21,14 +21,14 @@ void cleanpath(char *path) {
 	char *out = path;
 	char *start = path;
 
-	while (*path) {
+	while (*path != '\0') {
 		if (*path == '/') {
 			// empty component
 			++path;
-		} else if (*path == '.' && (!*(path+1) || *(path+1) == '/')) {
+		} else if (*path == '.' && (*(path+1) == '\0' || *(path+1) == '/')) {
 			// . component
 			++path;
-		} else if (*path == '.' && *(path+1) == '.' && (!*(path+2) || *(path+2) == '/')) {
+		} else if (*path == '.' && *(path+1) == '.' && (*(path+2) == '\0' || *(path+2) == '/')) {
 			// .. component
 			path += 2;
 
@@ -44,7 +44,7 @@ void cleanpath(char *path) {
 				*out = '/';
 				++out;
 			}
-			for (; *path && *path != '/'; ++path, ++out) {
+			for (; *path != '\0' && *path != '/'; ++path, ++out) {
 				*out = *path;
 			}
 		}

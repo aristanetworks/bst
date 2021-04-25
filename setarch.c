@@ -22,8 +22,7 @@ struct exec_domain {
 void setarch(const char *arch)
 {
 	static struct exec_domain domains[] = {
-		/* Placeholder for host execution domain */
-		{ "", 0 },
+		{ "", 0 },			/* Placeholder for host execution domain */
 		{ "linux32", PER_LINUX32 },
 		{ "linux64", PER_LINUX },
 		{ "x86_64",  PER_LINUX },
@@ -31,7 +30,7 @@ void setarch(const char *arch)
 		{ "i486",    PER_LINUX32 },
 		{ "i586",    PER_LINUX32 },
 		{ "i686",    PER_LINUX32 },
-		{ "", 0 }
+		{ "", 0 }			/* Entry to mark end of the list */
 	};
 
 	struct exec_domain *host_domain = &domains[0];
@@ -49,13 +48,13 @@ void setarch(const char *arch)
 #endif
 
 	struct exec_domain *domain = domains;
-	for (; *domain->name; ++domain) {
+	for (; *domain->name != '\0'; ++domain) {
 		if (strncmp(domain->name, arch, MACHINE_SIZE) == 0) {
 			break;
 		}
 	}
 
-	if (!*domain->name) {
+	if (*domain->name == '\0') {
 		errx(1, "setarch: unknown arch %s.", arch);
 	}
 

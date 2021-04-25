@@ -49,7 +49,7 @@ static inline size_t append_argv(char **argv, size_t argc, char *arg)
 static void apply_limit(int resource, struct rlimit const *value)
 {
 	struct rlimit new_limit;
-	if (!value) {
+	if (value == NULL) {
 		if (getrlimit(resource, &new_limit)) {
 			if (errno == EINVAL) {
 				/* Skip this limit -- it is not supported. */
@@ -117,7 +117,7 @@ int enter(struct entry_settings *opts)
 	}
 	deny_new_capabilities = 1;
 
-	const char *root = opts->root ? opts->root : "/";
+	const char *root = (opts->root != NULL) ? opts->root : "/";
 
 	char resolved_root[PATH_MAX];
 	if (realpath(root, resolved_root) == NULL) {
@@ -128,7 +128,7 @@ int enter(struct entry_settings *opts)
 
 	char cwd[PATH_MAX];
 	char *workdir = opts->workdir;
-	if ((!workdir || workdir[0] == '\0')) {
+	if ((workdir == NULL || workdir[0] == '\0')) {
 		if (getcwd(cwd, sizeof (cwd)) == NULL) {
 			err(1, "getcwd");
 		}
@@ -149,7 +149,7 @@ int enter(struct entry_settings *opts)
 	}
 	/* Our tentative to use the cwd failed, or it worked and the cwd _is_ the
 	   new root. In both cases, the workdir must be /. */
-	if (!workdir || workdir[0] == '\0') {
+	if (workdir == NULL || workdir[0] == '\0') {
 		workdir = "/";
 	}
 
@@ -180,7 +180,7 @@ int enter(struct entry_settings *opts)
 		err(1, "could not make / private: mount");
 	}
 
-	if (opts->arch && opts->arch[0] != 0) {
+	if (opts->arch != NULL && opts->arch[0] != '\0') {
 		setarch(opts->arch);
 	}
 
@@ -217,7 +217,7 @@ int enter(struct entry_settings *opts)
 	}
 
 	if (pid) {
-		if (opts->pidfile) {
+		if (opts->pidfile != NULL) {
 			int pidfile = open(opts->pidfile, O_WRONLY | O_CREAT | O_CLOEXEC | O_NOCTTY , 0666);
 			if (pidfile == -1) {
 				err(1, "open %s", opts->pidfile);
@@ -340,7 +340,7 @@ int enter(struct entry_settings *opts)
 		}
 	}
 
-	if (opts->setup_program) {
+	if (opts->setup_program != NULL) {
 		pid_t pid = fork();
 		if (pid == -1) {
 			err(1, "setup: fork");
@@ -358,7 +358,7 @@ int enter(struct entry_settings *opts)
 			extern char **environ;
 
 			char *const *argv = default_argv;
-			if (opts->setup_argv) {
+			if (opts->setup_argv != NULL) {
 				argv = opts->setup_argv;
 			}
 
@@ -416,23 +416,23 @@ int enter(struct entry_settings *opts)
 	}
 
 	/* Set the host and domain names only when in an UTS namespace. */
-	if ((opts->hostname || opts->domainname) && !uts_unshare) {
+	if ((opts->hostname != NULL || opts->domainname != NULL ) && !uts_unshare) {
 		errx(1, "attempted to set host or domain names on the host UTS namespace.");
 	}
 
 	const char *hostname = opts->hostname;
-	if (!hostname && uts_unshare) {
+	if (hostname == NULL && uts_unshare) {
 		hostname = "localhost";
 	}
-	if (hostname && sethostname(hostname, strlen(hostname)) == -1) {
+	if (hostname != NULL && sethostname(hostname, strlen(hostname)) == -1) {
 		err(1, "sethostname");
 	}
 
 	const char *domainname = opts->domainname;
-	if (!domainname && uts_unshare) {
+	if (domainname == NULL && uts_unshare) {
 		domainname = "localdomain";
 	}
-	if (domainname && setdomainname(domainname, strlen(domainname)) == -1) {
+	if (domainname != NULL && setdomainname(domainname, strlen(domainname)) == -1) {
 		err(1, "setdomainname");
 	}
 
@@ -588,7 +588,7 @@ int enter(struct entry_settings *opts)
 		argc = append_argv(argv, argc, opts->argv[0]);
 		argc = append_argv(argv, argc, (char *) opts->pathname);
 		char *const *arg = opts->argv + 1;
-		for (; *arg; ++arg) {
+		for (; *arg != NULL; ++arg) {
 			argc = append_argv(argv, argc, *arg);
 		}
 		argv[argc] = NULL;
