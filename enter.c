@@ -31,6 +31,7 @@
 #include "ns.h"
 #include "outer.h"
 #include "path.h"
+#include "tty.h"
 #include "setarch.h"
 #include "sig.h"
 #include "util.h"
@@ -208,6 +209,11 @@ int enter(struct entry_settings *opts)
 	   cleaner and easier to always fork, regardless of unsharing the PID
 	   namespace. */
 
+	int parentSock = -1, childSock = -1;
+	if (opts->tty) {
+		tty_setup_socketpair(&parentSock, &childSock);
+	}
+
 	pid_t pid = fork();
 	if (pid == -1) {
 		if (errno == ENOMEM && nsactions[NS_PID] >= 0) {
@@ -217,6 +223,9 @@ int enter(struct entry_settings *opts)
 	}
 
 	if (pid) {
+		if (childSock >= 0) {
+			close(childSock);
+		}
 		if (opts->pidfile != NULL) {
 			int pidfile = open(opts->pidfile, O_WRONLY | O_CREAT | O_CLOEXEC | O_NOCTTY , 0666);
 			if (pidfile == -1) {
@@ -260,14 +269,24 @@ int enter(struct entry_settings *opts)
 		sigset_t mask;
 		sigfillset(&mask);
 
+		if (parentSock >= 0) {
+			tty_parent_setup(parentSock);
+		}
+			
 		for (;;) {
 
+			int waitflags = WEXITED | WNOHANG;
 			siginfo_t info;
-			sig_wait(&mask, &info);
-			sig_forward(&info, pid);
-
-			if (info.si_signo != SIGCHLD) {
-				continue;
+			if (parentSock < 0) {
+				sig_wait(&mask, &info);
+				sig_forward(&info, pid);
+				if (info.si_signo != SIGCHLD) {
+					continue;
+				}
+			} else {
+				if (!tty_parent_select(pid, &waitflags)) {
+					continue;
+				}
 			}
 
 			/* We might have been run as a process subreaper against our
@@ -275,7 +294,7 @@ int enter(struct entry_settings *opts)
 			   exited. */
 
 			int rc;
-			while ((rc = waitid(P_ALL, 0, &info, WEXITED | WNOHANG)) != -1) {
+			while ((rc = waitid(P_ALL, 0, &info, waitflags)) != -1) {
 				if (info.si_signo != SIGCHLD) {
 					break;
 				}
@@ -306,6 +325,10 @@ int enter(struct entry_settings *opts)
 				err(1, "waitid");
 			}
 		}
+	}
+
+	if (parentSock >= 0) {
+		close(parentSock);
 	}
 
 	sigset_t mask;
@@ -575,6 +598,10 @@ int enter(struct entry_settings *opts)
 		}
 	}
 
+	if (childSock >= 0) {
+		tty_child(childSock);
+	}
+	
 	if (opts->init != NULL && opts->init[0] != '\0') {
 
 		if (!pid_unshare && prctl(PR_SET_CHILD_SUBREAPER, 1) == -1) {

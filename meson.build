@@ -87,6 +87,7 @@ bst_sources = [
 	'setarch.c',
 	'sig.c',
 	'timens.c',
+	'tty.c',
 	'usage.c',
 	'userns.c',
 ]

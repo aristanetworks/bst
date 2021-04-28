@@ -328,6 +328,12 @@ _VAR=value_ before the executable to run.
 	the spacetime process. This can cause issues for environment variables like
 	PATH if the rootfs layout is different than the host.
 
+\--tty
+	Allocate a pty for the process.
+
+	By default bst inherits the parent's terminal device (or lack thereof).  Use
+	the --tty option to allocate a new pty for the child process.
+
 # PRIVILEGE MODEL
 
 *bst* strives to be runnable by unprivileged users.  However, some code paths

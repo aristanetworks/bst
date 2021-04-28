@@ -83,6 +83,8 @@ struct entry_settings {
 
 	const char *pidfile;
 
+	bool tty;
+
 	int no_copy_hard_limits;
 	int no_fake_devtmpfs;
 	int no_derandomize;
