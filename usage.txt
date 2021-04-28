@@ -55,3 +55,4 @@ Options:
                                     namespaces.
       --no-env                      Clear the environment before running the
                                     executable.
+      --tty                         Allocate a pty for the process.

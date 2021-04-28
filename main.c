@@ -62,6 +62,7 @@ enum {
 	OPTION_NO_INIT,
 	OPTION_NO_ENV,
 	OPTION_NO_COPY_HARD_LIMITS,
+	OPTION_TTY,
 };
 
 static void process_nslist_entry(const char **out, const char *share, const char *path, int append_nsname)
@@ -284,6 +285,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ "pidfile",            required_argument, NULL, OPTION_PIDFILE         },
 		{ "ip",                 required_argument, NULL, OPTION_IP              },
 		{ "route",              required_argument, NULL, OPTION_ROUTE           },
+		{ "tty",                no_argument,       NULL, OPTION_TTY             },
 
 		/* Opt-out feature flags */
 		{ "no-copy-hard-limits", no_argument, NULL, OPTION_NO_COPY_HARD_LIMITS  },
@@ -655,6 +657,10 @@ int main(int argc, char *argv[], char *envp[])
 			case OPTION_NO_ENV:
 				opts.no_env = 1;
 				break;
+
+			case OPTION_TTY:
+			  opts.tty = 1;
+			  break;
 
 			case 'r':
 				opts.root = optarg;
