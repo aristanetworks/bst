@@ -22,7 +22,7 @@ struct exec_domain {
 void setarch(const char *arch)
 {
 	static struct exec_domain domains[] = {
-		{ "", 0 },			/* Placeholder for host execution domain */
+		{ "", 0 },                      /* Placeholder for host execution domain */
 		{ "linux32", PER_LINUX32 },
 		{ "linux64", PER_LINUX },
 		{ "x86_64",  PER_LINUX },
@@ -30,7 +30,7 @@ void setarch(const char *arch)
 		{ "i486",    PER_LINUX32 },
 		{ "i586",    PER_LINUX32 },
 		{ "i686",    PER_LINUX32 },
-		{ "", 0 }			/* Entry to mark end of the list */
+		{ "", 0 }                       /* Entry to mark end of the list */
 	};
 
 	struct exec_domain *host_domain = &domains[0];
