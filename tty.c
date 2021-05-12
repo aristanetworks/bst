@@ -7,6 +7,7 @@
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <pty.h>
 #include <signal.h>
 #include <stdio.h>
@@ -14,7 +15,6 @@
 #include <string.h>
 #include <sys/file.h>
 #include <sys/signalfd.h>
-#include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <termios.h>
@@ -88,16 +88,45 @@ void send_fd(int socket, int fd) {
 	}
 }
 
+#define R_NFDS 3
+#define W_NFDS 2
+#define R_STDIN 0
+#define R_TERM 1
+#define R_SIG 2
+#define W_STDOUT 0
+#define W_TERM 1
+
 static struct tty_parent_info_s {
 	int termfd;
 	int sigfd;
-	fd_set rfds, wfds;
-	int nfds;
+	struct pollfd rfds[R_NFDS];
+	struct pollfd wfds[W_NFDS];
 	struct termios orig;
 	bool stdinIsatty;
 } info = {
 	.termfd = -1,
 	.sigfd = -1,
+	.rfds = {
+		[R_STDIN] = {
+			.fd = STDIN_FILENO,
+			.events = POLLIN,
+		},
+		[R_TERM] = {
+			.events = POLLIN,
+		},
+		[R_SIG] = {
+			.events = POLLIN,
+		},
+	},
+	.wfds = {
+		[W_STDOUT] = {
+			.fd = STDOUT_FILENO,
+			.events = POLLOUT,
+		},
+		[W_TERM] = {
+			.events = POLLOUT,
+		},
+	},
 };
 
 void tty_setup_socketpair(int *pParentSock, int *pChildSock) {
@@ -141,10 +170,9 @@ bool tty_handle_sig(siginfo_t *siginfo) {
 bool tty_parent_select(pid_t pid) {
 	const size_t buflen = 1024;
 	char buf[buflen];
-	fd_set readFds = info.rfds, writeFds = info.wfds;
 	bool rtn = false;
 
-	int rc = select(info.nfds, &readFds, NULL, NULL, NULL);
+	int rc = poll(info.rfds, R_NFDS, -1);
 	if (rc == 0) {
 		return false;
 	}
@@ -154,11 +182,10 @@ bool tty_parent_select(pid_t pid) {
 		}
 		err(1, "select");
 	}
-	struct timeval immediate = {0};
-	if (select(info.nfds, NULL, &writeFds, NULL, &immediate) < 0) {
+	if (poll(info.wfds, W_NFDS, 0) <= 0) {
 		return false;
 	}
-	if (FD_ISSET(STDIN_FILENO, &readFds) && FD_ISSET((unsigned long) info.termfd, &writeFds)) {
+	if ((info.rfds[R_STDIN].revents & POLLIN) && (info.wfds[W_TERM].revents & POLLOUT)) {
 		ssize_t nread = read(STDIN_FILENO, buf, buflen);
 		if (nread > 0) {
 			if (write(info.termfd, buf, (size_t) nread) < 0) {
@@ -168,13 +195,13 @@ bool tty_parent_select(pid_t pid) {
 			if (nread < 0) {
 				warn("reading from stdin");
 			}
-			FD_CLR(STDIN_FILENO, &info.rfds);
+			info.rfds[R_STDIN].revents &= ~POLLIN;
 			if (write(info.termfd, &(char){4}, 1) < 0) {
 				warn("writing EOT to terminal");
 			}
 		}
 	}
-	if (FD_ISSET((unsigned long) info.termfd, &readFds) && FD_ISSET(STDOUT_FILENO, &writeFds)) {
+	if ((info.rfds[R_TERM].revents & POLLIN) && (info.wfds[W_STDOUT].revents & POLLOUT)) {
 		ssize_t nread = read(info.termfd, buf, buflen);
 		if (nread > 0) {
 			if (write(STDOUT_FILENO, buf, (size_t) nread) < 0) {
@@ -184,10 +211,10 @@ bool tty_parent_select(pid_t pid) {
 			if (nread < 0 && errno != EIO) {
 				warn("reading from terminal");
 			}
-			FD_CLR((unsigned long) info.termfd, &info.rfds);
+			info.rfds[R_TERM].revents &= ~POLLIN;
 		}
 	}
-	if (FD_ISSET((unsigned long) info.sigfd, &readFds)) {
+	if (info.rfds[R_SIG].revents & POLLIN) {
 		struct signalfd_siginfo sigfd_info;
 		if (read(info.sigfd, &sigfd_info, sizeof(sigfd_info)) == sizeof(sigfd_info)) {
 			siginfo_t siginfo;
@@ -238,18 +265,8 @@ void tty_parent_setup(int socket) {
 	if ((info.sigfd = signalfd(-1, &sigmask, 0)) < 0) {
 		err(1, "tty_parent: signalfd");
 	}
-	FD_ZERO(&info.rfds);
-	FD_ZERO(&info.wfds);
-	FD_SET(STDIN_FILENO, &info.rfds);
-	FD_SET((unsigned long) info.termfd, &info.rfds);
-	FD_SET((unsigned long) info.sigfd, &info.rfds);
-	FD_SET(STDOUT_FILENO, &info.wfds);
-	FD_SET((unsigned long) info.termfd, &info.wfds);
-	if (info.sigfd > info.termfd) {
-		info.nfds = info.sigfd + 1;
-	} else {
-		info.nfds = info.termfd + 1;
-	}
+	info.rfds[R_TERM].fd = info.wfds[W_TERM].fd = info.termfd;
+	info.rfds[R_SIG].fd = info.sigfd;
 	if (info.stdinIsatty) {
 		tty_set_winsize();
 	}
