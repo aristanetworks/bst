@@ -12,7 +12,7 @@
 
 void tty_setup_socketpair(int *pParentSock, int *pChildSock);
 void tty_parent_setup(int fd);
-bool tty_parent_select(pid_t pid, int *pwaitflags);
+bool tty_parent_select(pid_t pid);
 void tty_child(int fd);
 
 #endif /* !TTY_H */

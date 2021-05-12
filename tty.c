@@ -94,6 +94,7 @@ static struct tty_parent_info_s {
 	fd_set rfds, wfds;
 	int nfds;
 	struct termios orig;
+	bool stdinIsatty;
 } info = {
 	.termfd = -1,
 	.sigfd = -1,
@@ -112,39 +113,38 @@ void tty_parent_cleanup() {
 	if (info.termfd >= 0) {
 		close(info.termfd);
 	}
-	if (isatty(STDIN_FILENO)) {
+	if (info.stdinIsatty) {
 		tcsetattr(STDIN_FILENO, TCSADRAIN, &info.orig);
 	}
 }
 
-bool tty_handle_sig(siginfo_t *siginfo) {
-	if (info.termfd >= 0) return false;
-	if (!isatty(STDIN_FILENO)) return false;
-
+void tty_set_winsize() {
 	struct winsize wsize;
+	if (ioctl(STDIN_FILENO, TIOCGWINSZ, (char*) &wsize) < 0) {
+		err(1, "reading window size");
+	}
+	if (ioctl(info.termfd, TIOCSWINSZ, (char*) &wsize) < 0) {
+		err(1, "writing window size");
+	}
+}
 
+bool tty_handle_sig(siginfo_t *siginfo) {
 	switch (siginfo->si_signo) {
 	case SIGWINCH:
-		if (ioctl(STDIN_FILENO, TIOCGWINSZ, (char*) &wsize) < 0) {
-			err(1, "reading window size");
-		}
-		if (ioctl(info.termfd, TIOCSWINSZ, (char*) &wsize) < 0) {
-			err(1, "writing window size");
-		}
+		if (!info.stdinIsatty) return false;
+		tty_set_winsize();
 		return true;
 	}
 	return false;
 }
 
-bool tty_parent_select(pid_t pid, int *pwaitflags) {
+bool tty_parent_select(pid_t pid) {
 	const size_t buflen = 1024;
 	char buf[buflen];
-	sigset_t noSignals;
-	sigemptyset(&noSignals);
 	fd_set readFds = info.rfds, writeFds = info.wfds;
 	bool rtn = false;
 
-	int rc = pselect(info.nfds, &readFds, NULL, NULL, NULL, &noSignals);
+	int rc = select(info.nfds, &readFds, NULL, NULL, NULL);
 	if (rc == 0) {
 		return false;
 	}
@@ -152,10 +152,10 @@ bool tty_parent_select(pid_t pid, int *pwaitflags) {
 		if (errno == EINTR) {
 			return false;
 		}
-		err(1, "pselect");
+		err(1, "select");
 	}
-	struct timespec immediate = {0};
-	if (pselect(info.nfds, NULL, &writeFds, NULL, &immediate, &noSignals) <= 0) {
+	struct timeval immediate = {0};
+	if (select(info.nfds, NULL, &writeFds, NULL, &immediate) < 0) {
 		return false;
 	}
 	if (FD_ISSET(STDIN_FILENO, &readFds) && FD_ISSET((unsigned long) info.termfd, &writeFds)) {
@@ -172,7 +172,6 @@ bool tty_parent_select(pid_t pid, int *pwaitflags) {
 			if (write(info.termfd, &(char){4}, 1) < 0) {
 				warn("writing EOT to terminal");
 			}
-			rtn = false;
 		}
 	}
 	if (FD_ISSET((unsigned long) info.termfd, &readFds) && FD_ISSET(STDOUT_FILENO, &writeFds)) {
@@ -186,7 +185,6 @@ bool tty_parent_select(pid_t pid, int *pwaitflags) {
 				warn("reading from terminal");
 			}
 			FD_CLR((unsigned long) info.termfd, &info.rfds);
-			rtn = true;
 		}
 	}
 	if (FD_ISSET((unsigned long) info.sigfd, &readFds)) {
@@ -201,16 +199,13 @@ bool tty_parent_select(pid_t pid, int *pwaitflags) {
 			rtn = (sigfd_info.ssi_signo == SIGCHLD);
 		}
 	}
-	if (!FD_ISSET((unsigned long) info.termfd, &info.rfds)) {
-		*pwaitflags &= ~WNOHANG;
-	}
 	return rtn;
 }
 
 void tty_parent_setup(int socket) {
 	// Put the parent's stdin in raw mode, except add CRLF handling.
 	struct termios tios;
-	if (isatty(STDIN_FILENO)) {
+	if ((info.stdinIsatty = isatty(STDIN_FILENO))) {
 		if (tcgetattr(STDIN_FILENO, &tios) < 0) {
 			err(1, "tty_parent: tcgetattr");
 		}
@@ -230,7 +225,7 @@ void tty_parent_setup(int socket) {
 	if (tcgetattr(info.termfd, &tios) < 0) {
 		err(1, "tty_parent: tcgetattr");
 	}
-	tios.c_oflag &= ~OPOST;
+	tios.c_oflag &= ~((tcflag_t){OPOST});
 	if (tcsetattr(info.termfd, TCSAFLUSH, &tios) < 0) {
 		err(1, "tty_parent: tcsetattr");
 	}
@@ -254,6 +249,9 @@ void tty_parent_setup(int socket) {
 		info.nfds = info.sigfd + 1;
 	} else {
 		info.nfds = info.termfd + 1;
+	}
+	if (info.stdinIsatty) {
+		tty_set_winsize();
 	}
 }
 
