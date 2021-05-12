@@ -275,7 +275,6 @@ int enter(struct entry_settings *opts)
 			
 		for (;;) {
 
-			int waitflags = WEXITED | WNOHANG;
 			siginfo_t info;
 			if (parentSock < 0) {
 				sig_wait(&mask, &info);
@@ -284,7 +283,7 @@ int enter(struct entry_settings *opts)
 					continue;
 				}
 			} else {
-				if (!tty_parent_select(pid, &waitflags)) {
+				if (!tty_parent_select(pid)) {
 					continue;
 				}
 			}
@@ -294,7 +293,7 @@ int enter(struct entry_settings *opts)
 			   exited. */
 
 			int rc;
-			while ((rc = waitid(P_ALL, 0, &info, waitflags)) != -1) {
+			while ((rc = waitid(P_ALL, 0, &info, WEXITED | WNOHANG)) != -1) {
 				if (info.si_signo != SIGCHLD) {
 					break;
 				}
