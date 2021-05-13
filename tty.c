@@ -88,17 +88,24 @@ void send_fd(int socket, int fd) {
 	}
 }
 
-#define R_NFDS 3
-#define W_NFDS 2
+#define R_NFDS 5
 #define R_STDIN 0
 #define R_TERM 1
 #define R_SIG 2
+#define R_INPIPE 3
+#define R_OUTPIPE 4
+
+#define W_NFDS 4
 #define W_STDOUT 0
 #define W_TERM 1
+#define W_INPIPE 2
+#define W_OUTPIPE 3
 
 static struct tty_parent_info_s {
 	int termfd;
 	int sigfd;
+	int inpipe[2];
+	int outpipe[2];
 	struct pollfd rfds[R_NFDS];
 	struct pollfd wfds[W_NFDS];
 	struct termios orig;
@@ -117,6 +124,12 @@ static struct tty_parent_info_s {
 		[R_SIG] = {
 			.events = POLLIN,
 		},
+		[R_INPIPE] = {
+			.events = POLLIN,
+		},
+		[R_OUTPIPE] = {
+			.events = POLLIN,
+		},
 	},
 	.wfds = {
 		[W_STDOUT] = {
@@ -124,6 +137,12 @@ static struct tty_parent_info_s {
 			.events = POLLOUT,
 		},
 		[W_TERM] = {
+			.events = POLLOUT,
+		},
+		[W_INPIPE] = {
+			.events = POLLOUT,
+		},
+		[W_OUTPIPE] = {
 			.events = POLLOUT,
 		},
 	},
@@ -169,7 +188,6 @@ bool tty_handle_sig(siginfo_t *siginfo) {
 
 bool tty_parent_select(pid_t pid) {
 	const size_t buflen = 1024;
-	char buf[buflen];
 	bool rtn = false;
 
 	int rc = poll(info.rfds, R_NFDS, -1);
@@ -185,33 +203,51 @@ bool tty_parent_select(pid_t pid) {
 	if (poll(info.wfds, W_NFDS, 0) <= 0) {
 		return false;
 	}
-	if ((info.rfds[R_STDIN].revents & POLLIN) && (info.wfds[W_TERM].revents & POLLOUT)) {
-		ssize_t nread = read(STDIN_FILENO, buf, buflen);
-		if (nread > 0) {
-			if (write(info.termfd, buf, (size_t) nread) < 0) {
-				warn("writing to terminal");
-			}
-		} else {
+	if ((info.rfds[R_STDIN].revents & POLLIN) && (info.wfds[W_INPIPE].revents & POLLOUT)) {
+		ssize_t nread = splice(STDIN_FILENO, NULL, info.inpipe[1], NULL, buflen, 0);
+		if (nread <= 0) {
 			if (nread < 0) {
 				warn("reading from stdin");
 			}
 			info.rfds[R_STDIN].revents &= ~POLLIN;
-			if (write(info.termfd, &(char){4}, 1) < 0) {
+			info.rfds[W_INPIPE].revents &= ~POLLOUT;
+			close(info.inpipe[1]);
+		}
+		return false;
+	}
+	if ((info.rfds[R_INPIPE].revents & POLLIN) && (info.wfds[W_TERM].revents & POLLOUT)) {
+		ssize_t nread = splice(info.inpipe[0], NULL, info.termfd, NULL, buflen, 0);
+		if (nread <= 0) {
+			if (nread < 0) {
+				warn("reading from inpipe");
+			}
+			info.rfds[R_INPIPE].revents &= ~POLLIN;
+			info.rfds[W_TERM].revents &= ~POLLOUT;
+			if (write(info.inpipe[1], &(char){4}, 1) < 0) {
 				warn("writing EOT to terminal");
 			}
 		}
 	}
-	if ((info.rfds[R_TERM].revents & POLLIN) && (info.wfds[W_STDOUT].revents & POLLOUT)) {
-		ssize_t nread = read(info.termfd, buf, buflen);
-		if (nread > 0) {
-			if (write(STDOUT_FILENO, buf, (size_t) nread) < 0) {
-				warn("writing to stdout");
-			}
-		} else {
+	if ((info.rfds[R_TERM].revents & POLLIN) && (info.wfds[W_OUTPIPE].revents & POLLOUT)) {
+		ssize_t nread = splice(info.termfd, NULL, info.outpipe[1], NULL, buflen, 0);
+		if (nread <= 0) {
 			if (nread < 0 && errno != EIO) {
 				warn("reading from terminal");
 			}
 			info.rfds[R_TERM].revents &= ~POLLIN;
+			info.rfds[W_OUTPIPE].revents &= ~POLLOUT;
+			close(info.outpipe[1]);
+		}
+		return false;
+	}
+	if ((info.rfds[R_OUTPIPE].revents & POLLIN) && (info.wfds[W_STDOUT].revents & POLLOUT)) {
+		ssize_t nread = splice(info.outpipe[0], NULL, STDOUT_FILENO, NULL, buflen, 0);
+		if (nread <= 0) {
+			if (nread < 0) {
+				warn("reading from outpipe");
+			}
+			info.rfds[R_OUTPIPE].revents &= ~POLLIN;
+			info.rfds[W_STDOUT].revents &= ~POLLOUT;
 		}
 	}
 	if (info.rfds[R_SIG].revents & POLLIN) {
@@ -265,8 +301,22 @@ void tty_parent_setup(int socket) {
 	if ((info.sigfd = signalfd(-1, &sigmask, 0)) < 0) {
 		err(1, "tty_parent: signalfd");
 	}
+
+	if (pipe(info.inpipe) < 0) {
+		err(1, "tty_parent: pipe(inpipe)");
+	}
+	if (pipe(info.outpipe) < 0) {
+		err(1, "tty_parent: pipe(outpipe)");
+	}
+	fcntl(STDOUT_FILENO, F_SETFL, fcntl(STDOUT_FILENO, F_GETFL) & ~O_APPEND);
+
 	info.rfds[R_TERM].fd = info.wfds[W_TERM].fd = info.termfd;
 	info.rfds[R_SIG].fd = info.sigfd;
+	info.rfds[R_INPIPE].fd = info.inpipe[0];
+	info.wfds[W_INPIPE].fd = info.inpipe[1];
+	info.rfds[R_OUTPIPE].fd = info.outpipe[0];
+	info.wfds[W_OUTPIPE].fd = info.outpipe[1];
+
 	if (info.stdinIsatty) {
 		tty_set_winsize();
 	}
