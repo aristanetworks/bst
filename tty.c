@@ -205,14 +205,15 @@ bool tty_parent_select(pid_t pid) {
 void tty_parent_setup(int socket) {
 	// Put the parent's stdin in raw mode, except add CRLF handling.
 	struct termios tios;
-	if ((info.stdinIsatty = isatty(STDIN_FILENO))) {
-		if (tcgetattr(STDIN_FILENO, &tios) < 0) {
-			err(1, "tty_parent: tcgetattr");
-		}
+
+	info.stdinIsatty = tcgetattr(STDIN_FILENO, &tios) == 0;
+	if (!info.stdinIsatty && errno != ENOTTY) {
+		err(1, "tty_parent: tcgetattr");
+	}
+
+	if (info.stdinIsatty) {
 		info.orig = tios;
 		cfmakeraw(&tios);
-		// keep c_oflag the same
-		tios.c_oflag = info.orig.c_oflag;
 		if (tcsetattr(STDIN_FILENO, TCSANOW, &tios) < 0) {
 			err(1, "tty_parent: tcsetattr");
 		}
@@ -220,14 +221,12 @@ void tty_parent_setup(int socket) {
 	atexit(tty_parent_cleanup);
 
 	// Wait for the child to create the pty pair and pass the master back.
-	// Turn off CRLF handling since that gives us ^Ms in output.
 	recv_fd(socket, &info.termfd);
-	if (tcgetattr(info.termfd, &tios) < 0) {
-		err(1, "tty_parent: tcgetattr");
-	}
-	tios.c_oflag &= ~((tcflag_t){OPOST});
-	if (tcsetattr(info.termfd, TCSAFLUSH, &tios) < 0) {
-		err(1, "tty_parent: tcsetattr");
+
+	if (info.stdinIsatty) {
+		if (tcsetattr(info.termfd, TCSAFLUSH, &info.orig) < 0) {
+			err(1, "tty_parent: tcsetattr");
+		}
 	}
 
 	sigset_t sigmask;
