@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
+#include <sys/eventfd.h>
 #include <sys/file.h>
 #include <sys/signalfd.h>
 #include <sys/socket.h>
@@ -276,7 +277,8 @@ static int tty_handle_io(int epollfd, const struct epoll_event *ev, int fd, pid_
 	}
 
 	if ((inbound_handler.ready & (READ_READY | WRITE_READY)) == (READ_READY | WRITE_READY)) {
-		int read_fd = inbound_handler.fd;
+		/* inbound_handler.fd might contain our eventfd workaround */
+		int read_fd = STDIN_FILENO;
 		int write_fd = inbound_handler.peer_fd;
 
 		ssize_t copied = io_copy(write_fd, read_fd, &inbound_buffer);
@@ -302,7 +304,8 @@ static int tty_handle_io(int epollfd, const struct epoll_event *ev, int fd, pid_
 
 	if (outbound_handler.ready == (READ_READY | WRITE_READY)) {
 		int read_fd = outbound_handler.peer_fd;
-		int write_fd = outbound_handler.fd;
+		/* outbound_handler.fd might contain our eventfd workaround */
+		int write_fd = STDOUT_FILENO;
 
 		if (io_copy(write_fd, read_fd, &outbound_buffer) == -1) {
 			err(1, "copy tty -> stdout");
@@ -424,14 +427,56 @@ void tty_parent_setup(int epollfd, int socket)
 	event.data.ptr = &inbound_handler;
 
 	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, STDIN_FILENO, &event) == -1) {
-		err(1, "epoll_ctl_add stdin");
+		if (errno != EPERM && errno != EBADF) {
+			err(1, "epoll_ctl_add stdin");
+		}
+		/* EPERM means the file descriptor does not support epoll. This can
+		   happen if our caller closed stdin on us, which causes the libc to
+		   open /dev/full O_WRONLY in its stead.
+
+		   EBADF usually does not happen for the reason above, but I can
+		   imagine that not all libcs might open /dev/full for us.
+
+		   Devices and regular files never block and are always read-ready
+		   (well, rather, it's not possible to know whether an IO operation
+		   will wait on disk, and select() already reports regular files
+		   as being always read-ready). Emulate that behaviour with an eventfd. */
+
+		int fd = eventfd(1, EFD_CLOEXEC);
+		if (fd == -1) {
+			err(1, "eventfd");
+		}
+
+		inbound_handler.fd = fd;
+		if (epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &event) == -1) {
+			err(1, "epoll_ctl_add stdout eventfd fallback");
+		}
 	}
 
 	event.events = EPOLLOUT | EPOLLONESHOT;
 	event.data.ptr = &outbound_handler;
 
 	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, STDOUT_FILENO, &event) == -1) {
-		err(1, "epoll_ctl_add stdout");
+		if (errno != EPERM && errno != EBADF) {
+			err(1, "epoll_ctl_add stdout");
+		}
+		/* We ignore EPERM for the same reasons as for stdin. The libc opens
+		   /dev/null if our caller closed stdout.
+
+		   EBADF has the same treatment as stdin, too.
+
+		   Devices and regular files never block, and are always write-ready.
+		   Emulate that behaviour with an eventfd. */
+
+		int fd = eventfd(1, EFD_CLOEXEC);
+		if (fd == -1) {
+			err(1, "eventfd");
+		}
+
+		outbound_handler.fd = fd;
+		if (epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &event) == -1) {
+			err(1, "epoll_ctl_add stdout eventfd fallback");
+		}
 	}
 
 	if (info.stdinIsatty) {
