@@ -212,6 +212,7 @@ void mount_entries(const char *root, const struct mount_entry *mounts, size_t nm
 				{ "tty",     S_IFCHR | 0666, makedev(5, 0) },
 				{ "random",  S_IFCHR | 0666, makedev(1, 8) },
 				{ "urandom", S_IFCHR | 0666, makedev(1, 9) },
+				{ "net/tun", S_IFCHR | 0666, makedev(10, 200) },
 			};
 
 			for (size_t i = 0; i < lengthof(devices); ++i) {
@@ -247,6 +248,11 @@ void mount_entries(const char *root, const struct mount_entry *mounts, size_t nm
 				}
 
 				if (mount(source, path, "", MS_BIND, "") == -1) {
+					if (errno == ENOENT) {
+						/* device doesn't exist in the host, can't bind mount it */
+						unlink(path);
+						continue;
+					}
 					err(1, "mount_entries: bst_devtmpfs: bind-mount %s to %s",
 							source, path);
 				}
