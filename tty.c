@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <util.h>
 
+#include "errutil.h"
 #include "sig.h"
 #include "tty.h"
 
@@ -356,7 +357,12 @@ void tty_parent_setup(int epollfd, int socket)
 		if (tcsetattr(STDIN_FILENO, TCSANOW, &tios) == -1) {
 			err(1, "tty_parent: tcsetattr");
 		}
+
+		/* We changed the terminal to raw mode. Line-endings now need carriage
+		   returns in order to be palatable. */
+		err_line_ending = "\r\n";
 	}
+	atexit(tty_parent_cleanup);
 
 	// Wait for the child to create the pty pair and pass the master back.
 	recv_fd(socket, &info.termfd);

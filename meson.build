@@ -77,6 +77,7 @@ bst_sources = [
 	'capable.c',
 	'compat.c',
 	'enter.c',
+	'err.c',
 	'kvlist.c',
 	'main.c',
 	'mount.c',

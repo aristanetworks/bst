@@ -27,6 +27,7 @@
 #include "bst_limits.h"
 #include "capable.h"
 #include "enter.h"
+#include "errutil.h"
 #include "mount.h"
 #include "net.h"
 #include "ns.h"
@@ -373,6 +374,9 @@ int enter(struct entry_settings *opts)
 			}
 		}
 	}
+
+	/* err() and errx() cannot use exit(), since it's not fork-safe. */
+	err_exit = _exit;
 
 	if (parentSock >= 0) {
 		close(parentSock);
