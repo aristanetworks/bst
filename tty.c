@@ -25,7 +25,8 @@
 #include "sig.h"
 #include "tty.h"
 
-void recv_fd(int socket, int *pFd) {
+void recv_fd(int socket, int *pFd)
+{
 	char buf[1];
 	struct iovec iov[1] = {
 		[0] = {.iov_base = buf, .iov_len = 1 }
@@ -62,7 +63,8 @@ void recv_fd(int socket, int *pFd) {
 	}
 }
 
-void send_fd(int socket, int fd) {
+void send_fd(int socket, int fd)
+{
 	char buf[1] = {0};
 	struct iovec iov[1] = {
 		[0] = {.iov_base = buf, .iov_len = 1 }
@@ -103,7 +105,8 @@ static struct tty_parent_info_s {
 	.termfd = -1,
 };
 
-void tty_setup_socketpair(int *pParentSock, int *pChildSock) {
+void tty_setup_socketpair(int *pParentSock, int *pChildSock)
+{
 	int socks[2];
 	if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, socks) < 0) {
 		err(1, "tty_setup: socketpair");
@@ -187,7 +190,8 @@ static void set_nonblock(int fd, int nonblock)
 	}
 }
 
-void tty_parent_cleanup() {
+void tty_parent_cleanup(void)
+{
 	if (info.termfd >= 0) {
 		/* Drain any remaining data in the terminal buffer */
 		set_nonblock(STDOUT_FILENO, 0);
@@ -209,7 +213,8 @@ void tty_parent_cleanup() {
 	}
 }
 
-void tty_set_winsize() {
+void tty_set_winsize(void)
+{
 	struct winsize wsize;
 	if (info.stdinIsatty) {
 		if (ioctl(STDIN_FILENO, TIOCGWINSZ, (char*) &wsize) < 0) {
@@ -428,7 +433,8 @@ void tty_parent_setup(int epollfd, int socket)
 	}
 }
 
-void tty_child(int socket) {
+void tty_child(int socket)
+{
 	int mfd = open("/dev/pts/ptmx", O_RDWR | O_NONBLOCK);
 	if (mfd < 0) {
 		err(1, "tty_child: open ptmx");
