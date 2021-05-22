@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/epoll.h>
 #include <sys/file.h>
 #include <sys/mount.h>
 #include <sys/personality.h>
@@ -65,6 +66,64 @@ static void apply_limit(int resource, struct rlimit const *value)
 	if (setrlimit(resource, value)) {
 		err(1, "setrlimit(%d) failed", resource);
 	}
+}
+
+static int sig_handler(int epollfd, const struct epoll_event *ev, int fd, pid_t pid)
+{
+	siginfo_t info;
+	sig_read(fd, &info);
+	sig_forward(&info, pid);
+
+	if (info.si_signo != SIGCHLD) {
+		return EPOLL_HANDLER_CONTINUE;
+	}
+
+	struct epoll_handler *handler = ev->data.ptr;
+
+	/* We might have been run as a process subreaper against our
+	   will -- make sure we only exit when the main child pid
+	   exited. */
+
+	int rc;
+	while ((rc = waitid(P_ALL, 0, &info, WEXITED | WNOHANG)) != -1) {
+		if (info.si_signo != SIGCHLD) {
+			break;
+		}
+
+		if (info.si_pid == pid) {
+			switch (info.si_code) {
+			case CLD_EXITED:
+				return info.si_status;
+			case CLD_KILLED:
+			case CLD_DUMPED:
+				return info.si_status | 1 << 7;
+			}
+		} else if (info.si_pid == handler->helper_pid) {
+			switch (info.si_code) {
+			case CLD_KILLED:
+				errx(1, "helper got killed with signal %d", info.si_status);
+			case CLD_DUMPED:
+				errx(1, "helper crashed with signal %d", info.si_status);
+			case CLD_EXITED:
+				if (info.si_status > 1) {
+					errx(1, "helper exit status %d", info.si_status);
+				}
+				break;
+			}
+		}
+	}
+	if (rc == -1) {
+		err(1, "waitid");
+	}
+
+	return EPOLL_HANDLER_CONTINUE;
+}
+
+static int cmp_epoll_handler(const void *a, const void *b)
+{
+	struct epoll_handler *lhs = ((const struct epoll_event *)a)->data.ptr;
+	struct epoll_handler *rhs = ((const struct epoll_event *)b)->data.ptr;
+	return lhs->priority - rhs->priority;
 }
 
 int enter(struct entry_settings *opts)
@@ -266,62 +325,51 @@ int enter(struct entry_settings *opts)
 		outer_helper_sendpid(&outer_helper, pid);
 		outer_helper_close(&outer_helper);
 
+		int epollfd = epoll_create1(EPOLL_CLOEXEC);
+
 		sigset_t mask;
 		sigfillset(&mask);
 
 		if (parentSock >= 0) {
-			tty_parent_setup(parentSock);
+			/* tty_parent_setup handles SIGWINCH to resize the pty */
+			sigdelset(&mask, SIGWINCH);
+			tty_parent_setup(epollfd, parentSock);
 		}
-			
+		sig_setup(epollfd, &mask, outer_helper.pid, sig_handler);
+
 		for (;;) {
 
-			siginfo_t info;
-			if (parentSock < 0) {
-				sig_wait(&mask, &info);
-				sig_forward(&info, pid);
-				if (info.si_signo != SIGCHLD) {
-					continue;
+			/* 16 events is good enough */
+			struct epoll_event events[16];
+			int ready;
+			do {
+				ready = epoll_wait(epollfd, events, lengthof(events), -1);
+				if (ready == -1 && errno != EINTR) {
+					err(1, "epoll_wait");
 				}
-			} else {
-				if (!tty_parent_select(pid)) {
-					continue;
-				}
-			}
+			} while (ready == -1);
 
-			/* We might have been run as a process subreaper against our
-			   will -- make sure we only exit when the main child pid
-			   exited. */
+			/* Sort the handlers by priority */
+			qsort(events, (size_t) ready, sizeof (*events), cmp_epoll_handler);
 
-			int rc;
-			while ((rc = waitid(P_ALL, 0, &info, WEXITED | WNOHANG)) != -1) {
-				if (info.si_signo != SIGCHLD) {
-					break;
-				}
+			for (int i = 0; i < ready; ++i) {
+				struct epoll_handler *handler = events[i].data.ptr;
+				int rc = handler->fn(epollfd, &events[i], handler->fd, pid);
+				if (rc >= 0) {
+					/* Cleanup and exit. We reset our proc mask to allow
+					   ourselves to get killed during anything that blocks. */
+					sigset_t mask;
+					sigemptyset(&mask);
 
-				if (info.si_pid == pid) {
-					switch (info.si_code) {
-					case CLD_EXITED:
-						return info.si_status;
-					case CLD_KILLED:
-					case CLD_DUMPED:
-						return info.si_status | 1 << 7;
+					if (sigprocmask(SIG_SETMASK, &mask, NULL) == -1) {
+						err(1, "sigprocmask");
 					}
-				} else if (info.si_pid == outer_helper.pid) {
-					switch (info.si_code) {
-					case CLD_KILLED:
-						errx(1, "helper got killed with signal %d", info.si_status);
-					case CLD_DUMPED:
-						errx(1, "helper crashed with signal %d", info.si_status);
-					case CLD_EXITED:
-						if (info.si_status > 1) {
-							errx(1, "helper exit status %d", info.si_status);
-						}
-						break;
+
+					if (parentSock >= 0) {
+						tty_parent_cleanup();
 					}
+					return rc;
 				}
-			}
-			if (rc == -1) {
-				err(1, "waitid");
 			}
 		}
 	}

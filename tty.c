@@ -4,6 +4,7 @@
  * in the LICENSE file.
  */
 
+#include <assert.h>
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -12,9 +13,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/epoll.h>
 #include <sys/file.h>
 #include <sys/signalfd.h>
-#include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <termios.h>
@@ -88,16 +89,18 @@ void send_fd(int socket, int fd) {
 	}
 }
 
+struct buffer {
+	char buf[BUFSIZ];
+	size_t index;
+	size_t size;
+};
+
 static struct tty_parent_info_s {
 	int termfd;
-	int sigfd;
-	fd_set rfds, wfds;
-	int nfds;
 	struct termios orig;
 	bool stdinIsatty;
 } info = {
 	.termfd = -1,
-	.sigfd = -1,
 };
 
 void tty_setup_socketpair(int *pParentSock, int *pChildSock) {
@@ -109,101 +112,232 @@ void tty_setup_socketpair(int *pParentSock, int *pChildSock) {
 	*pChildSock = socks[1];
 }
 
+static ssize_t io_copy(int out_fd, int in_fd, struct buffer *buf)
+{
+	_Static_assert(sizeof (buf->buf) == BUFSIZ,
+			"buf->buf must be of size BUFSIZ, check that sizeof (buf->buf) is still correct.");
+
+	ssize_t copied = 0;
+	ssize_t rd = sizeof (buf->buf);
+
+	for (;;) {
+
+		/* Write any leftover data from a previous read. This handles the case
+		   where we cannot write all of the data we read from in_fd into
+		   out_fd without having out_fd block.
+
+		   This also serves as the main write syscall of the loop; the read
+		   happens at the end, and simply loops back here when new data
+		   is available in the buffer. */
+
+		while (buf->size > 0) {
+			ssize_t written = write(out_fd, buf->buf + buf->index, buf->size);
+			if (written == -1) {
+				switch (errno) {
+				case EINTR:
+					continue;
+				case EAGAIN:
+					if (copied != 0) {
+						return copied;
+					}
+					break;
+				}
+				return -1;
+			}
+			buf->size -= written;
+			buf->index += written;
+			copied += written;
+		}
+
+		if ((size_t) rd < sizeof (buf->buf)) {
+			return copied;
+		}
+
+		rd = read(in_fd, buf->buf, sizeof (buf->buf));
+		if (rd == -1) {
+			switch (errno) {
+			case EAGAIN:
+				if (copied != 0) {
+					return copied;
+				}
+				break;
+			case EINTR:
+				continue;
+			}
+			return -1;
+		}
+		buf->size = (size_t) rd;
+		buf->index = 0;
+	}
+}
+
+static void set_nonblock(int fd, int nonblock)
+{
+	int flags = fcntl(fd, F_GETFL);
+	if (flags == -1) {
+		err(1, "fcntl %d F_GETFL", fd);
+	}
+	if (nonblock) {
+		flags |= O_NONBLOCK;
+	} else {
+		flags &= ~O_NONBLOCK;
+	}
+	if (fcntl(fd, F_SETFL, flags) == -1) {
+		err(1, "fcntl %d F_SETFL O_NONBLOCK", fd);
+	}
+}
+
 void tty_parent_cleanup() {
 	if (info.termfd >= 0) {
+		/* Drain any remaining data in the terminal buffer */
+		set_nonblock(STDOUT_FILENO, 0);
+		set_nonblock(info.termfd, 0);
+		struct buffer drain = {
+			.size = 0,
+		};
+
+		if (io_copy(STDOUT_FILENO, info.termfd, &drain) == -1 && errno != EIO) {
+			warn("copy tty -> stdout");
+		}
+
 		close(info.termfd);
+		info.termfd = -1;
 	}
 	if (info.stdinIsatty) {
 		tcsetattr(STDIN_FILENO, TCSADRAIN, &info.orig);
+		info.stdinIsatty = false;
 	}
 }
 
 void tty_set_winsize() {
 	struct winsize wsize;
-	if (ioctl(STDIN_FILENO, TIOCGWINSZ, (char*) &wsize) < 0) {
-		err(1, "reading window size");
-	}
-	if (ioctl(info.termfd, TIOCSWINSZ, (char*) &wsize) < 0) {
-		err(1, "writing window size");
+	if (info.stdinIsatty) {
+		if (ioctl(STDIN_FILENO, TIOCGWINSZ, (char*) &wsize) < 0) {
+			err(1, "reading window size");
+		}
+		if (ioctl(info.termfd, TIOCSWINSZ, (char*) &wsize) < 0) {
+			err(1, "writing window size");
+		}
 	}
 }
 
-bool tty_handle_sig(siginfo_t *siginfo) {
-	switch (siginfo->si_signo) {
-	case SIGWINCH:
-		if (!info.stdinIsatty) return false;
-		tty_set_winsize();
-		return true;
-	}
-	return false;
+static int tty_handle_sig(int epollfd, const struct epoll_event *ev, int fd, pid_t pid)
+{
+	siginfo_t siginfo;
+	sig_read(fd, &siginfo);
+
+	assert(siginfo.si_signo == SIGWINCH && "tty_handle_sig can only handle SIGWINCH");
+	tty_set_winsize();
+	return EPOLL_HANDLER_CONTINUE;
 }
 
-bool tty_parent_select(pid_t pid) {
-	const size_t buflen = 1024;
-	char buf[buflen];
-	fd_set readFds = info.rfds, writeFds = info.wfds;
-	bool rtn = false;
+static struct epoll_handler inbound_handler, outbound_handler, term_handler;
 
-	int rc = select(info.nfds, &readFds, NULL, NULL, NULL);
-	if (rc == 0) {
-		return false;
-	}
-	if (rc < 0) {
-		if (errno == EINTR) {
-			return false;
+static struct buffer inbound_buffer, outbound_buffer;
+
+static int tty_handle_io(int epollfd, const struct epoll_event *ev, int fd, pid_t pid)
+{
+	struct epoll_handler *handler = ev->data.ptr;
+
+	if (fd == inbound_handler.fd) {
+		if (ev->events & EPOLLIN) {
+			handler->ready |= READ_READY;
 		}
-		err(1, "select");
-	}
-	struct timeval immediate = {0};
-	if (select(info.nfds, NULL, &writeFds, NULL, &immediate) < 0) {
-		return false;
-	}
-	if (FD_ISSET(STDIN_FILENO, &readFds) && FD_ISSET((unsigned long) info.termfd, &writeFds)) {
-		ssize_t nread = read(STDIN_FILENO, buf, buflen);
-		if (nread > 0) {
-			if (write(info.termfd, buf, (size_t) nread) < 0) {
-				warn("writing to terminal");
-			}
-		} else {
-			if (nread < 0) {
-				warn("reading from stdin");
-			}
-			FD_CLR(STDIN_FILENO, &info.rfds);
-			if (write(info.termfd, &(char){4}, 1) < 0) {
-				warn("writing EOT to terminal");
-			}
+		if (ev->events & EPOLLHUP) {
+			handler->ready |= HANGUP;
 		}
-	}
-	if (FD_ISSET((unsigned long) info.termfd, &readFds) && FD_ISSET(STDOUT_FILENO, &writeFds)) {
-		ssize_t nread = read(info.termfd, buf, buflen);
-		if (nread > 0) {
-			if (write(STDOUT_FILENO, buf, (size_t) nread) < 0) {
-				warn("writing to stdout");
+	} else if (fd == outbound_handler.fd) {
+		if (ev->events & EPOLLOUT) {
+			handler->ready |= WRITE_READY;
+		}
+	} else {
+		struct epoll_event newev = *ev;
+		newev.events = EPOLLIN | EPOLLOUT | EPOLLONESHOT;
+
+		if (ev->events & EPOLLOUT || inbound_handler.ready & WRITE_READY) {
+			inbound_handler.ready |= WRITE_READY;
+			newev.events &= ~EPOLLOUT;
+		}
+		if (ev->events & EPOLLIN || outbound_handler.ready & READ_READY) {
+			outbound_handler.ready |= READ_READY;
+			newev.events &= ~EPOLLIN;
+		}
+		if (!(ev->events & EPOLLHUP) && newev.events != EPOLLONESHOT) {
+			if (epoll_ctl(epollfd, EPOLL_CTL_MOD, fd, &newev) == -1) {
+				err(1, "epoll_ctl_mod termfd");
 			}
-		} else {
-			if (nread < 0 && errno != EIO) {
-				warn("reading from terminal");
-			}
-			FD_CLR((unsigned long) info.termfd, &info.rfds);
 		}
 	}
-	if (FD_ISSET((unsigned long) info.sigfd, &readFds)) {
-		struct signalfd_siginfo sigfd_info;
-		if (read(info.sigfd, &sigfd_info, sizeof(sigfd_info)) == sizeof(sigfd_info)) {
-			siginfo_t siginfo;
-			siginfo.si_signo = (int) sigfd_info.ssi_signo;
-			siginfo.si_code = sigfd_info.ssi_code;
-			if (!tty_handle_sig(&siginfo)) {
-				sig_forward(&siginfo, pid);
-			}
-			rtn = (sigfd_info.ssi_signo == SIGCHLD);
+
+	if ((inbound_handler.ready & (READ_READY | WRITE_READY)) == (READ_READY | WRITE_READY)) {
+		int read_fd = inbound_handler.fd;
+		int write_fd = inbound_handler.peer_fd;
+
+		ssize_t copied = io_copy(write_fd, read_fd, &inbound_buffer);
+		if (copied == -1) {
+			err(1, "copy stdin -> tty");
+		}
+
+		inbound_handler.ready &= ~(READ_READY|WRITE_READY);
+
+		struct epoll_event newev = {
+			.events = EPOLLIN | EPOLLONESHOT,
+			.data.ptr = &inbound_handler,
+		};
+		if (epoll_ctl(epollfd, EPOLL_CTL_MOD, inbound_handler.fd, &newev) == -1) {
+			err(1, "epoll_ctl_mod stdin");
+		}
+	} else if ((inbound_handler.ready & (WRITE_READY | HANGUP)) == (WRITE_READY | HANGUP)) {
+		if (write(inbound_handler.peer_fd, &(char){4}, 1) < 0) {
+			err(1, "writing EOT to terminal");
+		}
+		inbound_handler.ready &= ~HANGUP;
+	}
+
+	if (outbound_handler.ready == (READ_READY | WRITE_READY)) {
+		int read_fd = outbound_handler.peer_fd;
+		int write_fd = outbound_handler.fd;
+
+		if (io_copy(write_fd, read_fd, &outbound_buffer) == -1) {
+			err(1, "copy tty -> stdout");
+		}
+
+		outbound_handler.ready = 0;
+
+		struct epoll_event newev = {
+			.events = EPOLLOUT | EPOLLONESHOT,
+			.data.ptr = &outbound_handler,
+		};
+		if (epoll_ctl(epollfd, EPOLL_CTL_MOD, outbound_handler.fd, &newev) == -1) {
+			err(1, "epoll_ctl_mod stdout");
 		}
 	}
-	return rtn;
+
+	struct epoll_event termev = {
+		.events = EPOLLIN | EPOLLOUT | EPOLLONESHOT,
+		.data.ptr = &term_handler,
+	};
+
+	if (inbound_handler.ready & WRITE_READY) {
+		termev.events &= ~EPOLLOUT;
+	}
+	if (outbound_handler.ready & READ_READY) {
+		termev.events &= ~EPOLLIN;
+	}
+	if (termev.events != EPOLLONESHOT) {
+		if (epoll_ctl(epollfd, EPOLL_CTL_MOD, info.termfd, &termev) == -1) {
+			err(1, "epoll_ctl_mod termfd");
+		}
+	}
+
+	return EPOLL_HANDLER_CONTINUE;
 }
 
-void tty_parent_setup(int socket) {
-	// Put the parent's stdin in raw mode, except add CRLF handling.
+void tty_parent_setup(int epollfd, int socket)
+{
+	set_nonblock(STDIN_FILENO, 1);
+	set_nonblock(STDOUT_FILENO, 1);
+
 	struct termios tios;
 
 	info.stdinIsatty = tcgetattr(STDIN_FILENO, &tios) == 0;
@@ -214,48 +348,88 @@ void tty_parent_setup(int socket) {
 	if (info.stdinIsatty) {
 		info.orig = tios;
 		cfmakeraw(&tios);
-		if (tcsetattr(STDIN_FILENO, TCSANOW, &tios) < 0) {
+		if (tcsetattr(STDIN_FILENO, TCSANOW, &tios) == -1) {
 			err(1, "tty_parent: tcsetattr");
 		}
 	}
-	atexit(tty_parent_cleanup);
 
 	// Wait for the child to create the pty pair and pass the master back.
 	recv_fd(socket, &info.termfd);
 
 	if (info.stdinIsatty) {
-		if (tcsetattr(info.termfd, TCSAFLUSH, &info.orig) < 0) {
+		if (tcsetattr(info.termfd, TCSAFLUSH, &info.orig) == -1) {
 			err(1, "tty_parent: tcsetattr");
 		}
 	}
 
 	sigset_t sigmask;
-	sigfillset(&sigmask);
-	if (sigprocmask(SIG_BLOCK, &sigmask, NULL) < 0) {
-		err(1, "tty_parent: sigprocmask");
-	}
-	if ((info.sigfd = signalfd(-1, &sigmask, 0)) < 0) {
+	sigemptyset(&sigmask);
+	sigaddset(&sigmask, SIGWINCH);
+
+	int sigfd = signalfd(-1, &sigmask, 0);
+	if (sigfd == -1) {
 		err(1, "tty_parent: signalfd");
 	}
-	FD_ZERO(&info.rfds);
-	FD_ZERO(&info.wfds);
-	FD_SET(STDIN_FILENO, &info.rfds);
-	FD_SET((unsigned long) info.termfd, &info.rfds);
-	FD_SET((unsigned long) info.sigfd, &info.rfds);
-	FD_SET(STDOUT_FILENO, &info.wfds);
-	FD_SET((unsigned long) info.termfd, &info.wfds);
-	if (info.sigfd > info.termfd) {
-		info.nfds = info.sigfd + 1;
-	} else {
-		info.nfds = info.termfd + 1;
+
+	static struct epoll_handler sighandler;
+	sighandler.fn = tty_handle_sig;
+	sighandler.fd = sigfd;
+
+	struct epoll_event event = {
+		.events = EPOLLIN,
+		.data.ptr = &sighandler,
+	};
+
+	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, sigfd, &event) == -1) {
+		err(1, "epoll_ctl_add signalfd");
 	}
+
+	inbound_handler = (struct epoll_handler) {
+		.fn = tty_handle_io,
+		.fd = STDIN_FILENO,
+		.peer_fd = info.termfd,
+	};
+
+	outbound_handler = (struct epoll_handler) {
+		.fn = tty_handle_io,
+		.fd = STDOUT_FILENO,
+		.peer_fd = info.termfd,
+	};
+
+	term_handler = (struct epoll_handler) {
+		.fn = tty_handle_io,
+		.fd = info.termfd,
+		.peer_fd = -1,
+	};
+
+	event.events = EPOLLOUT | EPOLLIN | EPOLLONESHOT;
+	event.data.ptr = &term_handler;
+
+	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, info.termfd, &event) == -1) {
+		err(1, "epoll_ctl_add termfd");
+	}
+
+	event.events = EPOLLIN | EPOLLONESHOT;
+	event.data.ptr = &inbound_handler;
+
+	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, STDIN_FILENO, &event) == -1) {
+		err(1, "epoll_ctl_add stdin");
+	}
+
+	event.events = EPOLLOUT | EPOLLONESHOT;
+	event.data.ptr = &outbound_handler;
+
+	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, STDOUT_FILENO, &event) == -1) {
+		err(1, "epoll_ctl_add stdout");
+	}
+
 	if (info.stdinIsatty) {
 		tty_set_winsize();
 	}
 }
 
 void tty_child(int socket) {
-	int mfd = open("/dev/pts/ptmx", O_RDWR);
+	int mfd = open("/dev/pts/ptmx", O_RDWR | O_NONBLOCK);
 	if (mfd < 0) {
 		err(1, "tty_child: open ptmx");
 	}

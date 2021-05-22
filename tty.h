@@ -11,8 +11,9 @@
 # include <stdbool.h>
 
 void tty_setup_socketpair(int *pParentSock, int *pChildSock);
-void tty_parent_setup(int fd);
+void tty_parent_setup(int epollfd, int socket);
 bool tty_parent_select(pid_t pid);
+void tty_parent_cleanup();
 void tty_child(int fd);
 
 #endif /* !TTY_H */
