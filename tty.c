@@ -488,7 +488,15 @@ void tty_child(int socket)
 {
 	int mfd = open("/dev/pts/ptmx", O_RDWR | O_NONBLOCK);
 	if (mfd < 0) {
-		err(1, "tty_child: open ptmx");
+		if (errno == EACCES) {
+			/* Special case: some distros configure /dev/pts/ptmx to be mode
+			   0000 as a way to force the use of /dev/ptmx. Fallback to that
+			   so that it works as expected when not changing roots. */
+			mfd = open("/dev/ptmx", O_RDWR | O_NONBLOCK);
+		}
+		if (mfd == -1) {
+			err(1, "tty_child: open ptmx");
+		}
 	}
 	int unlock = 0;
 	if (ioctl(mfd, TIOCSPTLCK, &unlock) < 0) {

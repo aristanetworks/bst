@@ -6,9 +6,9 @@ Allocate a PTY for the spacetime
 
 Check that redirections still work
 
-	$ echo hello | bst --tty --mount devpts,/dev/pts,devpts,mode=620,ptmxmode=666 cat
+	$ echo hello | bst --tty cat
 	hello
 	hello
 
-	$ bst --tty --mount devpts,/dev/pts,devpts,mode=620,ptmxmode=666 echo hello | cat
+	$ bst --tty echo hello | cat
 	hello
