@@ -192,6 +192,18 @@ static void set_nonblock(int fd, int nonblock)
 	}
 }
 
+static void send_veof(int ptm)
+{
+	struct termios tios;
+	if (tcgetattr(info.termfd, &tios) == -1) {
+		err(1, "send_veof: tcgetattr");
+	}
+
+	if (write(ptm, &tios.c_cc[VEOF], 1) == -1) {
+		err(1, "send_veof: write");
+	}
+}
+
 void tty_parent_cleanup(void)
 {
 	if (info.termfd >= 0) {
@@ -296,9 +308,7 @@ static int tty_handle_io(int epollfd, const struct epoll_event *ev, int fd, pid_
 			err(1, "epoll_ctl_mod stdin");
 		}
 	} else if ((inbound_handler.ready & (WRITE_READY | HANGUP)) == (WRITE_READY | HANGUP)) {
-		if (write(inbound_handler.peer_fd, &(char){4}, 1) < 0) {
-			err(1, "writing EOT to terminal");
-		}
+		send_veof(inbound_handler.peer_fd);
 		inbound_handler.ready &= ~HANGUP;
 	}
 

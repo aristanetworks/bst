@@ -12,3 +12,7 @@ Check that redirections still work
 
 	$ bst --tty echo hello | cat
 	hello
+
+Ensure we send the correct VEOF control character
+
+	$ yes '' | head -c 32768 | timeout 1 bst --tty sh -c 'stty eof ^B && cat' >/dev/null
