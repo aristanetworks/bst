@@ -481,9 +481,19 @@ int enter(struct entry_settings *opts)
 		   procfs one someone's oddball configuration. */
 		if (procst.st_dev != 0 && procst.st_dev != rootst.st_dev) {
 			const char *target = makepath("%s/proc", root);
-			umount2(target, MNT_DETACH);
 
-			if (mount("proc", target, "proc", 0, NULL) == -1) {
+			int rc = mount("proc", target, "proc", 0, NULL);
+			if (rc == -1 && errno == EBUSY) {
+				/* This situation can arise on some kernels when we don't switch
+				   roots, and the mount namespace already has an entry for /proc.
+				   In this case, we have to unmount the original entry and
+				   mount a new one over it. */
+				if (umount2(target, MNT_DETACH) == -1) {
+					warn("umount2 %s", target);
+				}
+				rc = mount("proc", target, "proc", 0, NULL);
+			}
+			if (rc == -1) {
 				err(1, "mount: %s remount", target);
 			}
 		}
