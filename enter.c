@@ -283,6 +283,18 @@ int enter(struct entry_settings *opts)
 	}
 
 	if (pid) {
+
+		/* Past this point, drop all capabilities. This promises that we do not
+		   need to make any privileged adjustments past initialization, and
+		   makes us debuggable unprivileged during the wait loop. */
+
+		drop_capabilities();
+
+		if (prctl(PR_SET_DUMPABLE, 1) == -1) {
+			/* Not being debuggable is not the end of the world */
+			warn("prctl PR_SET_DUMPABLE");
+		}
+
 		if (childSock >= 0) {
 			close(childSock);
 		}

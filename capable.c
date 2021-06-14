@@ -68,3 +68,11 @@ void reset_capabilities(void)
 	}
 	memcpy(current, original, sizeof (current));
 }
+
+void drop_capabilities(void)
+{
+	memset(current, 0, sizeof (current));
+	if (bst_capset(&hdr, current) == -1) {
+		err(1, "capset");
+	}
+}
