@@ -192,16 +192,14 @@ static void set_nonblock(int fd, int nonblock)
 	}
 }
 
-static void send_veof(int ptm)
+static int send_veof(int ptm)
 {
 	struct termios tios;
 	if (tcgetattr(info.termfd, &tios) == -1) {
 		err(1, "send_veof: tcgetattr");
 	}
 
-	if (write(ptm, &tios.c_cc[VEOF], 1) == -1) {
-		err(1, "send_veof: write");
-	}
+	return write(ptm, &tios.c_cc[VEOF], 1);
 }
 
 void tty_parent_cleanup(void)
@@ -308,8 +306,26 @@ static int tty_handle_io(int epollfd, const struct epoll_event *ev, int fd, pid_
 			err(1, "epoll_ctl_mod stdin");
 		}
 	} else if ((inbound_handler.ready & (WRITE_READY | HANGUP)) == (WRITE_READY | HANGUP)) {
-		send_veof(inbound_handler.peer_fd);
-		inbound_handler.ready &= ~HANGUP;
+		if (send_veof(inbound_handler.peer_fd) == -1) {
+			err(1, "send_eof: write");
+		}
+
+		/* Send VEOF twice. This is necessary, because if there is pending input
+		   on the tty, a VEOF will cause the input to be dropped rather than
+		   signaling EOF. A second VEOF is then required to properly indicate
+		   EOF. */
+		if (send_veof(inbound_handler.peer_fd) == -1) {
+			switch (errno) {
+			case EAGAIN:
+				/* The pty device isn't ready for a second VEOF -- that's fine,
+				   we'll just send it later */
+				break;
+			default:
+				err(1, "send_eof: write");
+			}
+		} else {
+			inbound_handler.ready &= ~HANGUP;
+		}
 	}
 
 	if (outbound_handler.ready == (READ_READY | WRITE_READY)) {
