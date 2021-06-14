@@ -27,5 +27,6 @@ void init_capabilities(void);
 bool capable(uint64_t cap);
 void make_capable(uint64_t cap);
 void reset_capabilities(void);
+void drop_capabilities(void);
 
 #endif /* !CAPABLE_H_ */
