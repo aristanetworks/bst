@@ -19,6 +19,7 @@
 # include "ns.h"
 # include "timens.h"
 # include "userns.h"
+# include "tty.h"
 
 struct limit {
 	bool present;
@@ -84,6 +85,7 @@ struct entry_settings {
 	const char *pidfile;
 
 	bool tty;
+	struct tty_opts ttyopts;
 
 	int no_copy_hard_limits;
 	int no_fake_devtmpfs;

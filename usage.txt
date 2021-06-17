@@ -45,6 +45,7 @@ Options:
       --limit <res>=<value>         Set the specified resource to the provided
                                     value(s).
       --pidfile <path>              Write PID in file and exclusive-lock it.
+      --tty[=<options>]             Allocate a pty for the process.
 
       --no-copy-hard-limits         Don't copy hard limit values to soft limits.
       --no-fake-devtmpfs            Don't replace devtmpfs mounts with fake ones.
@@ -55,4 +56,3 @@ Options:
                                     namespaces.
       --no-env                      Clear the environment before running the
                                     executable.
-      --tty                         Allocate a pty for the process.

@@ -9,11 +9,21 @@
 
 # include <signal.h>
 # include <stdbool.h>
+# include <termios.h>
+
+struct tty_opts {
+	const char *ptmx;
+	struct termios termios;
+	struct termios neg_termios;
+};
+
+extern const char *tty_default_ptmx;
 
 void tty_setup_socketpair(int *pParentSock, int *pChildSock);
-void tty_parent_setup(int epollfd, int socket);
+void tty_parent_setup(struct tty_opts *opts, int epollfd, int socket);
 bool tty_parent_select(pid_t pid);
 void tty_parent_cleanup(void);
-void tty_child(int fd);
+void tty_child(struct tty_opts *opts, int fd);
+void tty_opt_parse(struct tty_opts *opts, const char *key, const char *val);
 
 #endif /* !TTY_H */

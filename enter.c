@@ -334,7 +334,7 @@ int enter(struct entry_settings *opts)
 		if (parentSock >= 0) {
 			/* tty_parent_setup handles SIGWINCH to resize the pty */
 			sigdelset(&mask, SIGWINCH);
-			tty_parent_setup(epollfd, parentSock);
+			tty_parent_setup(&opts->ttyopts, epollfd, parentSock);
 		}
 		sig_setup(epollfd, &mask, outer_helper.pid, sig_handler);
 
@@ -650,9 +650,9 @@ int enter(struct entry_settings *opts)
 	}
 
 	if (childSock >= 0) {
-		tty_child(childSock);
+		tty_child(&opts->ttyopts, childSock);
 	}
-	
+
 	if (opts->init != NULL && opts->init[0] != '\0') {
 
 		if (!pid_unshare && prctl(PR_SET_CHILD_SUBREAPER, 1) == -1) {

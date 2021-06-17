@@ -26,6 +26,7 @@
 #include "errutil.h"
 #include "sig.h"
 #include "tty.h"
+#include "util.h"
 
 void recv_fd(int socket, int *pFd)
 {
@@ -46,8 +47,12 @@ void recv_fd(int socket, int *pFd)
 		.msg_iovlen = 1,
 	};
 
-	if ((recvmsg(socket, &msg, 0)) <= 0) {
+	ssize_t recv = recvmsg(socket, &msg, 0);
+	if (recv == -1) {
 		err(1, "recv_fd: recvmsg");
+	}
+	if (recv == 0) {
+		errx(1, "recv_fd: child exited without sending pty file descriptor");
 	}
 
 	struct cmsghdr *pCm;
@@ -368,7 +373,7 @@ static int tty_handle_io(int epollfd, const struct epoll_event *ev, int fd, pid_
 	return EPOLL_HANDLER_CONTINUE;
 }
 
-void tty_parent_setup(int epollfd, int socket)
+void tty_parent_setup(struct tty_opts *opts, int epollfd, int socket)
 {
 	set_nonblock(STDIN_FILENO, 1);
 	set_nonblock(STDOUT_FILENO, 1);
@@ -396,10 +401,29 @@ void tty_parent_setup(int epollfd, int socket)
 	// Wait for the child to create the pty pair and pass the master back.
 	recv_fd(socket, &info.termfd);
 
-	if (info.stdinIsatty) {
-		if (tcsetattr(info.termfd, TCSAFLUSH, &info.orig) == -1) {
-			err(1, "tty_parent: tcsetattr");
+	if (!info.stdinIsatty) {
+		if (tcgetattr(info.termfd, &tios) == -1) {
+			err(1, "tty_parent: tcgetattr");
 		}
+	} else {
+		tios = info.orig;
+	}
+	tios.c_cflag |= opts->termios.c_cflag;
+	tios.c_cflag &= ~opts->neg_termios.c_cflag;
+	tios.c_lflag |= opts->termios.c_lflag;
+	tios.c_lflag &= ~opts->neg_termios.c_lflag;
+	tios.c_iflag |= opts->termios.c_iflag;
+	tios.c_iflag &= ~opts->neg_termios.c_iflag;
+	tios.c_oflag |= opts->termios.c_oflag;
+	tios.c_oflag &= ~opts->neg_termios.c_oflag;
+	for (size_t i = 0; i < NCCS; ++i) {
+		if (opts->neg_termios.c_cc[i]) {
+			tios.c_cc[i] = opts->termios.c_cc[i];
+		}
+	}
+
+	if (tcsetattr(info.termfd, TCSAFLUSH, &tios) == -1) {
+		err(1, "tty_parent: tcsetattr");
 	}
 
 	sigset_t sigmask;
@@ -510,14 +534,20 @@ void tty_parent_setup(int epollfd, int socket)
 	}
 }
 
-void tty_child(int socket)
+const char *tty_default_ptmx = "/dev/pts/ptmx";
+
+void tty_child(struct tty_opts *opts, int socket)
 {
-	int mfd = open("/dev/pts/ptmx", O_RDWR | O_NONBLOCK);
+	int mfd = open(opts->ptmx, O_RDWR | O_NONBLOCK);
 	if (mfd < 0) {
-		if (errno == EACCES) {
+		if (errno == EACCES && opts->ptmx == tty_default_ptmx) {
 			/* Special case: some distros configure /dev/pts/ptmx to be mode
 			   0000 as a way to force the use of /dev/ptmx. Fallback to that
-			   so that it works as expected when not changing roots. */
+			   so that it works as expected when not changing roots.
+			
+			   The direct comparison against tty_default_ptmx is right -- we want
+			   to fallback when /dev/pts/ptmx is the default, and *not* when
+			   provided by the users via the argv array. */
 			mfd = open("/dev/ptmx", O_RDWR | O_NONBLOCK);
 		}
 		if (mfd == -1) {
@@ -551,4 +581,192 @@ void tty_child(int socket)
 	if (sfd > STDERR_FILENO) {
 		close(sfd);
 	}
+}
+
+struct valmap {
+	const char *name;
+	void (*fn)(struct tty_opts *, const char *, const char *, const void *);
+	const void *cookie;
+};
+
+static void parse_flag(struct tty_opts *opts, const char *key, const char *val, const void *cookie)
+{
+	if (val != NULL) {
+		errx(2, "tty option '%s' must have no value", key);
+	}
+
+	const struct termios *tios = cookie;
+	struct termios *dest = &opts->termios;
+	if (key[0] == '-') {
+		dest = &opts->neg_termios;
+	}
+
+	dest->c_iflag |= tios->c_iflag;
+	dest->c_oflag |= tios->c_oflag;
+	dest->c_lflag |= tios->c_cflag;
+	dest->c_lflag |= tios->c_lflag;
+}
+
+static void parse_cc(struct tty_opts *opts, const char *key, const char *val, const void *cookie)
+{
+	if (key[0] == '-') {
+		errx(2, "tty option '%s' cannot be negated", key);
+	}
+	if (val == NULL) {
+		errx(2, "tty option '%s' must have a value", key);
+	}
+
+	char *end = (char *) &val[0];
+	cc_t cc = val[0];
+	if (cc != 0) {
+		end++;
+	}
+
+	/* Support the caret notation */
+	if (val[0] == '^' && val[1] != '\0') {
+		if ((val[1] < '@' || val[1] > '_') && val[1] != '?') {
+			errx(2, "invalid control character '%s' for tty option '%s'", val, key);
+		}
+		cc = val[1] - 64;
+		if (val[1] == '?') {
+			cc = val[1] + 64;
+		}
+		end = (char *) &val[2];
+	}
+	/* Support the backslash escape notation */
+	if (val[0] == '\\' && val[1] != '\0') {
+		int base = 8;
+		const char *parse = &val[1];
+		if (val[1] == 'x') {
+			base = 16;
+			parse++;
+		}
+
+		errno = 0;
+		long v = strtol(parse, &end, base);
+		if (v < 0 || v >= 256) {
+			errno = ERANGE;
+		}
+		if (errno != 0) {
+			err(2, "invalid escape sequence '%s' for tty option '%s'", val, key);
+		}
+		cc = v;
+	}
+
+	if (*end != '\0') {
+		errx(2, "there can be no more than one control character for tty option '%s'", key);
+	}
+
+	const size_t *idx = cookie;
+	opts->termios.c_cc[*idx] = cc;
+
+	/* neg_termios.c_cc is used as a mean to distinguish between "not changing"
+	   and "setting to 0" */
+	opts->neg_termios.c_cc[*idx] = 1;
+}
+
+static void parse_ptmx(struct tty_opts *opts, const char *key, const char *val, const void *cookie)
+{
+	if (key[0] == '-') {
+		errx(2, "tty option '%s' cannot be negated", key);
+	}
+	if (val == NULL) {
+		errx(2, "tty option '%s' must have a value", key);
+	}
+	opts->ptmx = val;
+}
+
+static int cmp_flag(const void *key, const void *elem)
+{
+	return strcmp(key, ((const struct valmap *)elem)->name);
+}
+
+void tty_opt_parse(struct tty_opts *opts, const char *key, const char *val)
+{
+	struct valmap valmap[] = {
+		/* NOTE: this array must be kept sorted for bsearch */
+		{ "brkint",     parse_flag,  .cookie = &(const struct termios) { .c_iflag = BRKINT   } },
+		{ "clocal",     parse_flag,  .cookie = &(const struct termios) { .c_cflag = CLOCAL   } },
+		{ "cmspar",     parse_flag,  .cookie = &(const struct termios) { .c_cflag = CMSPAR   } },
+		{ "cr0",        parse_flag,  .cookie = &(const struct termios) { .c_oflag = CR0      } },
+		{ "cr1",        parse_flag,  .cookie = &(const struct termios) { .c_oflag = CR1      } },
+		{ "cr2",        parse_flag,  .cookie = &(const struct termios) { .c_oflag = CR2      } },
+		{ "cr3",        parse_flag,  .cookie = &(const struct termios) { .c_oflag = CR3      } },
+		{ "cread",      parse_flag,  .cookie = &(const struct termios) { .c_cflag = CREAD    } },
+		{ "crtscts",    parse_flag,  .cookie = &(const struct termios) { .c_cflag = CRTSCTS  } },
+		{ "cstopb",     parse_flag,  .cookie = &(const struct termios) { .c_cflag = CSTOPB   } },
+		{ "echo",       parse_flag,  .cookie = &(const struct termios) { .c_lflag = ECHO     } },
+		{ "echoctl",    parse_flag,  .cookie = &(const struct termios) { .c_lflag = ECHOCTL  } },
+		{ "echoe",      parse_flag,  .cookie = &(const struct termios) { .c_lflag = ECHOE    } },
+		{ "echok",      parse_flag,  .cookie = &(const struct termios) { .c_lflag = ECHOK    } },
+		{ "echoke",     parse_flag,  .cookie = &(const struct termios) { .c_lflag = ECHOKE   } },
+		{ "echonl",     parse_flag,  .cookie = &(const struct termios) { .c_lflag = ECHONL   } },
+		{ "echoprt",    parse_flag,  .cookie = &(const struct termios) { .c_lflag = ECHOPRT  } },
+		{ "extproc",    parse_flag,  .cookie = &(const struct termios) { .c_lflag = EXTPROC  } },
+		{ "ff0",        parse_flag,  .cookie = &(const struct termios) { .c_oflag = FF0      } },
+		{ "ff1",        parse_flag,  .cookie = &(const struct termios) { .c_oflag = FF1      } },
+		{ "flusho",     parse_flag,  .cookie = &(const struct termios) { .c_lflag = FLUSHO   } },
+		{ "hupcl",      parse_flag,  .cookie = &(const struct termios) { .c_cflag = HUPCL    } },
+		{ "icanon",     parse_flag,  .cookie = &(const struct termios) { .c_lflag = ICANON   } },
+		{ "icrnl",      parse_flag,  .cookie = &(const struct termios) { .c_iflag = ICRNL    } },
+		{ "iexten",     parse_flag,  .cookie = &(const struct termios) { .c_lflag = IEXTEN   } },
+		{ "ignbrk",     parse_flag,  .cookie = &(const struct termios) { .c_iflag = IGNBRK   } },
+		{ "igncr",      parse_flag,  .cookie = &(const struct termios) { .c_iflag = IGNCR    } },
+		{ "ignpar",     parse_flag,  .cookie = &(const struct termios) { .c_iflag = IGNPAR   } },
+		{ "inlcr",      parse_flag,  .cookie = &(const struct termios) { .c_iflag = INLCR    } },
+		{ "inpck",      parse_flag,  .cookie = &(const struct termios) { .c_iflag = INPCK    } },
+		{ "isig",       parse_flag,  .cookie = &(const struct termios) { .c_lflag = ISIG     } },
+		{ "istrip",     parse_flag,  .cookie = &(const struct termios) { .c_iflag = ISTRIP   } },
+		{ "iuclc",      parse_flag,  .cookie = &(const struct termios) { .c_iflag = IUCLC    } },
+		{ "iutf8",      parse_flag,  .cookie = &(const struct termios) { .c_iflag = IUTF8    } },
+		{ "ixany",      parse_flag,  .cookie = &(const struct termios) { .c_iflag = IXANY    } },
+		{ "ixoff",      parse_flag,  .cookie = &(const struct termios) { .c_iflag = IXOFF    } },
+		{ "ixon",       parse_flag,  .cookie = &(const struct termios) { .c_iflag = IXON     } },
+		{ "nl0",        parse_flag,  .cookie = &(const struct termios) { .c_oflag = NL0      } },
+		{ "nl1",        parse_flag,  .cookie = &(const struct termios) { .c_oflag = NL1      } },
+		{ "noflsh",     parse_flag,  .cookie = &(const struct termios) { .c_lflag = NOFLSH   } },
+		{ "ocrnl",      parse_flag,  .cookie = &(const struct termios) { .c_oflag = OCRNL    } },
+		{ "ofill",      parse_flag,  .cookie = &(const struct termios) { .c_oflag = OFILL    } },
+		{ "olcuc",      parse_flag,  .cookie = &(const struct termios) { .c_oflag = OLCUC    } },
+		{ "onlcr",      parse_flag,  .cookie = &(const struct termios) { .c_oflag = ONLCR    } },
+		{ "onlret",     parse_flag,  .cookie = &(const struct termios) { .c_oflag = ONLRET   } },
+		{ "onocr",      parse_flag,  .cookie = &(const struct termios) { .c_oflag = ONOCR    } },
+		{ "opost",      parse_flag,  .cookie = &(const struct termios) { .c_oflag = OPOST    } },
+		{ "parenb",     parse_flag,  .cookie = &(const struct termios) { .c_cflag = PARENB   } },
+		{ "parmrk",     parse_flag,  .cookie = &(const struct termios) { .c_iflag = PARMRK   } },
+		{ "parodd",     parse_flag,  .cookie = &(const struct termios) { .c_cflag = PARODD   } },
+		{ "ptmx",       parse_ptmx,  .cookie = NULL                                            },
+		{ "tab0",       parse_flag,  .cookie = &(const struct termios) { .c_oflag = TAB0     } },
+		{ "tab1",       parse_flag,  .cookie = &(const struct termios) { .c_oflag = TAB1     } },
+		{ "tab2",       parse_flag,  .cookie = &(const struct termios) { .c_oflag = TAB2     } },
+		{ "tab3",       parse_flag,  .cookie = &(const struct termios) { .c_oflag = TAB3     } },
+		{ "tostop",     parse_flag,  .cookie = &(const struct termios) { .c_lflag = TOSTOP   } },
+		{ "veof",       parse_cc,    .cookie = &(const size_t) { VEOF     }                    },
+		{ "veol",       parse_cc,    .cookie = &(const size_t) { VEOL     }                    },
+		{ "veol2",      parse_cc,    .cookie = &(const size_t) { VEOL2    }                    },
+		{ "verase",     parse_cc,    .cookie = &(const size_t) { VERASE   }                    },
+		{ "vintr",      parse_cc,    .cookie = &(const size_t) { VINTR    }                    },
+		{ "vkill",      parse_cc,    .cookie = &(const size_t) { VKILL    }                    },
+		{ "vlnext",     parse_cc,    .cookie = &(const size_t) { VLNEXT   }                    },
+		{ "vquit",      parse_cc,    .cookie = &(const size_t) { VQUIT    }                    },
+		{ "vreprint",   parse_cc,    .cookie = &(const size_t) { VREPRINT }                    },
+		{ "vstart",     parse_cc,    .cookie = &(const size_t) { VSTART   }                    },
+		{ "vstop",      parse_cc,    .cookie = &(const size_t) { VSTOP    }                    },
+		{ "vsusp",      parse_cc,    .cookie = &(const size_t) { VSUSP    }                    },
+		{ "vt0",        parse_flag,  .cookie = &(const struct termios) { .c_oflag = VT0      } },
+		{ "vt1",        parse_flag,  .cookie = &(const struct termios) { .c_oflag = VT1      } },
+		{ "vwerase",    parse_cc,    .cookie = &(const size_t) { VWERASE  }                    },
+	};
+
+	const char *k = key;
+	if (key[0] == '-') {
+		k = &key[1];
+	}
+
+	struct valmap *found = bsearch(k, valmap, lengthof(valmap), sizeof (*valmap), cmp_flag);
+	if (!found) {
+		errx(2, "unrecognized tty option '%s'", key);
+	}
+
+	found->fn(opts, key, val, found->cookie);
 }
