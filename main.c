@@ -285,7 +285,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ "pidfile",            required_argument, NULL, OPTION_PIDFILE         },
 		{ "ip",                 required_argument, NULL, OPTION_IP              },
 		{ "route",              required_argument, NULL, OPTION_ROUTE           },
-		{ "tty",                no_argument,       NULL, OPTION_TTY             },
+		{ "tty",                optional_argument, NULL, OPTION_TTY             },
 
 		/* Opt-out feature flags */
 		{ "no-copy-hard-limits", no_argument, NULL, OPTION_NO_COPY_HARD_LIMITS  },
@@ -665,8 +665,20 @@ int main(int argc, char *argv[], char *envp[])
 				break;
 
 			case OPTION_TTY:
-			  opts.tty = 1;
-			  break;
+			{
+				opts.tty = 1;
+				opts.ttyopts.ptmx = tty_default_ptmx;
+
+				/* 128 is enough to support everything */
+				struct kvlist kvlist[128];
+				size_t nopts = sizeof (kvlist) / sizeof (*kvlist);
+				kvlist_parse(optarg, kvlist, nopts, NULL);
+
+				for (size_t i = 0; i < nopts && kvlist[i].key != NULL; ++i) {
+					tty_opt_parse(&opts.ttyopts, kvlist[i].key, kvlist[i].value);
+				}
+				break;
+			}
 
 			case 'r':
 				opts.root = optarg;

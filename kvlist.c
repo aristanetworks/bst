@@ -9,6 +9,11 @@
 
 void kvlist_parse(char *in, struct kvlist *out, size_t len, char **rest)
 {
+	memset(out, 0, sizeof (out) * len);
+	if (in == NULL) {
+		return;
+	}
+
 	char *end = in + strlen(in);
 	char *save = NULL;
 	char *tok = strtok_r(in, ",", &save);

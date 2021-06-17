@@ -284,6 +284,40 @@ _VAR=value_ before the executable to run.
 	To avoid lock races with other processes sharing a common pidfile path, the
 	file is never removed.
 
+\--tty[=<options>]
+	Allocate a pty for the process.
+
+	_--tty_ optionally takes a list of flags or key=value pairs to set specific
+	termios options and control characters for the newly allocated pty.
+
+	Options take no value and can be negated by prepending _'-'_ to the option
+	name (e.g. _-echo_). Supported options are: *brkint*, *clocal*, *cmspar*,
+	*cr0*, *cr1*, *cr2*, *cr3*, *cread*, *crtscts*, *cstopb*, *echo*, *echoctl*,
+	*echoe*, *echok*, *echoke*, *echonl*, *echoprt*, *extproc*, *ff0*, *ff1*,
+	*flusho*, *hupcl*, *icanon*, *icrnl*, *iexten*, *ignbrk*, *igncr*, *ignpar*,
+	*inlcr*, *inpck*, *isig*, *istrip*, *iuclc*, *iutf8*, *ixany*, *ixoff*,
+	*ixon*, *nl0*, *nl1*, *noflsh*, *ocrnl*, *ofill*, *olcuc*, *onlcr*, *onlret*,
+	*onocr*, *opost*, *parenb*, *parmrk*, *parodd*, *tab0*, *tab1*, *tab2*,
+	*tab3*, *tostop*, *vt0*, and *vt1*.
+
+	Control characters are specified as a key-value pair, _<cc>=<val>_. Values
+	can be specified using the caret notation, or a backslash-escaped octal
+	(\\nnn) or hexadecimal (\\xnn) value. Supported control characters are: *veof*,
+	*veol*, *veol2*, *verase*, *vintr*, *vkill*, *vlnext*, *vquit*, *vreprint*,
+	*vstart*, *vstop*, *vsusp*, and *vwerase*.
+
+	A comprehensive description of what these options and control characters do
+	can be found in the *termios*(3) manual.
+
+	Other bst-specific options are:
+
+	- *ptmx*=<path>: use the specified ptmx device (relative to the target root)
+	  to allocated the pty.
+
+	By default bst inherits the parent's terminal device (or lack thereof).  Use
+	the --tty option to allocate a new pty for the child process.
+
+
 \--no-copy-hard-limits
 	Do not copy hard limit values to soft limits for all resources mentioned above.
 
@@ -327,12 +361,6 @@ _VAR=value_ before the executable to run.
 	By default, the environment of the parent process is inherited as-is into
 	the spacetime process. This can cause issues for environment variables like
 	PATH if the rootfs layout is different than the host.
-
-\--tty
-	Allocate a pty for the process.
-
-	By default bst inherits the parent's terminal device (or lack thereof).  Use
-	the --tty option to allocate a new pty for the child process.
 
 # PRIVILEGE MODEL
 
