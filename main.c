@@ -299,7 +299,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ 0, 0, 0, 0 }
 	};
 
-	static const char *clocknames[MAX_CLOCK + 1] = {
+	static const char *clocknames[MAX_CLOCK] = {
 		[CLOCK_MONOTONIC] = "monotonic",
 		[CLOCK_BOOTTIME]  = "boottime",
 	};
@@ -419,7 +419,7 @@ int main(int argc, char *argv[], char *envp[])
 				const char *nsecs = strtok(NULL, "");
 
 				clockid_t clock = -1;
-				for (clockid_t id = 0; id < MAX_CLOCK + 1; ++id) {
+				for (clockid_t id = 0; id < MAX_CLOCK; ++id) {
 					if (clocknames[id] && strcmp(clocknames[id], name) == 0) {
 						clock = id;
 						break;
@@ -434,7 +434,7 @@ int main(int argc, char *argv[], char *envp[])
 					}
 				}
 
-				if (clock < 0 || clock > MAX_CLOCK) {
+				if (clock < 0 || clock >= MAX_CLOCK) {
 					errx(2, "%s is not a valid clock ID or name", name);
 				}
 

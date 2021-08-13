@@ -11,7 +11,7 @@
 # include <time.h>
 
 enum {
-	MAX_CLOCK = 11, // CLOCK_TAI
+	MAX_CLOCK = CLOCK_TAI + 1,
 
 	SEC_IN_NS = 1000000000,
 };

@@ -63,7 +63,7 @@ struct entry_settings {
 	struct mount_entry mounts[MAX_MOUNT];
 	size_t nmounts;
 
-	struct timespec clockspecs[MAX_CLOCK + 1];
+	struct timespec clockspecs[MAX_CLOCK];
 
 	struct nic_options nics[MAX_NICS];
 	size_t nnics;
