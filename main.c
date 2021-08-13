@@ -439,13 +439,15 @@ int main(int argc, char *argv[], char *envp[])
 				}
 
 				struct timespec ts = {0, 0};
-				errno = 0;
-				ts.tv_sec  = strtol(secs, NULL, 10);
-				if (errno != 0) {
-					err(2, "%s is not a valid number of seconds", secs);
-				}
-				if (ts.tv_sec < 0) {
-					errx(2, "%s must be a positive number of seconds", secs);
+				if (secs && secs[0] != '\0') {
+					errno = 0;
+					ts.tv_sec  = strtol(secs, NULL, 10);
+					if (errno != 0) {
+						err(2, "%s is not a valid number of seconds", secs);
+					}
+					if (ts.tv_sec < 0) {
+						errx(2, "%s must be a positive number of seconds", secs);
+					}
 				}
 				if (nsecs && nsecs[0] != '\0') {
 					errno = 0;
