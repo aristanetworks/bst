@@ -325,6 +325,10 @@ int main(int argc, char *argv[], char *envp[])
 				return 0;
 
 			case OPTION_WORKDIR:
+				if (optarg[0] != '\0' && optarg[0] != '/') {
+					errx(1, "workdir must be an absolute path.");
+				}
+
 				opts.workdir = optarg;
 				break;
 
@@ -763,10 +767,6 @@ end:
 	opts.pathname = argv[optind];
 	opts.argv = new_argv;
 	opts.envp = newenv;
-
-	if (opts.workdir != NULL && opts.workdir[0] != '\0' && opts.workdir[0] != '/') {
-		errx(1, "workdir must be an absolute path.");
-	}
 
 	/* Block all signals. We use sigwaitinfo to probe for pending signals,
 	   including SIGCHLD. */
