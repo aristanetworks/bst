@@ -10,6 +10,13 @@ usage() {
 	If the directory is not specified, the current work directory is used
 	instead.
 
+	The options are as follows:
+	  -p/--patch  If there is a difference between the expeted output and the
+	              actual output, the expected output in the file will be patched
+	              by the actual output. Setting the environment variable
+	              'CRAM_PATCH' has the same effect. The environment variable
+	              can be used when passing command line option is not possible.
+
 	The file format understood by $0 is a subset of the format used by cram
 	or the glib test suite.
 
