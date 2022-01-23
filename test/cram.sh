@@ -72,6 +72,17 @@ if [ -f "$what" -a -x "$what" ]; then
 	# reset environment, and define sensible defaults
 	env -i PATH="$PATH:$(dirname $0)" LC_ALL=C TERM=dumb CRAM_PATH=$(dirname $0) \
 		gawk -v what="$what" <"$what" >"$what".err '
+	# This awk script does two things: first, it scans a test file and
+	# executes each test command within according to the cram format.
+	# Second, it outputs an "expected" test file, which looks like the input
+	# test file, but has all of the stdout, stderr, and exit status of the
+	# invoked commands substituted in at the right place. This means that one
+	# can diff the input test file with the output of this awk script and
+	# figure out quickly any difference in output or exit status.
+
+	# maybe_exec executes (if necessary) the currently accumulated commands
+	# in the cmd array, and writes its stdout/stderr and exit status, with
+	# indentation.
 	function maybe_exec() {
 		if (cmd != "") {
 			while ( ( "( set -eu\n" cmd "\n) 2>&1 || echo \\[$?\\]" | getline ln ) > 0 ) {
@@ -83,15 +94,33 @@ if [ -f "$what" -a -x "$what" ]; then
 		}
 	}
 
+	# Match a command and initialize the cmd array. Commands are indented,
+	# and start with `$`.
+	#
+	# E.g:
+	#
+	#    $ some command
+	#
+	# This also
 	match($0, /^([[:space:]]+)\$([[:space:]])(.*)$/, m) {
 		maybe_exec()
 		print $0
 
 		cmd = m[3]
 		indent = m[1]
-        next_re = "^" indent ">(" m[2] ")?(.*)$"
+		# Setup the match for subsequent multi-line commands.
+		next_re = "^" indent ">(" m[2] ")?(.*)$"
 	}
 
+	# Match command continuations, if we previously matched a command,
+	# and append them to the cmd array. Continuations are indented, and
+	# start with `>`.
+	#
+	# E.g:
+	#
+	#    $ some command
+	#    > some other command
+	#
 	{
 		if (next_re != "") {
 			if (match($0, next_re, m)) {
@@ -101,11 +130,15 @@ if [ -f "$what" -a -x "$what" ]; then
 		}
 	}
 
+	# Match a blank or an empty line. This can only happen between two commands,
+	# and therefore after an output; try to execute the accumulated cmd array.
 	/^([^[:space:]].*|)$/ {
 		maybe_exec()
 		print $0
 	}
 
+	# EOF -- try to execute the accumulated cmd array, which if set contains the
+	# last test of the file
 	END {
 		maybe_exec()
 	}
