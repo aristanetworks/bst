@@ -24,6 +24,7 @@ Options:
       --workdir <directory>         Set current work directory.
       --mount <mount>               Mount source over target before
                                     executing the program.
+      --umask <mask>                Set the umask to the provided value.
       --uid <uid>                   Set user ID.
       --gid <gid>                   Set group ID.
       --groups <gid,gid,...>        Set additional groups.
