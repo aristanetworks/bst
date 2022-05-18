@@ -1,4 +1,4 @@
-/* Copyright © 2020 Arista Networks, Inc. All rights reserved.
+/* Copyright © 2020-2022 Arista Networks, Inc. All rights reserved.
  *
  * Use of this source code is governed by the MIT license that can be found
  * in the LICENSE file.
@@ -260,6 +260,16 @@ int enter(struct entry_settings *opts)
 		err(1, "close timens_offsets");
 	}
 
+	/* Setup a socket pair for file-descriptor passing. Used by pty allocation. */
+	enum {
+		SOCKET_PARENT,
+		SOCKET_CHILD,
+	};
+	int socket_fdpass[2];
+	if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, socket_fdpass) < 0) {
+		err(1, "socketpair");
+	}
+
 	/* You can't "really" unshare the PID namespace of a running process
 	   without forking, since for process hierarchy reasons only the next
 	   child process enters the namespace as init and subsequent calls to
@@ -268,11 +278,6 @@ int enter(struct entry_settings *opts)
 	   Since we set-up some things like the parent death signal, it's just
 	   cleaner and easier to always fork, regardless of unsharing the PID
 	   namespace. */
-
-	int parentSock = -1, childSock = -1;
-	if (opts->tty) {
-		tty_setup_socketpair(&parentSock, &childSock);
-	}
 
 	pid_t pid = fork();
 	if (pid == -1) {
@@ -295,9 +300,7 @@ int enter(struct entry_settings *opts)
 			warn("prctl PR_SET_DUMPABLE");
 		}
 
-		if (childSock >= 0) {
-			close(childSock);
-		}
+		close(socket_fdpass[SOCKET_CHILD]);
 		if (opts->pidfile != NULL) {
 			int pidfile = open(opts->pidfile, O_WRONLY | O_CREAT | O_CLOEXEC | O_NOCTTY , 0666);
 			if (pidfile == -1) {
@@ -343,10 +346,10 @@ int enter(struct entry_settings *opts)
 		sigset_t mask;
 		sigfillset(&mask);
 
-		if (parentSock >= 0) {
+		if (opts->tty) {
 			/* tty_parent_setup handles SIGWINCH to resize the pty */
 			sigdelset(&mask, SIGWINCH);
-			tty_parent_setup(&opts->ttyopts, epollfd, parentSock);
+			tty_parent_setup(&opts->ttyopts, epollfd, socket_fdpass[SOCKET_PARENT]);
 		}
 		sig_setup(epollfd, &mask, outer_helper.pid, sig_handler);
 
@@ -378,7 +381,7 @@ int enter(struct entry_settings *opts)
 						err(1, "sigprocmask");
 					}
 
-					if (parentSock >= 0) {
+					if (opts->tty) {
 						tty_parent_cleanup();
 					}
 					return rc;
@@ -390,9 +393,7 @@ int enter(struct entry_settings *opts)
 	/* err() and errx() cannot use exit(), since it's not fork-safe. */
 	err_exit = _exit;
 
-	if (parentSock >= 0) {
-		close(parentSock);
-	}
+	close(socket_fdpass[SOCKET_PARENT]);
 
 	sigset_t mask;
 	sigemptyset(&mask);
@@ -671,8 +672,8 @@ int enter(struct entry_settings *opts)
 		}
 	}
 
-	if (childSock >= 0) {
-		tty_child(&opts->ttyopts, childSock);
+	if (opts->tty) {
+		tty_child(&opts->ttyopts, socket_fdpass[SOCKET_CHILD]);
 	}
 
 	if (opts->init != NULL && opts->init[0] != '\0') {

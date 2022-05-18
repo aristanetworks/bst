@@ -24,79 +24,10 @@
 #include <util.h>
 
 #include "errutil.h"
+#include "fd.h"
 #include "sig.h"
 #include "tty.h"
 #include "util.h"
-
-void recv_fd(int socket, int *pFd)
-{
-	char buf[1];
-	struct iovec iov[1] = {
-		[0] = {.iov_base = buf, .iov_len = 1 }
-	};
-	union {
-		struct cmsghdr _align;
-		char ctrl[CMSG_SPACE(sizeof(int))];
-	} uCtrl;
-	struct msghdr msg = {
-		.msg_control = uCtrl.ctrl,
-		.msg_controllen = sizeof(uCtrl.ctrl),
-		.msg_name = NULL,
-		.msg_namelen = 0,
-		.msg_iov = iov,
-		.msg_iovlen = 1,
-	};
-
-	ssize_t recv = recvmsg(socket, &msg, 0);
-	if (recv == -1) {
-		err(1, "recv_fd: recvmsg");
-	}
-	if (recv == 0) {
-		errx(1, "recv_fd: child exited without sending pty file descriptor");
-	}
-
-	struct cmsghdr *pCm;
-	if (((pCm = CMSG_FIRSTHDR(&msg)) != NULL) &&
-		 pCm->cmsg_len == CMSG_LEN(sizeof(int))) {
-		if (pCm->cmsg_level != SOL_SOCKET) {
-			errx(1, "recv_fd: control level != SOL_SOCKET");
-		}
-		if (pCm->cmsg_type != SCM_RIGHTS) {
-			errx(1, "recv_fd: control type != SCM_RIGHTS");
-		}
-		*pFd = *((int*) CMSG_DATA(pCm));
-	} else {
-		errx(1, "recv_fd: no descriptor passed");
-	}
-}
-
-void send_fd(int socket, int fd)
-{
-	char buf[1] = {0};
-	struct iovec iov[1] = {
-		[0] = {.iov_base = buf, .iov_len = 1 }
-	};
-	union {
-		struct cmsghdr _align;
-		char ctrl[CMSG_SPACE(sizeof(int))];
-	} uCtrl;
-	struct msghdr msg = {
-		.msg_control = uCtrl.ctrl,
-		.msg_controllen = sizeof(uCtrl.ctrl),
-		.msg_name = NULL,
-		.msg_namelen = 0,
-		.msg_iov = iov,
-		.msg_iovlen = 1,
-	};
-	struct cmsghdr *pCm = CMSG_FIRSTHDR(&msg);
-	pCm->cmsg_len = CMSG_LEN(sizeof(int));
-	pCm->cmsg_level = SOL_SOCKET;
-	pCm->cmsg_type = SCM_RIGHTS;
-	*((int*) CMSG_DATA(pCm)) = fd;
-	if (sendmsg(socket, &msg, 0) < 0) {
-		err(1, "send_fd: sendmsg");
-	}
-}
 
 struct buffer {
 	char buf[BUFSIZ];
@@ -111,16 +42,6 @@ static struct tty_parent_info_s {
 } info = {
 	.termfd = -1,
 };
-
-void tty_setup_socketpair(int *pParentSock, int *pChildSock)
-{
-	int socks[2];
-	if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, socks) < 0) {
-		err(1, "tty_setup: socketpair");
-	}
-	*pParentSock = socks[0];
-	*pChildSock = socks[1];
-}
 
 static ssize_t io_copy(int out_fd, int in_fd, struct buffer *buf)
 {
@@ -399,7 +320,7 @@ void tty_parent_setup(struct tty_opts *opts, int epollfd, int socket)
 	atexit(tty_parent_cleanup);
 
 	// Wait for the child to create the pty pair and pass the master back.
-	recv_fd(socket, &info.termfd);
+	info.termfd = recv_fd(socket);
 
 	if (!info.stdinIsatty) {
 		if (tcgetattr(info.termfd, &tios) == -1) {
