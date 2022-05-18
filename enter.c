@@ -26,8 +26,10 @@
 
 #include "bst_limits.h"
 #include "capable.h"
+#include "config.h"
 #include "enter.h"
 #include "errutil.h"
+#include "fd.h"
 #include "mount.h"
 #include "net.h"
 #include "ns.h"
@@ -37,6 +39,10 @@
 #include "setarch.h"
 #include "sig.h"
 #include "util.h"
+
+#ifdef HAVE_SECCOMP_UNOTIFY
+# include "sec.h"
+#endif
 
 static inline size_t append_argv(char **argv, size_t argc, char *arg)
 {
@@ -411,6 +417,15 @@ int enter(struct entry_settings *opts)
 	}
 
 	outer_helper_sync(&outer_helper);
+
+#ifdef HAVE_SECCOMP_UNOTIFY
+		int seccomp_fd = sec_seccomp_install_filter();
+		if (seccomp_fd != -1) {
+			send_fd(outer_helper.fd, seccomp_fd);
+			close(seccomp_fd);
+		}
+#endif
+
 	outer_helper_close(&outer_helper);
 
 	int rtnl = init_rtnetlink_socket();

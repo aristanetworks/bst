@@ -20,11 +20,17 @@
 #include <unistd.h>
 
 #include "capable.h"
+#include "config.h"
 #include "enter.h"
+#include "fd.h"
 #include "outer.h"
 #include "path.h"
 #include "userns.h"
 #include "util.h"
+
+#ifdef HAVE_SECCOMP_UNOTIFY
+# include "sec.h"
+#endif
 
 enum {
 	/* This should be enough for defining our mappings. If we assign
@@ -270,7 +276,13 @@ void outer_helper_spawn(struct outer_helper *helper)
 	ssize_t count = write(fd, &ok, sizeof (ok));
 	assert((ssize_t)(sizeof (ok)) == count);
 
+#ifdef HAVE_SECCOMP_UNOTIFY
+	int seccomp_fd = recv_fd(fd);
+	sec_seccomp_supervisor(seccomp_fd);
+	__builtin_unreachable();
+#else
 	_exit(0);
+#endif
 }
 
 void outer_helper_sendpid(const struct outer_helper *helper, pid_t pid)

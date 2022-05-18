@@ -44,11 +44,19 @@ add_project_arguments(
 	'-D_GNU_SOURCE',
 	language: ['c'])
 
+arch = host_machine.cpu_family()
+
 config = configuration_data()
 config.set('package', meson.project_name())
 config.set('bindir', bindir)
 config.set('libexecdir', libexecdir)
 config.set('version', version)
+
+config.set('ARCH', arch)
+config.set('ARCH_@0@'.format(arch.to_upper()), 1)
+
+has_seccomp_unotify = cc.has_header_symbol('linux/seccomp.h', 'SECCOMP_FILTER_FLAG_NEW_LISTENER')
+config.set('HAVE_SECCOMP_UNOTIFY', has_seccomp_unotify)
 
 configure_file(input: 'config.h.in', output: 'config.h', configuration: config)
 
@@ -94,6 +102,13 @@ bst_sources = [
 	'userns.c',
 ]
 
+if has_seccomp_unotify
+  bst_sources += [
+	'proc.c',
+	'sec.c',
+  ]
+endif
+
 executable('bst', bst_sources, install: true)
 
 if not get_option('no-setcap-or-suid')
@@ -106,6 +121,7 @@ if not get_option('no-setcap-or-suid')
 			'cap_sys_admin',
 			'cap_sys_chroot',
 			'cap_sys_ptrace',
+			'cap_mknod',
 		],
 		'bst-unpersist': [
 			'cap_sys_admin',
