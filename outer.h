@@ -22,8 +22,7 @@ struct outer_helper {
 	size_t nnics;
 
 	pid_t pid;
-	int in;
-	int out;
+	int fd;
 };
 
 void outer_helper_spawn(struct outer_helper *helper);

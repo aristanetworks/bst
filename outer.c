@@ -207,14 +207,13 @@ static void persist_ns_files(pid_t pid, const char **persist)
    host system, so we reimplement that functionality here. */
 void outer_helper_spawn(struct outer_helper *helper)
 {
-	int pipefds_in[2];
-	if (pipe(pipefds_in) == -1) {
-		err(1, "outer_helper: pipe");
-	}
-
-	int pipefds_out[2];
-	if (pipe(pipefds_out) == -1) {
-		err(1, "outer_helper: pipe");
+	enum {
+		SOCKET_PARENT,
+		SOCKET_CHILD,
+	};
+	int fdpair[2];
+	if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, fdpair) == -1) {
+		err(1, "outer_helper: socketpair");
 	}
 
 	pid_t pid = fork();
@@ -223,11 +222,9 @@ void outer_helper_spawn(struct outer_helper *helper)
 	}
 
 	if (pid) {
-		close(pipefds_in[1]);
-		close(pipefds_out[0]);
+		close(fdpair[SOCKET_CHILD]);
 		helper->pid = pid;
-		helper->in = pipefds_in[0];
-		helper->out = pipefds_out[1];
+		helper->fd  = fdpair[SOCKET_PARENT];
 		return;
 	}
 
@@ -242,11 +239,11 @@ void outer_helper_spawn(struct outer_helper *helper)
 		err(1, "sigprocmask");
 	}
 
-	close(pipefds_in[0]);
-	close(pipefds_out[1]);
+	close(fdpair[SOCKET_PARENT]);
+	int fd = fdpair[SOCKET_CHILD];
 
 	pid_t child_pid;
-	ssize_t rdbytes = read(pipefds_out[0], &child_pid, sizeof (child_pid));
+	ssize_t rdbytes = read(fd, &child_pid, sizeof (child_pid));
 	if (rdbytes == -1) {
 		err(1, "outer_helper: read child pid");
 	}
@@ -270,7 +267,7 @@ void outer_helper_spawn(struct outer_helper *helper)
 	/* Notify sibling that we're done persisting their proc files
 	   and/or changing their [ug]id map */
 	int ok = 1;
-	ssize_t count = write(pipefds_in[1], &ok, sizeof (ok));
+	ssize_t count = write(fd, &ok, sizeof (ok));
 	assert((ssize_t)(sizeof (ok)) == count);
 
 	_exit(0);
@@ -279,7 +276,7 @@ void outer_helper_spawn(struct outer_helper *helper)
 void outer_helper_sendpid(const struct outer_helper *helper, pid_t pid)
 {
 	/* Unblock the privileged helper to set our own [ug]id maps */
-	if (write(helper->out, &pid, sizeof (pid)) == -1) {
+	if (write(helper->fd, &pid, sizeof (pid)) == -1) {
 		err(1, "outer_helper_sendpid_and_wait: write");
 	}
 }
@@ -287,7 +284,7 @@ void outer_helper_sendpid(const struct outer_helper *helper, pid_t pid)
 void outer_helper_sync(const struct outer_helper *helper)
 {
 	int ok;
-	switch (read(helper->in, &ok, sizeof (ok))) {
+	switch (read(helper->fd, &ok, sizeof (ok))) {
 	case -1:
 		err(1, "outer_helper_wait: read");
 	case 0:
@@ -298,6 +295,5 @@ void outer_helper_sync(const struct outer_helper *helper)
 
 void outer_helper_close(struct outer_helper *helper)
 {
-	close(helper->in);
-	close(helper->out);
+	close(helper->fd);
 }
