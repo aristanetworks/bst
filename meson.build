@@ -51,17 +51,25 @@ if get_option('optimization') != '0'
 		language: ['c'])
 endif
 
+arch = host_machine.cpu_family()
+
 config = configuration_data()
 config.set('package', meson.project_name())
 config.set('bindir', bindir)
 config.set('libexecdir', libexecdir)
 config.set('version', version)
 
+config.set('ARCH', arch)
+config.set('ARCH_@0@'.format(arch.to_upper()), 1)
+
 config.set('HAVE_SYS_mount_setattr', cc.has_header_symbol('syscall.h', 'SYS_mount_setattr'))
 config.set('HAVE_close_range', cc.has_function('close_range'))
 
 libdbus = dependency('dbus-1', required: false)
 config.set('HAVE_SYSTEMD', libdbus.found())
+
+has_seccomp_unotify = cc.has_header_symbol('linux/seccomp.h', 'SECCOMP_FILTER_FLAG_NEW_LISTENER')
+config.set('HAVE_SECCOMP_UNOTIFY', has_seccomp_unotify)
 
 configure_file(input: 'config.h.in', output: 'config.h', configuration: config)
 
@@ -113,6 +121,14 @@ if libdbus.found()
 	bst_sources += ['cgroup_systemd.c']
 endif
 
+if has_seccomp_unotify
+	bst_sources += [
+		'arch/@0@/syscall.c'.format(arch),
+		'proc.c',
+		'sec.c',
+	]
+endif
+
 executable('bst', bst_sources, install: true, dependencies: [libdbus])
 
 if not get_option('no-setcap-or-suid')
@@ -125,6 +141,7 @@ if not get_option('no-setcap-or-suid')
 			'cap_sys_admin',
 			'cap_sys_chroot',
 			'cap_sys_ptrace',
+			'cap_mknod',
 		],
 		'bst-unpersist': [
 			'cap_sys_admin',

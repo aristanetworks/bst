@@ -20,6 +20,7 @@
 # define BST_CAP_SETUID         ((uint64_t) 1 << CAP_SETUID)
 # define BST_CAP_SETGID         ((uint64_t) 1 << CAP_SETGID)
 # define BST_CAP_SYS_CHROOT     ((uint64_t) 1 << CAP_SYS_CHROOT)
+# define BST_CAP_MKNOD          ((uint64_t) 1 << CAP_MKNOD)
 
 extern int deny_new_capabilities;
 
