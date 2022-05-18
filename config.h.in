@@ -12,8 +12,13 @@
 # define LIBEXECDIR "@libexecdir@"
 # define VERSION "@version@"
 
+#mesondefine ARCH
+#mesondefine ARCH_X86
+#mesondefine ARCH_X86_64
+
+#mesondefine HAVE_SECCOMP_UNOTIFY
+#mesondefine HAVE_SYSTEMD
 #mesondefine HAVE_SYS_mount_setattr
 #mesondefine HAVE_close_range
-#mesondefine HAVE_SYSTEMD
 
 #endif /* !CONFIG_H_ */
