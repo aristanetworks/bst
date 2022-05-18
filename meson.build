@@ -12,13 +12,6 @@ sh    = find_program('sh')
 git   = find_program('git', required: false)
 scdoc = find_program('scdoc', required: get_option('man-pages'))
 
-supported_oses = ['linux']
-targetos = host_machine.system()
-
-if not supported_oses.contains(targetos)
-	error('bst is not supported on ' + targetos + ' platform.')
-endif
-
 # Get the right version
 
 is_git_repo = run_command(['[', '-d', '.git', ']']).returncode() == 0
