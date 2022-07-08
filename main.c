@@ -21,6 +21,7 @@
 #include "config.h"
 
 #include "bst_limits.h"
+#include "cgroups.h"
 #include "capable.h"
 #include "compat.h"
 #include "enter.h"
@@ -52,12 +53,15 @@ enum {
 	OPTION_UIDMAP,
 	OPTION_GIDMAP,
 	OPTION_NIC,
+	OPTION_CGROUP,
+	OPTION_CLIMIT,
 	OPTION_PIDFILE,
 	OPTION_IP,
 	OPTION_ROUTE,
 	OPTION_NO_FAKE_DEVTMPFS,
 	OPTION_NO_DERANDOMIZE,
 	OPTION_NO_PROC_REMOUNT,
+	OPTION_NO_CGROUP_REMOUNT,
 	OPTION_NO_LOOPBACK_SETUP,
 	OPTION_NO_INIT,
 	OPTION_NO_ENV,
@@ -166,6 +170,44 @@ static void process_unshare(const char **out, char *nsnames)
 	for (const char *ns = strtok(nsnames, ","); ns != NULL; ns = strtok(NULL, ",")) {
 		process_nslist_entry(out, ns, NULL, false);
 	}
+}
+
+static void handle_climit_arg(struct entry_settings *opts, char *optarg) {
+	char *name = strtok(optarg, "=");
+	char *arg = strtok(NULL, "");
+
+	if (arg == NULL) {
+		errx(2, "--limit takes an argument in the form resource=value");
+	}
+
+	const struct cmap *opt_ent = NULL;
+	for (const struct cmap *opt = cgroup_map; opt < cgroup_map + lengthof(cgroup_map); ++opt) {
+		if (strcmp(opt->fname, name) == 0) {
+			opt_ent = opt;
+		}
+	}
+
+	if (opt_ent == NULL) {
+		fprintf(stderr, "--limit: `%s` is not a valid resource name.\n", name);
+		fprintf(stderr, "valid resources are: ");
+
+		for (const struct cmap *opt = cgroup_map; opt < cgroup_map + lengthof(cgroup_map); ++opt) {
+			fprintf(stderr, "%s%s", opt == cgroup_map ? "" : ", ", opt->fname);
+		}
+		fprintf(stderr, ".\n");
+		exit(2);
+	}
+
+	// Limit the maximum number of arguments specified, and prevent double specification of
+	// single argument
+	if (opts->climits[opt_ent->resource].present) {
+		errx(2, "double specified --limit argument");
+	}
+
+	opts->climits[opt_ent->resource].fname   = name;
+	opts->climits[opt_ent->resource].clim    = arg;
+	opts->climits[opt_ent->resource].present = true;
+	opts->nactiveclimits++;
 }
 
 static void handle_rlimit_arg(struct entry_settings *opts, char *optarg)
@@ -282,6 +324,8 @@ int main(int argc, char *argv[], char *envp[])
 		{ "uid-map",            required_argument, NULL, OPTION_UIDMAP          },
 		{ "gid-map",            required_argument, NULL, OPTION_GIDMAP          },
 		{ "nic",                required_argument, NULL, OPTION_NIC             },
+		{ "cgroup",             required_argument, NULL, OPTION_CGROUP          },
+		{ "limit",              required_argument, NULL, OPTION_CLIMIT          },
 		{ "pidfile",            required_argument, NULL, OPTION_PIDFILE         },
 		{ "ip",                 required_argument, NULL, OPTION_IP              },
 		{ "route",              required_argument, NULL, OPTION_ROUTE           },
@@ -292,6 +336,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ "no-fake-devtmpfs",     no_argument, NULL, OPTION_NO_FAKE_DEVTMPFS     },
 		{ "no-derandomize",       no_argument, NULL, OPTION_NO_DERANDOMIZE       },
 		{ "no-proc-remount",      no_argument, NULL, OPTION_NO_PROC_REMOUNT      },
+		{ "no-cgroup-remount",    no_argument, NULL, OPTION_NO_CGROUP_REMOUNT    },
 		{ "no-loopback-setup",    no_argument, NULL, OPTION_NO_LOOPBACK_SETUP    },
 		{ "no-init",              no_argument, NULL, OPTION_NO_INIT              },
 		{ "no-env",               no_argument, NULL, OPTION_NO_ENV               },
@@ -390,6 +435,10 @@ int main(int argc, char *argv[], char *envp[])
 
 			case OPTION_RLIMIT:
 				handle_rlimit_arg(&opts, optarg);
+				break;
+
+			case OPTION_CLIMIT:
+				handle_climit_arg(&opts, optarg);
 				break;
 
 			case OPTION_SHARE:
@@ -622,6 +671,10 @@ int main(int argc, char *argv[], char *envp[])
 				opts.pidfile = optarg;
 				break;
 
+			case OPTION_CGROUP:
+				opts.cgroup_path = optarg;
+				break;
+
 			case OPTION_NO_FAKE_DEVTMPFS:
 				opts.no_fake_devtmpfs = 1;
 				break;
@@ -632,6 +685,10 @@ int main(int argc, char *argv[], char *envp[])
 
 			case OPTION_NO_PROC_REMOUNT:
 				opts.no_proc_remount = 1;
+				break;
+
+			case OPTION_NO_CGROUP_REMOUNT:
+				opts.no_cgroup_remount = 1;
 				break;
 
 			case OPTION_NO_COPY_HARD_RLIMITS:

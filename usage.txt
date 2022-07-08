@@ -42,6 +42,10 @@ Options:
       --nic <nic>                   Create network interface in namespace.
       --ip <address>,<dev>          Add an IP address to the specified interface.
       --route <route>               Add a route in the network namespace.
+
+      --cgroup <path>               Path to cgroup to join or operate within.
+      --limit <res>=<value>         Set the specified cgroup resource to the
+                                    provided value(s).
       --rlimit <res>=<hard>:<soft>,
       --rlimit <res>=<value>        Set the specified resource to the provided
                                     value(s).
@@ -51,6 +55,7 @@ Options:
       --no-copy-hard-rlimits        Don't copy hard limit values to soft limits.
       --no-fake-devtmpfs            Don't replace devtmpfs mounts with fake ones.
       --no-derandomize              Don't attempt to reduce randomness sources.
+      --no-cgroup-remount           Don't remount the existing /sys/fs/cgroup.
       --no-proc-remount             Don't remount the existing /proc in pid
                                     namespaces.
       --no-loopback-setup           Don't bring the lo interface up in network

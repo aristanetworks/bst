@@ -37,6 +37,8 @@
 #include "setarch.h"
 #include "sig.h"
 #include "util.h"
+#include "cgroups.h"
+#include "fd.h"
 
 static inline size_t append_argv(char **argv, size_t argc, char *arg)
 {
@@ -165,6 +167,7 @@ int enter(struct entry_settings *opts)
 	memcpy(outer_helper.uid_desired, opts->uid_map, sizeof (outer_helper.uid_desired));
 	memcpy(outer_helper.gid_desired, opts->gid_map, sizeof (outer_helper.gid_desired));
 	outer_helper.unshare_net = nsactions[NS_NET] == NSACTION_UNSHARE;
+	outer_helper.cgroup_enabled = (opts->cgroup_path != NULL);
 	outer_helper.nics = opts->nics;
 	outer_helper.nnics = opts->nnics;
 	outer_helper_spawn(&outer_helper);
@@ -225,13 +228,53 @@ int enter(struct entry_settings *opts)
 		}
 	}
 
+	pid_t rootpid = getpid();
+
+	int cgroupfd;
+
+	/*
+	 * If there is a cgroup specified we need to create bst.<pid> subcgroup to join
+	 * Otherwise if no cgroup is specified but limits are applied bst will error out
+	 */
+	if (opts->cgroup_path != NULL) {
+		// Intentionally leave this fd open for cgroup cleanup
+		cgroupfd = open(opts->cgroup_path, O_PATH | O_DIRECTORY | O_CLOEXEC);
+		if (cgroupfd == -1) {
+			err(1, "unable to open cgroup %s", opts->cgroup_path);
+		}
+
+		char *subcgroup = makepath("bst.%d", rootpid);
+
+		if (mkdirat(cgroupfd, subcgroup, 0777) == -1) {
+			err(1, "unable to create sub-hierachy cgroup %s", subcgroup);
+		}
+
+		// Send cleanup cgroup fd to the cleanup process
+		send_fd(outer_helper.fd, cgroupfd);
+
+		int subcgroupfd = openat(cgroupfd, subcgroup, 0);
+		if (subcgroupfd == -1) {
+			err(1, "unable to open cgroup %s/%s", opts->cgroup_path, subcgroup);
+		}
+
+		burn(subcgroupfd, "cgroup.procs", "0");
+
+		// Cgroup subhierarchy is created, now apply specified limits
+		apply_climits(subcgroupfd, opts->climits);
+
+		close(subcgroupfd);
+	} else if (opts->nactiveclimits != 0 && opts->cgroup_path == NULL) {
+		errx(1, "unable to apply limits without --cgroup specified");
+	}
+
 	ns_enter(nsactions);
 
-	int mnt_unshare  = nsactions[NS_MNT]  == NSACTION_UNSHARE;
-	int uts_unshare  = nsactions[NS_UTS]  == NSACTION_UNSHARE;
-	int pid_unshare  = nsactions[NS_PID]  == NSACTION_UNSHARE;
-	int net_unshare  = nsactions[NS_NET]  == NSACTION_UNSHARE;
-	int time_unshare = nsactions[NS_TIME] == NSACTION_UNSHARE;
+	int mnt_unshare    = nsactions[NS_MNT]    == NSACTION_UNSHARE;
+	int uts_unshare    = nsactions[NS_UTS]    == NSACTION_UNSHARE;
+	int pid_unshare    = nsactions[NS_PID]    == NSACTION_UNSHARE;
+	int cgroup_unshare = nsactions[NS_CGROUP] == NSACTION_UNSHARE;
+	int net_unshare    = nsactions[NS_NET]    == NSACTION_UNSHARE;
+	int time_unshare   = nsactions[NS_TIME]   == NSACTION_UNSHARE;
 
 	/* Just unsharing the mount namespace is not sufficient -- if we don't make
 	   every mount entry private, any change we make will be applied to the
@@ -466,6 +509,49 @@ int enter(struct entry_settings *opts)
 			_exit(WEXITSTATUS(status));
 		} else if (WIFSIGNALED(status)) {
 			_exit(WTERMSIG(status) | 1 << 7);
+		}
+	}
+
+	/*
+	 * Only mount a a cgroup hierarchy over sys/fs/cgroup if:
+	 *  1) The user has not specified --no_cgroup_remount
+	 *  2) The mount namespaces are being unshared
+	 *  3) The cgroup namespaces are being unshared
+	 */
+	if (!opts->no_cgroup_remount && mnt_unshare && cgroup_unshare) {
+		int rootfd = open(root, O_PATH, 0);
+		if (rootfd == -1) {
+			err(1, "open %s", root);
+		}
+
+		struct stat cgroupst = { .st_dev = 0 };
+		if (fstatat(rootfd, "sys/fs/cgroup", &cgroupst, AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW) == -1 && errno != ENOENT) {
+			err(1, "fstatat %s/sys/fs/cgroup", root);
+		}
+
+		struct stat rootst;
+		if (fstat(rootfd, &rootst) == -1) {
+			err(1, "fstat %s", root);
+		}
+
+		close(rootfd);
+
+		/*
+		 * Check if sys/fs/cgroup is already a mount point
+		 * If it is we need to mount the current cgroup root over it so procs have a
+		 * coherent view of cgroup hierarchy. We cant just mount to sys/fs/cgroup
+		 * (as we do with /proc remount), so we mount a tmpfs and mount cgroups to that.
+		 */
+		if (cgroupst.st_dev != 0 && cgroupst.st_dev != rootst.st_dev) {
+			const char *target = makepath("%s/sys/fs/cgroup", root);
+
+			if (mount("tmpfs", target, "tmpfs", 0, NULL) == -1) {
+				err(1, "unable to mount tmpfs over %s", target);
+			}
+
+			if (mount("cgroup", target, "cgroup2", 0, NULL) == -1) {
+				err(1, "unable to mount tmpfs over %s", target);
+			}
 		}
 	}
 

@@ -17,6 +17,7 @@
 #include <string.h>
 #include <sys/mount.h>
 #include <sys/prctl.h>
+#include <sys/epoll.h>
 #include <unistd.h>
 
 #include "capable.h"
@@ -25,6 +26,8 @@
 #include "path.h"
 #include "userns.h"
 #include "util.h"
+#include "cgroups.h"
+#include "fd.h"
 
 enum {
 	/* This should be enough for defining our mappings. If we assign
@@ -41,7 +44,7 @@ enum {
    exactly once (hence "burning" rather than "writing"). Such files
    include /proc/pid/uid_map, /proc/pid/gid_map, and /proc/pid/setgroups
    under some circumstances. */
-static void burn(int dirfd, char *path, char *data)
+void burn(int dirfd, char *path, char *data)
 {
 	int fd = openat(dirfd, path, O_WRONLY, 0);
 	if (fd == -1) {
@@ -183,6 +186,86 @@ static void persist_ns_files(pid_t pid, const char **persist)
 	}
 }
 
+/*
+ * If bst has entered a cgroup this function will epoll the cgroup.events file
+ * to detect when all pids have exited the cgroup ("populated 0"). The cgroup is 
+ * destroyed when this condition is met.
+ */
+static void cgroup_helper(int cgroupfd, pid_t rootpid)
+{
+	// Create a new session in case current group leader is killed
+	if (setsid() == -1) {
+		err(1, "unable to create new session leader for cgroup cleanup process");
+	}
+
+	char *subcgroup = makepath("bst.%d", rootpid);
+
+	int subcgroupfd = openat(cgroupfd, subcgroup, O_DIRECTORY);
+	if (subcgroupfd == -1) {
+		err(1, "unable to open bst.%d", rootpid);
+	}
+
+	int cevent = openat(subcgroupfd, "cgroup.events", 0);
+	if (cevent == -1) {
+		err(1, "unable to open cgroup.events");
+	}
+
+	/* Use EPOLLET to be notified of any changes to the cgroup.events file without
+	   needing to seek through the entire file (which seems problematic with this
+	   kernel interface).*/
+	struct epoll_event event = {
+		.events = EPOLLET,
+		.data.fd = 0
+	};
+
+	int epollfd = epoll_create1(0);
+	if (epollfd == -1) {
+		err(1, "epoll_create1");
+	}
+
+	// Notify about I/O changes to cgroupfd
+	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, cevent, &event) == -1) {
+		err(1, "epoll_ctl_add cgroupfd");
+	}
+
+	char populated[BUFSIZ];
+	for (;;) {
+		// Single event (update cgroup.procs), block indefinitely
+		int ready = epoll_wait(epollfd, &event, 1, -1);
+		if (ready == -1) {
+			err(1, "epoll_wait cgroup.events");
+		}
+
+		// We need a new fd to read from the cgroup.events
+		int eventsfd = openat(subcgroupfd, "cgroup.events", O_RDONLY);
+		if (eventsfd == -1) {
+			err(1,"unable to open cgroup.events");
+		}
+
+		FILE *eventsfp = fdopen(eventsfd, "r");
+		if (eventsfp == NULL) {
+			err(1, "unable to open file pointer to cgroup.events");
+		}
+
+		// The order of elements in cgroup.events is not neccesarily specified 
+		while (fgets(populated, BUFSIZ, eventsfp) != NULL) {
+			if (strnlen(populated, sizeof(populated)) == sizeof(populated)) {
+				err(1, "exceeded cgroup.events line read buffer");
+			}
+			// Check if there are no procs within the bst cgroup -- if so, delete it
+			if (strncmp(populated, "populated 0", 11) == 0) {
+				cgroup_clean(cgroupfd, rootpid);
+				close(subcgroupfd);
+				close(cevent);
+				fclose(eventsfp);
+				return;
+			}
+		}
+
+		fclose(eventsfp);
+	}
+}
+
 /* outer_helper_spawn spawns a new process whose only purpose is to modify
    the uid and gid mappings of our target process (TP).
 
@@ -216,6 +299,8 @@ void outer_helper_spawn(struct outer_helper *helper)
 		err(1, "outer_helper: socketpair");
 	}
 
+	pid_t rootpid = getpid();
+
 	pid_t pid = fork();
 	if (pid == -1) {
 		err(1, "outer_helper: fork");
@@ -226,6 +311,25 @@ void outer_helper_spawn(struct outer_helper *helper)
 		helper->pid = pid;
 		helper->fd  = fdpair[SOCKET_PARENT];
 		return;
+	}
+
+	if (helper->cgroup_enabled) {
+		int cgroupfd = recv_fd(fdpair[SOCKET_CHILD]);
+		pid_t pid = fork();
+		if (pid == -1) {
+			err(1, "outer_helper: cgroup cleanup fork");
+		}
+
+		/* This process is intentionally left to leak as the bst root process must have exited
+			 and thus been removed from bst's cgroup.procs for the cgroup hierarchy to be removed */
+		if (pid == 0) {
+
+			// If cleanup is needed, fork process to epoll cgroup.events
+			if (cgroupfd != -1) {
+				cgroup_helper(cgroupfd, rootpid);
+				_exit(0);
+			}
+		}
 	}
 
 	if (prctl(PR_SET_PDEATHSIG, SIGKILL) == -1) {

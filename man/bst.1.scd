@@ -229,6 +229,40 @@ _VAR=value_ before the executable to run.
 
 	Supported options are described in more detail in the *NETWORKING* section.
 
+\--cgroup <path>
+	Specify the cgroup directory that bst will operate within. bst will create a
+	cgroup sub-hierarchy at the <path>.
+
+	This demands that the bst invoker have r/w access to the cgroup.procs at both
+	"<path>" and "<path>/.."
+
+\--limit <resource>=<value>
+	Apply a cgroup quota <value> to the provided <resource>. Multiple limits can
+	be specified in conjunction.
+
+	<value>=<resource> follow the interface of the underlying cgroup.
+
+	Valid <resource>=<value> pairs are:
+	- cpu.max=$MAX
+	- cpu.max="$MAX $PERIOD"
+	- cpu.weight=$WEIGHT
+	- memory.min=$MIN
+	- memory.low=$LOW
+	- memory.high=$HIGH
+	- memory.max=$MAX
+	- memory.swap.high=$HIGH
+	- memory.swap.max=$MAX
+	- io.weight=$WEIGHT
+	- io.max="$MAJ:$MIN rbps=$RIOPS wbps=$WBPS riops=$RIOPS wiops=$WIOPS"
+	- io.latency="$MAJ:$MIN target$MS"
+	- pids.max=$MAX
+
+	To use a <resource> ensure that the proper controller (io, cpu, memory) is
+	added to the cgroup.controller at the "<path>" specified by --cgroup. The bst
+	invoker must also have write access to the given <resource> file and the
+	ability to write to cgroup.procs at "<path>" specified by --cgroup as well 
+	as the cgroup.procs at "<path>/.."
+
 \--rlimit <resource>=<value>++
 \--rlimit <resource>=[hard]:[soft]
 	Set the specified hard and soft resource limits of the specified resource
@@ -340,6 +374,12 @@ _VAR=value_ before the executable to run.
 	By default, *bst* tries to run inner processes in a somewhat more deterministic
 	environment. So far, it does so by symlinking _/dev/random_ and _/dev/urandom_ to
 	_/dev/zero_, and by disabling ASLR for the inner process.
+
+\--no-cgroup-remount
+	Do not remount the existing /sys/fs/cgroup mount if in a mount and cgroup namespace.
+
+	By default, *bst* automatically tries to mount a new cgroup2 on top of
+	/sys/fs/cgroup if it detects it to be on another filesystem than _/_.
 
 \--no-proc-remount
 	Do not remount the existing _/proc_ mount if in a mount and pid namespace.

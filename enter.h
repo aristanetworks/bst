@@ -14,6 +14,7 @@
 # include <time.h>
 # include <unistd.h>
 # include "bst_limits.h"
+# include "cgroups.h"
 # include "mount.h"
 # include "net.h"
 # include "ns.h"
@@ -75,6 +76,11 @@ struct entry_settings {
 
 	mode_t umask;
 
+	char *cgroup_path;
+
+	struct climit climits[CGROUPS_NLIMIT];
+	size_t nactiveclimits;
+
 	const char *arch;
 
 	struct bst_rlimit rlimits[BST_NLIMIT];
@@ -91,6 +97,7 @@ struct entry_settings {
 	int no_fake_devtmpfs;
 	int no_derandomize;
 	int no_proc_remount;
+	int no_cgroup_remount;
 	int no_init;
 	int no_loopback_setup;
 	int no_env;
