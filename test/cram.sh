@@ -86,6 +86,11 @@ if [ -f "$what" -a -x "$what" ]; then
 	function maybe_exec() {
 		if (cmd != "") {
 			while ( ( "( set -eu\n" cmd "\n) 2>&1 || echo \\[$?\\]" | getline ln ) > 0 ) {
+				if (ln == "[80]") {
+					print what ":" NR ": [skipped]" | "cat 1>&2"
+					cmd = ""
+					exit 80
+				}
 				print indent ln
 			}
 			cmd = ""
@@ -143,6 +148,15 @@ if [ -f "$what" -a -x "$what" ]; then
 		maybe_exec()
 	}
 	'
+	status=$?
+	set -e
+
+	if [ "$status" -eq 80 ]; then
+		# skip file
+		exit 0
+	elif [ "$status" -ne 0 ]; then
+		exit "$status"
+	fi
 
 	# git diff complains when there are differences on the x bit
 	# busybox doesn't support --reference
@@ -151,7 +165,7 @@ if [ -f "$what" -a -x "$what" ]; then
 	fi
 
 	set +e
-	git diff --exit-code --no-index "$what" "$what.err"
+	git diff --exit-code --text --no-index "$what" "$what.err"
 	status=$?
 	set -e
 
@@ -162,6 +176,13 @@ if [ -f "$what" -a -x "$what" ]; then
 
 	rm -f "$what.err"
 	exit "$status"
+fi
+
+# Avoid going into an infinite recursive loop if $what is a
+# non-directory non-executable.
+if [ -n "$what" -a ! -d "$what" ]; then
+    echo "cram.sh: expecting argument to be either an executable file, or a directory" 1>&2
+    exit 1
 fi
 
 # $what can be empty, in which case this defaults to cwd.
