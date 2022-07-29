@@ -21,7 +21,7 @@
 # include "userns.h"
 # include "tty.h"
 
-struct limit {
+struct bst_rlimit {
 	bool present;
 	struct rlimit rlim;
 };
@@ -77,7 +77,7 @@ struct entry_settings {
 
 	const char *arch;
 
-	struct limit limits[BST_NLIMIT];
+	struct bst_rlimit rlimits[BST_NLIMIT];
 
 	const char *setup_program;
 	char *const *setup_argv;
@@ -87,7 +87,7 @@ struct entry_settings {
 	bool tty;
 	struct tty_opts ttyopts;
 
-	int no_copy_hard_limits;
+	int no_copy_hard_rlimits;
 	int no_fake_devtmpfs;
 	int no_derandomize;
 	int no_proc_remount;

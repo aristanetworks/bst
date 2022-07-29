@@ -49,7 +49,7 @@ static inline size_t append_argv(char **argv, size_t argc, char *arg)
 
 /* Applies the limit specified by `resource'.  If value is NULL, then copy the
    hard limit value to the soft limit and call `setrlimit'. */
-static void apply_limit(int resource, struct rlimit const *value)
+static void apply_rlimit(int resource, struct rlimit const *value)
 {
 	struct rlimit new_limit;
 	if (value == NULL) {
@@ -659,16 +659,16 @@ int enter(struct entry_settings *opts)
 		}
 	}
 
-	for (size_t resource = 0; resource < lengthof(opts->limits); ++resource) {
+	for (size_t resource = 0; resource < lengthof(opts->rlimits); ++resource) {
 		struct rlimit const * value = NULL;
-		if (opts->limits[resource].present) {
-			value = &opts->limits[resource].rlim;
+		if (opts->rlimits[resource].present) {
+			value = &opts->rlimits[resource].rlim;
 		}
-		/* When no_copy_hard_limits is not set, we always want to call apply_limit, either
+		/* When no_copy_hard_rlimits is not set, we always want to call apply_rlimit, either
 		   with the explicitly configured value (value != NULL), or by copying hard->soft
 		   (value == NULL). */
-		if (value || !opts->no_copy_hard_limits) {
-			apply_limit(resource, value);
+		if (value || !opts->no_copy_hard_rlimits) {
+			apply_rlimit(resource, value);
 		}
 	}
 

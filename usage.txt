@@ -42,13 +42,13 @@ Options:
       --nic <nic>                   Create network interface in namespace.
       --ip <address>,<dev>          Add an IP address to the specified interface.
       --route <route>               Add a route in the network namespace.
-      --limit <res>=<hard>:<soft>,
-      --limit <res>=<value>         Set the specified resource to the provided
+      --rlimit <res>=<hard>:<soft>,
+      --rlimit <res>=<value>        Set the specified resource to the provided
                                     value(s).
       --pidfile <path>              Write PID in file and exclusive-lock it.
       --tty[=<options>]             Allocate a pty for the process.
 
-      --no-copy-hard-limits         Don't copy hard limit values to soft limits.
+      --no-copy-hard-rlimits        Don't copy hard limit values to soft limits.
       --no-fake-devtmpfs            Don't replace devtmpfs mounts with fake ones.
       --no-derandomize              Don't attempt to reduce randomness sources.
       --no-proc-remount             Don't remount the existing /proc in pid

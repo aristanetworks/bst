@@ -122,23 +122,23 @@ Testing persistence
 
 	$ mkdir -p foo bar; trap 'bst-unpersist foo && rmdir foo bar' EXIT; bst --persist=foo sh -c 'mount -t tmpfs none bar && echo hello > bar/greeting' && [ ! -f bar/greeting ] && bst --share mnt,user=foo sh -c '[ "$(cat '"$PWD"'/bar/greeting)" = "hello" ]'
 
-Testing --limit core / general tests
-	$ bst --limit core=0 test/print_limits core
+Testing --rlimit core / general tests
+	$ bst --rlimit core=0 test/print_limits core
 	core: hard=0 soft=0
 
-	$ bst --limit core=-1
-	bst: error in --limit core value: Invalid argument
+	$ bst --rlimit core=-1
+	bst: error in --rlimit core value: Invalid argument
 	[1]
 
-	$ bst --limit core=0:-1
-	bst: error in --limit core value: Invalid argument
+	$ bst --rlimit core=0:-1
+	bst: error in --rlimit core value: Invalid argument
 	[1]
 
-	$ bst --limit core=0xffffffffffffffffffffffffe 2>&1 | sed -e 's/Result not representable/Numerical result out of range/'
-	bst: error in --limit core value: Numerical result out of range
+	$ bst --rlimit core=0xffffffffffffffffffffffffe 2>&1 | sed -e 's/Result not representable/Numerical result out of range/'
+	bst: error in --rlimit core value: Numerical result out of range
 
-Testing limit-copying
-	$ bst --no-copy-hard-limits true  # smoke test
+Testing rlimit-copying
+	$ bst --no-copy-hard-rlimits true  # smoke test
 
 	$ bst test/print_limits --soft-only
 	as: soft=hard
@@ -158,82 +158,82 @@ Testing limit-copying
 	sigpending: soft=hard
 	stack: soft=hard
 
-Testing --limit nofile
-	$ bst --limit nofile=750 test/print_limits nofile
+Testing --rlimit nofile
+	$ bst --rlimit nofile=750 test/print_limits nofile
 	nofile: hard=750 soft=750
 
-	$ bst --limit nofile=750:740 test/print_limits nofile
+	$ bst --rlimit nofile=750:740 test/print_limits nofile
 	nofile: hard=750 soft=740
 
-Testing --limit nproc
-	$ bst --limit nproc=3500 test/print_limits nproc
+Testing --rlimit nproc
+	$ bst --rlimit nproc=3500 test/print_limits nproc
 	nproc: hard=3500 soft=3500
 
-	$ bst --limit nproc=3500:3499 test/print_limits nproc
+	$ bst --rlimit nproc=3500:3499 test/print_limits nproc
 	nproc: hard=3500 soft=3499
 
-Testing --limit as
-	$ bst --limit as=: test/print_limits --soft-only as
+Testing --rlimit as
+	$ bst --rlimit as=: test/print_limits --soft-only as
 	as: soft=hard
 
-Testing --limit core
-	$ bst --limit core=: test/print_limits --soft-only core
+Testing --rlimit core
+	$ bst --rlimit core=: test/print_limits --soft-only core
 	core: soft=hard
 
-Testing --limit cpu
-	$ bst --limit cpu=: test/print_limits --soft-only cpu
+Testing --rlimit cpu
+	$ bst --rlimit cpu=: test/print_limits --soft-only cpu
 	cpu: soft=hard
 
-Testing --limit data
-	$ bst --limit data=: test/print_limits --soft-only data
+Testing --rlimit data
+	$ bst --rlimit data=: test/print_limits --soft-only data
 	data: soft=hard
 
-Testing --limit fsize
-	$ bst --limit fsize=: test/print_limits --soft-only fsize
+Testing --rlimit fsize
+	$ bst --rlimit fsize=: test/print_limits --soft-only fsize
 	fsize: soft=hard
 
-Testing --limit locks
-	$ bst --limit locks=: test/print_limits --soft-only locks
+Testing --rlimit locks
+	$ bst --rlimit locks=: test/print_limits --soft-only locks
 	locks: soft=hard
 
-Testing --limit memlock
-	$ bst --limit memlock=: test/print_limits --soft-only memlock
+Testing --rlimit memlock
+	$ bst --rlimit memlock=: test/print_limits --soft-only memlock
 	memlock: soft=hard
 
-Testing --limit msgqueue
-	$ bst --limit msgqueue=: test/print_limits --soft-only msgqueue
+Testing --rlimit msgqueue
+	$ bst --rlimit msgqueue=: test/print_limits --soft-only msgqueue
 	msgqueue: soft=hard
 
-Testing --limit nice
-	$ bst --limit nice=: test/print_limits --soft-only nice
+Testing --rlimit nice
+	$ bst --rlimit nice=: test/print_limits --soft-only nice
 	nice: soft=hard
 
-Testing --limit nofile
-	$ bst --limit nofile=: test/print_limits --soft-only nofile
+Testing --rlimit nofile
+	$ bst --rlimit nofile=: test/print_limits --soft-only nofile
 	nofile: soft=hard
 
-Testing --limit nproc
-	$ bst --limit nproc=: test/print_limits --soft-only nproc
+Testing --rlimit nproc
+	$ bst --rlimit nproc=: test/print_limits --soft-only nproc
 	nproc: soft=hard
 
-Testing --limit rss
-	$ bst --limit rss=: test/print_limits --soft-only rss
+Testing --rlimit rss
+	$ bst --rlimit rss=: test/print_limits --soft-only rss
 	rss: soft=hard
 
-Testing --limit rtprio
-	$ bst --limit rtprio=: test/print_limits --soft-only rtprio
+Testing --rlimit rtprio
+	$ bst --rlimit rtprio=: test/print_limits --soft-only rtprio
 	rtprio: soft=hard
 
-Testing --limit rttime
-	$ bst --limit rttime=: test/print_limits --soft-only rttime
+Testing --rlimit rttime
+	$ bst --rlimit rttime=: test/print_limits --soft-only rttime
 	rttime: soft=hard
 
-Testing --limit sigpending
-	$ bst --limit sigpending=: test/print_limits --soft-only sigpending
+Testing --rlimit sigpending
+	$ bst --rlimit sigpending=: test/print_limits --soft-only sigpending
 	sigpending: soft=hard
 
-Testing --limit stack
-	$ bst --limit stack=: test/print_limits --soft-only stack
+Testing --rlimit stack
+	$ bst --rlimit stack=: test/print_limits --soft-only stack
 	stack: soft=hard
 
 Testing Environment

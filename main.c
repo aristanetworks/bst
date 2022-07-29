@@ -37,7 +37,7 @@ enum {
 	OPTION_GROUPS,
 	OPTION_WORKDIR,
 	OPTION_ARCH,
-	OPTION_LIMIT,
+	OPTION_RLIMIT,
 	OPTION_SHARE,
 	OPTION_UNSHARE,
 	OPTION_ARGV0,
@@ -61,7 +61,7 @@ enum {
 	OPTION_NO_LOOPBACK_SETUP,
 	OPTION_NO_INIT,
 	OPTION_NO_ENV,
-	OPTION_NO_COPY_HARD_LIMITS,
+	OPTION_NO_COPY_HARD_RLIMITS,
 	OPTION_TTY,
 };
 
@@ -168,7 +168,7 @@ static void process_unshare(const char **out, char *nsnames)
 	}
 }
 
-static void handle_limit_arg(struct entry_settings *opts, char *optarg)
+static void handle_rlimit_arg(struct entry_settings *opts, char *optarg)
 {
 	struct opt {
 		int resource;
@@ -197,7 +197,7 @@ static void handle_limit_arg(struct entry_settings *opts, char *optarg)
 	char *arg = strtok(NULL, "");
 
 	if (arg == NULL) {
-		err(2, "--limit takes an argument in the form resource=value");
+		err(2, "--rlimit takes an argument in the form resource=value");
 	}
 
 	const struct opt *opt_ent = NULL;
@@ -208,7 +208,7 @@ static void handle_limit_arg(struct entry_settings *opts, char *optarg)
 	}
 
 	if (opt_ent == NULL) {
-		fprintf(stderr, "--limit: `%s` is not a valid resource name.\n", name);
+		fprintf(stderr, "--rlimit: `%s` is not a valid resource name.\n", name);
 		fprintf(stderr, "valid resources are: ");
 
 		for (const struct opt *opt = option_map; opt < option_map + lengthof(option_map); ++opt) {
@@ -218,10 +218,10 @@ static void handle_limit_arg(struct entry_settings *opts, char *optarg)
 		exit(2);
 	}
 
-	if (parse_rlimit(opt_ent->resource, &opts->limits[opt_ent->resource].rlim, arg)) {
-		err(1, "error in --limit %s value", opt_ent->name);
+	if (parse_rlimit(opt_ent->resource, &opts->rlimits[opt_ent->resource].rlim, arg)) {
+		err(1, "error in --rlimit %s value", opt_ent->name);
 	}
-	opts->limits[opt_ent->resource].present = true;
+	opts->rlimits[opt_ent->resource].present = true;
 }
 
 int usage(int error, char *argv0)
@@ -267,7 +267,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ "gid",                required_argument, NULL, OPTION_GID             },
 		{ "groups",             required_argument, NULL, OPTION_GROUPS          },
 		{ "arch",               required_argument, NULL, OPTION_ARCH            },
-		{ "limit",              required_argument, NULL, OPTION_LIMIT           },
+		{ "rlimit",             required_argument, NULL, OPTION_RLIMIT          },
 		{ "share",              required_argument, NULL, OPTION_SHARE           },
 		{ "unshare",            required_argument, NULL, OPTION_UNSHARE         },
 		{ "argv0",              required_argument, NULL, OPTION_ARGV0           },
@@ -288,13 +288,13 @@ int main(int argc, char *argv[], char *envp[])
 		{ "tty",                optional_argument, NULL, OPTION_TTY             },
 
 		/* Opt-out feature flags */
-		{ "no-copy-hard-limits", no_argument, NULL, OPTION_NO_COPY_HARD_LIMITS  },
-		{ "no-fake-devtmpfs",    no_argument, NULL, OPTION_NO_FAKE_DEVTMPFS     },
-		{ "no-derandomize",      no_argument, NULL, OPTION_NO_DERANDOMIZE       },
-		{ "no-proc-remount",     no_argument, NULL, OPTION_NO_PROC_REMOUNT      },
-		{ "no-loopback-setup",   no_argument, NULL, OPTION_NO_LOOPBACK_SETUP    },
-		{ "no-init",             no_argument, NULL, OPTION_NO_INIT              },
-		{ "no-env",              no_argument, NULL, OPTION_NO_ENV               },
+		{ "no-copy-hard-rlimits", no_argument, NULL, OPTION_NO_COPY_HARD_RLIMITS },
+		{ "no-fake-devtmpfs",     no_argument, NULL, OPTION_NO_FAKE_DEVTMPFS     },
+		{ "no-derandomize",       no_argument, NULL, OPTION_NO_DERANDOMIZE       },
+		{ "no-proc-remount",      no_argument, NULL, OPTION_NO_PROC_REMOUNT      },
+		{ "no-loopback-setup",    no_argument, NULL, OPTION_NO_LOOPBACK_SETUP    },
+		{ "no-init",              no_argument, NULL, OPTION_NO_INIT              },
+		{ "no-env",               no_argument, NULL, OPTION_NO_ENV               },
 
 		{ 0, 0, 0, 0 }
 	};
@@ -388,8 +388,8 @@ int main(int argc, char *argv[], char *envp[])
 				opts.arch = optarg;
 				break;
 
-			case OPTION_LIMIT:
-				handle_limit_arg(&opts, optarg);
+			case OPTION_RLIMIT:
+				handle_rlimit_arg(&opts, optarg);
 				break;
 
 			case OPTION_SHARE:
@@ -634,8 +634,8 @@ int main(int argc, char *argv[], char *envp[])
 				opts.no_proc_remount = 1;
 				break;
 
-			case OPTION_NO_COPY_HARD_LIMITS:
-				opts.no_copy_hard_limits = 1;
+			case OPTION_NO_COPY_HARD_RLIMITS:
+				opts.no_copy_hard_rlimits = 1;
 				break;
 
 			case OPTION_INIT:

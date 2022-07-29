@@ -229,8 +229,8 @@ _VAR=value_ before the executable to run.
 
 	Supported options are described in more detail in the *NETWORKING* section.
 
-\--limit <resource>=<value>++
-\--limit <resource>=[hard]:[soft]
+\--rlimit <resource>=<value>++
+\--rlimit <resource>=[hard]:[soft]
 	Set the specified hard and soft resource limits of the specified resource
 	based on *<value>*.
 
@@ -262,17 +262,17 @@ _VAR=value_ before the executable to run.
 	soft resource limit to the current hard limit value.
 
 	Examples:++
-	\--limit nproc=100       hard=100, soft=100++
-	\--limit nproc=200:100   hard=200, soft=100++
-	\--limit nproc=:100      hard=(unchanged), soft=100++
-	\--limit nproc=100:      hard=100, soft=(unchanged)++
-	\--limit nproc=:         hard=(unchanged), soft=(hard limit)
+	\--rlimit nproc=100       hard=100, soft=100++
+	\--rlimit nproc=200:100   hard=200, soft=100++
+	\--rlimit nproc=:100      hard=(unchanged), soft=100++
+	\--rlimit nproc=100:      hard=100, soft=(unchanged)++
+	\--rlimit nproc=:         hard=(unchanged), soft=(hard limit)
 
-	If a value is not provided using a --limit option for a given resource,
-	the hard limit will be used as the soft limit, unless *--no-copy-hard-limits* has
+	If a value is not provided using a --rlimit option for a given resource,
+	the hard limit will be used as the soft limit, unless *--no-copy-hard-rlimits* has
 	been provided.
 
-	Full details for each limit value can be found in *getrlimit*(2).
+	Full details for each rlimit value can be found in *getrlimit*(2).
 
 \--pidfile <path>
 	Write the PID of the newly spawned *<executable>* in *<path>*.
@@ -318,11 +318,11 @@ _VAR=value_ before the executable to run.
 	the --tty option to allocate a new pty for the child process.
 
 
-\--no-copy-hard-limits
+\--no-copy-hard-rlimits
 	Do not copy hard limit values to soft limits for all resources mentioned above.
 
 	By default, *bst* copies the hard limit to the soft limit for all of the resources mentioned
-	above.  To avoid setting any resource values, except as directed by --limit-<limit> options,
+	above.  To avoid setting any resource values, except as directed by --rlimit-<limit> options,
 	use this option.
 
 \--no-fake-devtmpfs
