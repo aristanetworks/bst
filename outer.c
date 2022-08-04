@@ -323,12 +323,8 @@ void outer_helper_spawn(struct outer_helper *helper)
 		/* This process is intentionally left to leak as the bst root process must have exited
 			 and thus been removed from bst's cgroup.procs for the cgroup hierarchy to be removed */
 		if (pid == 0) {
-
-			// If cleanup is needed, fork process to epoll cgroup.events
-			if (cgroupfd != -1) {
-				cgroup_helper(cgroupfd, rootpid);
-				_exit(0);
-			}
+			cgroup_helper(cgroupfd, rootpid);
+			_exit(0);
 		}
 	}
 
