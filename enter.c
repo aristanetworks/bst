@@ -161,15 +161,55 @@ int enter(struct entry_settings *opts)
 		errx(1, "cannot create NICs when not in a network namespace");
 	}
 
+
+	char cgroup_path[BUFSIZ];
+	/*
+	 * If there is a cgroup specified we need to create bst.<pid> subcgroup to join
+	 * Otherwise if no cgroup is specified but limits are applied bst will error out
+	 */
+	if (opts->nactiveclimits != 0 || opts->cgroup_path != NULL) {
+		// If cgroup path is unspecified then attempt to derive from /proc/self/cgroup
+		if (opts->cgroup_path == NULL) {
+			FILE *selfcgroupfd = fopen("/proc/self/cgroup", "r");
+			if (selfcgroupfd == NULL) {
+				err(1, "unable to derive current cgroup hierarchy from /proc/self/cgroup");
+			}
+
+			char selfcgroup[BUFSIZ];
+
+			while (fgets(selfcgroup, BUFSIZ, selfcgroupfd) != NULL) {
+				if (strncmp(selfcgroup, "0::/", 3) == 0) {
+					// Remove newline character read by fgets
+					selfcgroup[strcspn(selfcgroup, "\n")] = '\0';
+					break;
+				}
+			}
+			fclose(selfcgroupfd);
+
+			// Form path from default cgroups path + current cgroup path with removed 0:/
+			if (sprintf(cgroup_path, "/sys/fs/cgroup/%s", selfcgroup + 3) == -1) {
+				err(1, "unable to form path /sys/fs/cgroup/%s", selfcgroup + 3);
+			}
+
+			opts->cgroup_path = cgroup_path;
+		}
+
+		if (opts->nactiveclimits != 0 && opts->cgroup_path == NULL) {
+			errx(1, "unable to apply limits without --cgroup specified");
+		}
+	}
+
 	struct outer_helper outer_helper;
 	outer_helper.persist = opts->persist;
 	outer_helper.unshare_user = nsactions[NS_USER] == NSACTION_UNSHARE;
 	memcpy(outer_helper.uid_desired, opts->uid_map, sizeof (outer_helper.uid_desired));
 	memcpy(outer_helper.gid_desired, opts->gid_map, sizeof (outer_helper.gid_desired));
 	outer_helper.unshare_net = nsactions[NS_NET] == NSACTION_UNSHARE;
-	outer_helper.cgroup_enabled = (opts->cgroup_path != NULL);
+	outer_helper.cgroup_enabled = (opts->nactiveclimits != 0 || opts->cgroup_path != NULL);
 	outer_helper.nics = opts->nics;
 	outer_helper.nnics = opts->nnics;
+	outer_helper.cgroup_path = opts->cgroup_path;
+	outer_helper.climits = opts->climits;
 	outer_helper_spawn(&outer_helper);
 
 	/* After this point, we must operate with the privilege set of the caller
@@ -228,51 +268,11 @@ int enter(struct entry_settings *opts)
 		}
 	}
 
-	pid_t rootpid = getpid();
-
-	int cgroupfd;
-
-	/*
-	 * If there is a cgroup specified we need to create bst.<pid> subcgroup to join
-	 * Otherwise if no cgroup is specified but limits are applied bst will error out
-	 */
-	if (opts->cgroup_path != NULL) {
-		// Intentionally leave this fd open for cgroup cleanup
-		cgroupfd = open(opts->cgroup_path, O_PATH | O_DIRECTORY | O_CLOEXEC);
-		if (cgroupfd == -1) {
-			err(1, "unable to open cgroup %s", opts->cgroup_path);
-		}
-
-		char *subcgroup = makepath("bst.%d", rootpid);
-
-		if (mkdirat(cgroupfd, subcgroup, 0777) == -1) {
-			err(1, "unable to create sub-hierachy cgroup %s", subcgroup);
-		}
-
-		// Send cleanup cgroup fd to the cleanup process
-		send_fd(outer_helper.fd, cgroupfd);
-
-		int subcgroupfd = openat(cgroupfd, subcgroup, 0);
-		if (subcgroupfd == -1) {
-			err(1, "unable to open cgroup %s/%s", opts->cgroup_path, subcgroup);
-		}
-
-		burn(subcgroupfd, "cgroup.procs", "0");
-
-		// Cgroup subhierarchy is created, now apply specified limits
-		apply_climits(subcgroupfd, opts->climits);
-
-		close(subcgroupfd);
-	} else if (opts->nactiveclimits != 0 && opts->cgroup_path == NULL) {
-		errx(1, "unable to apply limits without --cgroup specified");
-	}
-
 	ns_enter(nsactions);
 
 	int mnt_unshare    = nsactions[NS_MNT]    == NSACTION_UNSHARE;
 	int uts_unshare    = nsactions[NS_UTS]    == NSACTION_UNSHARE;
 	int pid_unshare    = nsactions[NS_PID]    == NSACTION_UNSHARE;
-	int cgroup_unshare = nsactions[NS_CGROUP] == NSACTION_UNSHARE;
 	int net_unshare    = nsactions[NS_NET]    == NSACTION_UNSHARE;
 	int time_unshare   = nsactions[NS_TIME]   == NSACTION_UNSHARE;
 
@@ -454,6 +454,15 @@ int enter(struct entry_settings *opts)
 	}
 
 	outer_helper_sync(&outer_helper);
+
+	cgroup_enter(nsactions[NS_CGROUP]);
+	int cgroup_unshare = nsactions[NS_CGROUP] == NSACTION_UNSHARE;
+	//if (cgroup_unshare) {
+	//	if (unshare(BST_CLONE_NEWCGROUP) == -1) {
+	//		err(1, "unable to unshare cgroup");
+	//	}
+	//}
+
 	outer_helper_close(&outer_helper);
 
 	int rtnl = init_rtnetlink_socket();

@@ -41,6 +41,5 @@ struct climit {
 };
 
 void apply_climits(int cgroupfd, const struct climit *limits);
-void cgroup_clean(int cleanfd, pid_t rootpid);
 
 #endif /* !CGROUPS_H_ */

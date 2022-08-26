@@ -118,39 +118,15 @@ static int cmp_nsids(const void *lhs, const void *rhs)
 	return (int) ((intptr_t) lhs - (intptr_t) rhs);
 }
 
-void ns_enter(enum nsaction *nsactions)
-{
-	/* Enter all relevant namespaces. It's hard to check in advance which
-	   namespaces are supported, so we unshare them one by one in order. */
-
-	struct nsid namespaces[] = {
-		/* User namespace must be entered first and foremost. */
-		{ NS_USER,   nsactions[NS_USER] },
-		{ NS_NET,    nsactions[NS_NET] },
-		{ NS_MNT,    nsactions[NS_MNT] },
-		{ NS_IPC,    nsactions[NS_IPC] },
-		{ NS_PID,    nsactions[NS_PID] },
-		{ NS_CGROUP, nsactions[NS_CGROUP] },
-		{ NS_UTS,    nsactions[NS_UTS] },
-		{ NS_TIME,   nsactions[NS_TIME] },
-	};
-
-	/* If we have CAP_SYS_ADMIN from the get-go, starting by entering
-	   the userns may restrict us from joining additional namespaces, so
-	   we rearrange the order so that we setns into target nsfs files first. */
-	if (capable(BST_CAP_SYS_ADMIN)) {
-		qsort(namespaces, lengthof(namespaces), sizeof (namespaces[0]),
-				cmp_nsids);
-	}
-
-	for (struct nsid *ns = &namespaces[0]; ns < namespaces + lengthof(namespaces); ++ns) {
-		switch (ns->action) {
+static void ns_unshare(struct nsid * ns) {
+	switch (ns->action) {
 		case NSACTION_UNSHARE:
 			if (unshare(flags[ns->ns].flag) == -1) {
 				if (errno == EINVAL) {
 					/* We realized that the namespace isn't supported -- remove it
 					   from the unshare set. */
-					nsactions[ns->ns] = NSACTION_SHARE_WITH_PARENT;
+					//nsactions[ns->ns] = NSACTION_SHARE_WITH_PARENT;
+					ns->action = NSACTION_SHARE_WITH_PARENT;
 				} else {
 					err(1, "unshare %s", flags[ns->ns].proc_ns_name);
 				}
@@ -165,6 +141,43 @@ void ns_enter(enum nsaction *nsactions)
 				err(1, "setns %s", flags[ns->ns].proc_ns_name);
 			}
 			break;
-		}
 	}
+}
+
+void ns_enter(enum nsaction *nsactions)
+{
+	/* Enter all relevant namespaces. It's hard to check in advance which
+	   namespaces are supported, so we unshare them one by one in order. */
+
+	struct nsid namespaces[] = {
+		/* User namespace must be entered first and foremost. */
+		{ NS_USER,   nsactions[NS_USER] },
+		{ NS_NET,    nsactions[NS_NET] },
+		{ NS_MNT,    nsactions[NS_MNT] },
+		{ NS_IPC,    nsactions[NS_IPC] },
+		{ NS_PID,    nsactions[NS_PID] },
+		{ NS_UTS,    nsactions[NS_UTS] },
+		{ NS_TIME,   nsactions[NS_TIME] },
+	};
+
+	/* If we have CAP_SYS_ADMIN from the get-go, starting by entering
+	   the userns may restrict us from joining additional namespaces, so
+	   we rearrange the order so that we setns into target nsfs files first. */
+	if (capable(BST_CAP_SYS_ADMIN)) {
+		qsort(namespaces, lengthof(namespaces), sizeof (namespaces[0]),
+				cmp_nsids);
+	}
+
+	for (struct nsid *ns = &namespaces[0]; ns < namespaces + lengthof(namespaces); ++ns) {
+		ns_unshare(ns);
+	}
+}
+
+void cgroup_enter(enum nsaction nsaction)
+{
+	struct nsid namespace[] = {
+		{ NS_CGROUP, nsaction },
+	};
+
+	ns_unshare(namespace);
 }

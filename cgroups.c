@@ -45,15 +45,3 @@ void apply_climits(int cgroupfd, const struct climit *limits)  {
 		}
 	}
 }
-
-/*
- * Called when bst terminates. This removes the created bst directory at the given
- * cleanfd file descriptor.
- */
-void cgroup_clean(int cleanfd, pid_t rootpid) {
-	char *subcgroup = makepath("bst.%d", rootpid);
-
-	if (unlinkat(cleanfd, subcgroup, AT_REMOVEDIR) == -1) {
-		err(1, "unable to clean cgroup %s", subcgroup);
-	}
-}
