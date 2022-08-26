@@ -1,17 +1,17 @@
 #!/usr/bin/env cram.sh
 
-Verifying cgroup system config
+Verifying --cgroup system config
 
-	$ if touch /sys/fs/cgroup/bst                  ; then exit 0; else exit 80; fi
-	$ if touch /sys/fs/cgroup/cgroup.procs         ; then exit 0; else exit 80; fi
-	$ if touch /sys/fs/cgroup/bst/cpu.max          ; then exit 0; else exit 80; fi
-	$ if touch /sys/fs/cgroup/bst/cpu.weight       ; then exit 0; else exit 80; fi
-	$ if touch /sys/fs/cgroup/bst/memory.min       ; then exit 0; else exit 80; fi
-	$ if touch /sys/fs/cgroup/bst/memory.low       ; then exit 0; else exit 80; fi
-	$ if touch /sys/fs/cgroup/bst/memory.high      ; then exit 0; else exit 80; fi
-	$ if touch /sys/fs/cgroup/bst/memory.max       ; then exit 0; else exit 80; fi
-	$ if touch /sys/fs/cgroup/bst/io.weight        ; then exit 0; else exit 80; fi
-	$ if touch /sys/fs/cgroup/bst/pids.max         ; then exit 0; else exit 80; fi
+	$ if [ -d /sys/fs/cgroup/bst             ]     ; then exit 0; else exit 80; fi
+	$ if [ -f /sys/fs/cgroup/cgroup.procs    ]     ; then exit 0; else exit 80; fi
+	$ if [ -f /sys/fs/cgroup/bst/cpu.max     ]     ; then exit 0; else exit 80; fi
+	$ if [ -f /sys/fs/cgroup/bst/cpu.weight  ]     ; then exit 0; else exit 80; fi
+	$ if [ -f /sys/fs/cgroup/bst/memory.min  ]     ; then exit 0; else exit 80; fi
+	$ if [ -f /sys/fs/cgroup/bst/memory.low  ]     ; then exit 0; else exit 80; fi
+	$ if [ -f /sys/fs/cgroup/bst/memory.high ]     ; then exit 0; else exit 80; fi
+	$ if [ -f /sys/fs/cgroup/bst/memory.max  ]     ; then exit 0; else exit 80; fi
+	$ if [ -f /sys/fs/cgroup/bst/io.weight   ]     ; then exit 0; else exit 80; fi
+	$ if [ -f /sys/fs/cgroup/bst/pids.max    ]     ; then exit 0; else exit 80; fi
 
 Test --no-cgroup-remount disabling mount over
 
@@ -39,12 +39,6 @@ Test --share mount disabling mount over
 
 	$ ! bst --cgroup /sys/fs/cgroup/bst \
 	> test -f /sys/fs/cgroup/bst/cgroup.procs
-
-Test trying to apply climits without specifying a cgroup
-
-	$ ! bst --limit cpu.max=3333 \
-	> cat /sys/fs/cgroup/bst/cpu.max \
-	bst: unable to apply limits without --cgroup specified
 
 Test overspecified --limits
 	$ ! bst --cgroup /sys/fs/cgroup/bst \

@@ -230,11 +230,9 @@ _VAR=value_ before the executable to run.
 	Supported options are described in more detail in the *NETWORKING* section.
 
 \--cgroup <path>
-	Specify the cgroup directory that bst will operate within. bst will create a
-	cgroup sub-hierarchy at the <path>.
-
-	This demands that the bst invoker have r/w access to the cgroup.procs at both
-	"<path>" and "<path>/.."
+	Optionally specify the cgroup directory that bst will operate within. bst will create a
+	cgroup sub-hierarchy at the <path>. If not provided, <path> will assume the
+	cgroup directory of the current process.
 
 \--limit <resource>=<value>
 	Apply a cgroup quota <value> to the provided <resource>. Multiple limits can
@@ -258,10 +256,8 @@ _VAR=value_ before the executable to run.
 	- pids.max=$MAX
 
 	To use a <resource> ensure that the proper controller (io, cpu, memory) is
-	added to the cgroup.controller at the "<path>" specified by --cgroup. The bst
-	invoker must also have write access to the given <resource> file and the
-	ability to write to cgroup.procs at "<path>" specified by --cgroup as well 
-	as the cgroup.procs at "<path>/.."
+	added to the cgroup.controller at the current process's cgroup or at the <path>
+	specified by --cgroup if provided.
 
 \--rlimit <resource>=<value>++
 \--rlimit <resource>=[hard]:[soft]

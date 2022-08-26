@@ -53,10 +53,16 @@ enum nsaction {
 	NSACTION_UNSHARE = -2,
 };
 
+struct nsid {
+	int ns;
+	enum nsaction action;
+};
+
 const char *ns_name(enum nstype);
 int ns_cloneflag(enum nstype);
 
 void opts_to_nsactions(const char *shares[], enum nsaction *nsactions);
-void ns_enter(enum nsaction *nsactions);
+void ns_enter_prefork(struct nsid *namespaces, size_t *len);
+void ns_enter_postfork(struct nsid *namespaces, size_t len);
 
 #endif /* !NS_H_ */

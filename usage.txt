@@ -43,7 +43,8 @@ Options:
       --ip <address>,<dev>          Add an IP address to the specified interface.
       --route <route>               Add a route in the network namespace.
 
-      --cgroup <path>               Path to cgroup to join or operate within.
+      --cgroup <path>               Optionally set path for bst cgroup to be
+                                    created if --limits specified.
       --limit <res>=<value>         Set the specified cgroup resource to the
                                     provided value(s).
       --rlimit <res>=<hard>:<soft>,

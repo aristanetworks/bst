@@ -1,5 +1,4 @@
 #!/usr/bin/env cram.sh
-
 Basic usage
 
 	$ bst echo hello

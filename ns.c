@@ -88,11 +88,6 @@ void opts_to_nsactions(const char *shares[], enum nsaction *nsactions)
 	}
 }
 
-struct nsid {
-	int ns;
-	enum nsaction action;
-};
-
 static int is_setns(const struct nsid *ns)
 {
 	switch (ns->action) {
@@ -118,39 +113,16 @@ static int cmp_nsids(const void *lhs, const void *rhs)
 	return (int) ((intptr_t) lhs - (intptr_t) rhs);
 }
 
-void ns_enter(enum nsaction *nsactions)
+static void ns_enter_one(struct nsid *ns)
 {
-	/* Enter all relevant namespaces. It's hard to check in advance which
-	   namespaces are supported, so we unshare them one by one in order. */
-
-	struct nsid namespaces[] = {
-		/* User namespace must be entered first and foremost. */
-		{ NS_USER,   nsactions[NS_USER] },
-		{ NS_NET,    nsactions[NS_NET] },
-		{ NS_MNT,    nsactions[NS_MNT] },
-		{ NS_IPC,    nsactions[NS_IPC] },
-		{ NS_PID,    nsactions[NS_PID] },
-		{ NS_CGROUP, nsactions[NS_CGROUP] },
-		{ NS_UTS,    nsactions[NS_UTS] },
-		{ NS_TIME,   nsactions[NS_TIME] },
-	};
-
-	/* If we have CAP_SYS_ADMIN from the get-go, starting by entering
-	   the userns may restrict us from joining additional namespaces, so
-	   we rearrange the order so that we setns into target nsfs files first. */
-	if (capable(BST_CAP_SYS_ADMIN)) {
-		qsort(namespaces, lengthof(namespaces), sizeof (namespaces[0]),
-				cmp_nsids);
-	}
-
-	for (struct nsid *ns = &namespaces[0]; ns < namespaces + lengthof(namespaces); ++ns) {
-		switch (ns->action) {
+	switch (ns->action) {
 		case NSACTION_UNSHARE:
 			if (unshare(flags[ns->ns].flag) == -1) {
 				if (errno == EINVAL) {
 					/* We realized that the namespace isn't supported -- remove it
 					   from the unshare set. */
-					nsactions[ns->ns] = NSACTION_SHARE_WITH_PARENT;
+					//nsactions[ns->ns] = NSACTION_SHARE_WITH_PARENT;
+					ns->action = NSACTION_SHARE_WITH_PARENT;
 				} else {
 					err(1, "unshare %s", flags[ns->ns].proc_ns_name);
 				}
@@ -165,6 +137,54 @@ void ns_enter(enum nsaction *nsactions)
 				err(1, "setns %s", flags[ns->ns].proc_ns_name);
 			}
 			break;
+	}
+}
+
+static bool is_postfork_ns(struct nsid *ns)
+{
+	/* For now, only the cgroup namespace needs to be unshared postfork */
+	return ns->ns == NS_CGROUP;
+}
+
+void ns_enter_prefork(struct nsid *namespaces, size_t *len)
+{
+	/* Enter all relevant namespaces. It's hard to check in advance which
+	   namespaces are supported, so we unshare them one by one in order. */
+
+	/* If we have CAP_SYS_ADMIN from the get-go, starting by entering
+	   the userns may restrict us from joining additional namespaces, so
+	   we rearrange the order so that we setns into target nsfs files first. */
+	if (capable(BST_CAP_SYS_ADMIN)) {
+		qsort(namespaces, *len, sizeof (namespaces[0]),
+				cmp_nsids);
+	}
+
+	struct nsid *first_postfork = NULL;
+	struct nsid *ns = &namespaces[0];
+	for (; ns < namespaces + *len; ++ns) {
+		if (ns->action != NSACTION_SHARE_WITH_PARENT && is_postfork_ns(ns)) {
+			first_postfork = ns;
+			break;
 		}
+		ns_enter_one(ns);
+	}
+
+	size_t i = 0;
+	for (; ns < namespaces + *len; ++ns, ++i) {
+		if (first_postfork != NULL && !is_postfork_ns(ns)) {
+			errx(1, "incompatible options: %s namespace must be entered before "
+					"forking, but must be done after %s namespace is entered post-fork.",
+					ns_name(ns->ns),
+					ns_name(first_postfork->ns));
+		}
+		namespaces[i] = *ns;
+	}
+	*len = i;
+}
+
+void ns_enter_postfork(struct nsid *namespaces, size_t len)
+{
+	for (struct nsid *ns = &namespaces[0]; ns < namespaces + len; ++ns) {
+		ns_enter_one(ns);
 	}
 }

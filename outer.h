@@ -10,6 +10,7 @@
 # include <unistd.h>
 
 # include "userns.h"
+# include "cgroups.h"
 # include "net.h"
 
 struct outer_helper {
@@ -22,6 +23,9 @@ struct outer_helper {
 	size_t nnics;
 
 	bool cgroup_enabled;
+
+	char *cgroup_path;
+	struct climit *climits;
 
 	pid_t pid;
 	int fd;
