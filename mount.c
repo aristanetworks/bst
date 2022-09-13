@@ -6,17 +6,24 @@
 
 #include <err.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
 #include <unistd.h>
 
+#include "config.h"
 #include "mount.h"
 #include "path.h"
 #include "util.h"
+
+#ifdef HAVE_SYS_mount_setattr
+# include <syscall.h>
+#endif
 
 struct mntflag {
 	const char *name;
@@ -119,6 +126,28 @@ static void update_mount_flags_and_options(unsigned long *mountflags, char *opts
 	*newopts = 0;
 }
 
+enum {
+	BST_MOUNT_ATTR_RDONLY = 0x00000001,
+	BST_AT_RECURSIVE      = 0x8000,
+};
+
+struct bst_mount_attr {
+	uint64_t attr_set;     /* Mount properties to set */
+	uint64_t attr_clr;     /* Mount properties to clear */
+	uint64_t propagation;  /* Mount propagation type */
+	uint64_t userns_fd;    /* User namespace file descriptor */
+};
+
+static int mount_setattr(int dirfd, const char *pathname, unsigned int flags, struct bst_mount_attr *attr, size_t size)
+{
+#ifdef HAVE_SYS_mount_setattr
+	return syscall(SYS_mount_setattr, dirfd, pathname, flags, attr, size);
+#else
+	errno = ENOSYS;
+	return -1;
+#endif
+}
+
 static void do_mount(const char *source, const char *target, const char *type, unsigned long flags, const char *options)
 {
 	if (mount(source, target, type, flags, options) == -1) {
@@ -136,8 +165,24 @@ static void do_mount(const char *source, const char *target, const char *type, u
 
 	int ro_bind = (flags & (MS_BIND | MS_RDONLY)) == (MS_BIND | MS_RDONLY)
 			&& !(flags & MS_REMOUNT);
-	if (ro_bind && mount("none", target, NULL, flags | MS_REMOUNT, NULL) == -1) {
-		err(1, "mount_entries: read-only remount of %s", target);
+	if (ro_bind) {
+		unsigned int aflags = 0;
+		if (flags & MS_REC) {
+			aflags |= BST_AT_RECURSIVE;
+		}
+		struct bst_mount_attr attr = {
+			.attr_set = BST_MOUNT_ATTR_RDONLY,
+		};
+
+		/* mount_setattr should be used in priority, as it makes recursive
+		   read-only bind mounts work. */
+		int rc = mount_setattr(AT_FDCWD, target, aflags, &attr, sizeof (attr));
+		if (rc == -1 && errno == ENOSYS) {
+			rc = mount("none", target, NULL, flags | MS_REMOUNT, NULL);
+		}
+		if (rc == -1) {
+			err(1, "mount_entries: read-only remount of %s", target);
+		}
 	}
 }
 

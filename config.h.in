@@ -12,4 +12,6 @@
 # define LIBEXECDIR "@libexecdir@"
 # define VERSION "@version@"
 
+#mesondefine HAVE_SYS_mount_setattr
+
 #endif /* !CONFIG_H_ */
