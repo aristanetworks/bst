@@ -50,6 +50,8 @@ config.set('bindir', bindir)
 config.set('libexecdir', libexecdir)
 config.set('version', version)
 
+config.set('HAVE_SYS_mount_setattr', cc.has_header_symbol('syscall.h', 'SYS_mount_setattr'))
+
 configure_file(input: 'config.h.in', output: 'config.h', configuration: config)
 
 bst_init_sources = [
