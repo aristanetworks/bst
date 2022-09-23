@@ -44,6 +44,13 @@ add_project_arguments(
 	'-D_GNU_SOURCE',
 	language: ['c'])
 
+# Add source fortification by default; requires -O1 or higher.
+if get_option('optimization') != '0'
+	add_project_arguments(
+		'-D_FORTIFY_SOURCE=2',
+		language: ['c'])
+endif
+
 config = configuration_data()
 config.set('package', meson.project_name())
 config.set('bindir', bindir)
