@@ -8,17 +8,8 @@ Allocate a PTY for the spacetime
 	$ bst --tty=ptmx=/dev/pts/ptmx --mount devpts,/dev/pts,devpts,mode=620,ptmxmode=666 tty | cat -e
 	/dev/pts/0^M$
 
-	$ </dev/null bst --tty stty -a | cat -e
-	speed 38400 baud; rows 0; columns 0; line = 0;^M$
-	intr = ^C; quit = ^\; erase = ^?; kill = ^U; eof = ^D; eol = <undef>;^M$
-	eol2 = <undef>; swtch = <undef>; start = ^Q; stop = ^S; susp = ^Z; rprnt = ^R;^M$
-	werase = ^W; lnext = ^V; discard = ^O; min = 1; time = 0;^M$
-	-parenb -parodd -cmspar cs8 -hupcl -cstopb cread -clocal -crtscts^M$
-	-ignbrk -brkint -ignpar -parmrk -inpck -istrip -inlcr -igncr icrnl ixon -ixoff^M$
-	-iuclc -ixany -imaxbel -iutf8^M$
-	opost -olcuc -ocrnl onlcr -onocr -onlret -ofill -ofdel nl0 cr0 tab0 bs0 vt0 ff0^M$
-	isig icanon iexten echo echoe echok -echonl -noflsh -xcase -tostop -echoprt^M$
-	echoctl echoke -flusho -extproc^M$
+	$ </dev/null bst --tty stty -g | cat -e
+	500:5:bf:8a3b:3:1c:7f:15:4:0:1:0:11:13:1a:0:12:f:17:16:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0^M$
 
 Check that redirections still work
 
@@ -30,12 +21,13 @@ Check that redirections still work
 
 Change flags and control characters
 
-	$ bst --tty='-echo,-onlcr,-icanon,veof=^B,vintr=\4,vquit=\x10' stty
-	speed 38400 baud; line = 0;
-	intr = ^D; quit = ^P; eof = ^B; min = 1; time = 0;
-	-brkint -imaxbel
-	-onlcr
-	-icanon -echo
+	$ exp=$(bst --tty sh -c 'stty -echo -onlcr -icanon eof ^B intr 04 quit 16 && stty -g')
+	> act=$(bst --tty='-echo,-onlcr,-icanon,veof=^B,vintr=\4,vquit=\x10' stty -g)
+	> [ "$exp" = "$act" ] || echo -e "+$act\n-$exp"
+
+	$ nexp=$(bst --tty sh -c 'stty -g')
+	> act=$(bst --tty='-echo,-onlcr,-icanon,veof=^B,vintr=\4,vquit=\x10' stty -g)
+	> [ "$nexp" != "$act" ] || echo "actual: $act, unexpected: $nexp"
 
 Ensure we send the correct VEOF control character
 
@@ -50,7 +42,7 @@ Ensure that we send VEOF twice in case there is pending input in the pty buffer
 
 Inner PTYs should inherit their parent termios:
 
-	$ bst --tty sh -c '[ "$(stty -a)" = "$(bst --tty stty -a | tr -d "\r")" ]'
+	$ bst --tty sh -c '[ "$(stty -g)" = "$(bst --tty stty -g | tr -d "\r")" ]'
 
 	$ raw=-ignbrk,-brkint,-ignpar,-parmrk,-inpck,-istrip,-inlcr,-igncr,-icrnl,-ixon,-ixoff,-icanon,-opost,-isig,-iuclc,-ixany
-	> [ "$(bst --tty=$raw stty -a)" = "$(bst --tty=$raw bst --tty stty -a)" ]
+	> [ "$(bst --tty=$raw stty -g)" = "$(bst --tty=$raw bst --tty stty -g)" ]
