@@ -138,7 +138,7 @@ struct bst_mount_attr {
 	uint64_t userns_fd;    /* User namespace file descriptor */
 };
 
-static int mount_setattr(int dirfd, const char *pathname, unsigned int flags, struct bst_mount_attr *attr, size_t size)
+static int bst_mount_setattr(int dirfd, const char *pathname, unsigned int flags, struct bst_mount_attr *attr, size_t size)
 {
 #ifdef HAVE_SYS_mount_setattr
 	return syscall(SYS_mount_setattr, dirfd, pathname, flags, attr, size);
@@ -176,7 +176,7 @@ static void do_mount(const char *source, const char *target, const char *type, u
 
 		/* mount_setattr should be used in priority, as it makes recursive
 		   read-only bind mounts work. */
-		int rc = mount_setattr(AT_FDCWD, target, aflags, &attr, sizeof (attr));
+		int rc = bst_mount_setattr(AT_FDCWD, target, aflags, &attr, sizeof (attr));
 		if (rc == -1 && errno == ENOSYS) {
 			rc = mount("none", target, NULL, flags | MS_REMOUNT, NULL);
 		}
