@@ -42,7 +42,7 @@ Adding addresses
 
 Adding routes
 
-	$ bst --route gateway=1.1.1.1 -- ip route show
+	$ (bst --route gateway=1.1.1.1 -- ip route show 2>&1 || echo [$?]) | sed 's/Network unreachable/Network is unreachable/'
 	bst: route_add 0.0.0.0/0 via 1.1.1.1/32 src 0.0.0.0/0 dev  metric 0: Network is unreachable
 	[1]
 
@@ -58,5 +58,6 @@ Adding routes
 	$ bst --ip 172.20.0.2/16,lo --route gateway=172.20.0.1 -- ip route show
 	default via 172.20.0.1 dev lo 
 
-	$ bst --route dev=lo -- ip route show
-	default dev lo scope link 
+	$ exp=$(bst --no-loopback-setup sh -c 'ip link set lo up && ip route add default dev lo scope link && ip route show' 2>&1)
+	> act=$(bst --route dev=lo,scope=link -- ip route show 2>&1)
+	> [ "$exp" = "$act" ] || echo -e "-$exp\n+$act"
