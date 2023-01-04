@@ -69,6 +69,7 @@ what=$1
 # when dir is not passed, we run in interpreter mode
 if [ -f "$what" -a -x "$what" ]; then
 
+	set +e
 	# reset environment, and define sensible defaults
 	env -i PATH="$PATH:$(dirname $0)" LC_ALL=C TERM=dumb CRAM_PATH=$(dirname $0) \
 		gawk -v what="$what" <"$what" >"$what".err '
