@@ -14,7 +14,6 @@
 # include <time.h>
 # include <unistd.h>
 # include "bst_limits.h"
-# include "cgroups.h"
 # include "mount.h"
 # include "net.h"
 # include "ns.h"
@@ -27,11 +26,17 @@ struct bst_rlimit {
 	struct rlimit rlim;
 };
 
+struct climit {
+	char *limit;
+	char *fname;
+};
+
 enum {
 	MAX_MOUNT = 4096,
 	MAX_NICS = 4096,
 	MAX_ADDRS = 4096,
 	MAX_ROUTES = 4096,
+	MAX_CGROUPS = 4096,
 };
 
 /* SHARE_WITH_PARENT is a special value for entry_settings.shares[ns]. */
@@ -78,7 +83,7 @@ struct entry_settings {
 
 	char *cgroup_path;
 
-	struct climit climits[CGROUPS_NLIMIT];
+	struct climit climits[MAX_CGROUPS];
 	size_t nactiveclimits;
 
 	const char *arch;

@@ -37,7 +37,6 @@
 #include "setarch.h"
 #include "sig.h"
 #include "util.h"
-#include "cgroups.h"
 #include "fd.h"
 
 static inline size_t append_argv(char **argv, size_t argc, char *arg)
@@ -209,6 +208,7 @@ int enter(struct entry_settings *opts)
 	outer_helper.nnics = opts->nnics;
 	outer_helper.cgroup_path = opts->cgroup_path;
 	outer_helper.climits = opts->climits;
+	outer_helper.nclimits = opts->nactiveclimits;
 	outer_helper_spawn(&outer_helper);
 
 	/* After this point, we must operate with the privilege set of the caller

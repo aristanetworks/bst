@@ -10,7 +10,6 @@
 # include <unistd.h>
 
 # include "userns.h"
-# include "cgroups.h"
 # include "net.h"
 
 struct outer_helper {
@@ -26,12 +25,13 @@ struct outer_helper {
 
 	char *cgroup_path;
 	struct climit *climits;
+	size_t nclimits;
 
 	pid_t pid;
 	int fd;
 };
 
-void burn(int dirfd, char *path, char *data);
+ssize_t burn(int dirfd, char *path, char *data);
 void outer_helper_spawn(struct outer_helper *helper);
 void outer_helper_sendpid(const struct outer_helper *helper, pid_t pid);
 void outer_helper_sync(const struct outer_helper *helper);

@@ -26,7 +26,6 @@
 #include "path.h"
 #include "userns.h"
 #include "util.h"
-#include "cgroups.h"
 #include "fd.h"
 
 enum {
@@ -44,20 +43,22 @@ enum {
    exactly once (hence "burning" rather than "writing"). Such files
    include /proc/pid/uid_map, /proc/pid/gid_map, and /proc/pid/setgroups
    under some circumstances. */
-void burn(int dirfd, char *path, char *data)
+ssize_t burn(int dirfd, char *path, char *data)
 {
 	int fd = openat(dirfd, path, O_WRONLY, 0);
 	if (fd == -1) {
-		err(1, "burn %s: open", path);
+		return -1;
 	}
 
-	if (write(fd, data, strlen(data)) == -1) {
-		err(1, "burn %s: write", path);
+	ssize_t written = write(fd, data, strlen(data));
+	if (written == -1) {
+		return -1;
 	}
 
 	if (close(fd) == -1) {
-		err(1, "burn %s: close", path);
+		return -1;
 	}
+	return written;
 }
 
 static void make_idmap(char *idmap, size_t size, const char *which,
@@ -127,8 +128,12 @@ static void burn_uidmap_gidmap(pid_t child_pid, id_map uid_desired, id_map gid_d
 
 	make_capable(BST_CAP_SETUID | BST_CAP_SETGID | BST_CAP_DAC_OVERRIDE);
 
-	burn(procfd, "uid_map", uid_map);
-	burn(procfd, "gid_map", gid_map);
+	if (burn(procfd, "uid_map", uid_map) == -1) {
+		err(1, "burn /proc/%d/uid_map", child_pid);
+	}
+	if (burn(procfd, "gid_map", gid_map) == -1) {
+		err(1, "burn /proc/%d/gid_map", child_pid);
+	}
 
 	reset_capabilities();
 }
@@ -366,7 +371,17 @@ void outer_helper_spawn(struct outer_helper *helper)
 		}
 
 		// Cgroup subhierarchy is created, now apply specified limits
-		apply_climits(subcgroupfd, helper->climits);
+		for (size_t i = 0; i < helper->nclimits; ++i) {
+			struct climit *lim = &helper->climits[i];
+			if (burn(cgroupfd, lim->fname, lim->limit) == -1) {
+				switch (errno) {
+				case ENOENT:
+					errx(1, "unknown cgroup limit %s", lim->fname);
+				default:
+					err(1, "setting cgroup limit %s to %s", lim->fname, lim->limit);
+				}
+			}
+		}
 
 		char pidstr[BUFSIZ];
 		if (sprintf(pidstr, "%d", child_pid) == -1) {
@@ -374,7 +389,9 @@ void outer_helper_spawn(struct outer_helper *helper)
 		}
 
 		// Add bst subprocess to cgroup
-		burn(subcgroupfd, "cgroup.procs", pidstr);
+		if (burn(subcgroupfd, "cgroup.procs", pidstr) == -1) {
+			err(1, "outer_helper: burn process into cgroup.procs");
+		}
 
 		close(subcgroupfd);
 

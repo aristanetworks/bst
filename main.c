@@ -21,7 +21,6 @@
 #include "config.h"
 
 #include "bst_limits.h"
-#include "cgroups.h"
 #include "capable.h"
 #include "compat.h"
 #include "enter.h"
@@ -180,33 +179,8 @@ static void handle_climit_arg(struct entry_settings *opts, char *optarg) {
 		errx(2, "--limit takes an argument in the form resource=value");
 	}
 
-	const struct cmap *opt_ent = NULL;
-	for (const struct cmap *opt = cgroup_map; opt < cgroup_map + lengthof(cgroup_map); ++opt) {
-		if (strcmp(opt->fname, name) == 0) {
-			opt_ent = opt;
-		}
-	}
-
-	if (opt_ent == NULL) {
-		fprintf(stderr, "--limit: `%s` is not a valid resource name.\n", name);
-		fprintf(stderr, "valid resources are: ");
-
-		for (const struct cmap *opt = cgroup_map; opt < cgroup_map + lengthof(cgroup_map); ++opt) {
-			fprintf(stderr, "%s%s", opt == cgroup_map ? "" : ", ", opt->fname);
-		}
-		fprintf(stderr, ".\n");
-		exit(2);
-	}
-
-	// Limit the maximum number of arguments specified, and prevent double specification of
-	// single argument
-	if (opts->climits[opt_ent->resource].present) {
-		errx(2, "double specified --limit argument");
-	}
-
-	opts->climits[opt_ent->resource].fname   = name;
-	opts->climits[opt_ent->resource].clim    = arg;
-	opts->climits[opt_ent->resource].present = true;
+	opts->climits[opts->nactiveclimits].fname = name;
+	opts->climits[opts->nactiveclimits].limit = arg;
 	opts->nactiveclimits++;
 }
 
