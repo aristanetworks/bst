@@ -203,6 +203,7 @@ int enter(struct entry_settings *opts)
 	memcpy(outer_helper.uid_desired, opts->uid_map, sizeof (outer_helper.uid_desired));
 	memcpy(outer_helper.gid_desired, opts->gid_map, sizeof (outer_helper.gid_desired));
 	outer_helper.unshare_net = nsactions[NS_NET] == NSACTION_UNSHARE;
+	outer_helper.oom_group = opts->oom_group;
 	outer_helper.cgroup_enabled = (opts->nactiveclimits != 0 || opts->cgroup_path != NULL);
 	outer_helper.nics = opts->nics;
 	outer_helper.nnics = opts->nnics;

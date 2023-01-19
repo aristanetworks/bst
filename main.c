@@ -66,6 +66,7 @@ enum {
 	OPTION_NO_ENV,
 	OPTION_NO_COPY_HARD_RLIMITS,
 	OPTION_TTY,
+	OPTION_OOM_GROUP,
 };
 
 static void process_nslist_entry(const char **out, const char *share, const char *path, int append_nsname)
@@ -304,6 +305,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ "ip",                 required_argument, NULL, OPTION_IP              },
 		{ "route",              required_argument, NULL, OPTION_ROUTE           },
 		{ "tty",                optional_argument, NULL, OPTION_TTY             },
+		{ "oom-group",          no_argument,       NULL, OPTION_OOM_GROUP       },
 
 		/* Opt-out feature flags */
 		{ "no-copy-hard-rlimits", no_argument, NULL, OPTION_NO_COPY_HARD_RLIMITS },
@@ -710,6 +712,10 @@ int main(int argc, char *argv[], char *envp[])
 				}
 				break;
 			}
+
+			case OPTION_OOM_GROUP:
+				opts.oom_group = 1;
+				break;
 
 			case 'r':
 				opts.root = optarg;

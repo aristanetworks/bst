@@ -393,6 +393,13 @@ void outer_helper_spawn(struct outer_helper *helper)
 			err(1, "outer_helper: burn process into cgroup.procs");
 		}
 
+		// Make the cgroup an indivisible workload to the OOM killer
+		if (helper->oom_group) {
+			if (burn(subcgroupfd, "memory.oom.group", "1") == -1 && errno != ENOENT) {
+				err(1, "outer_helper: burn memory.oom.group");
+			}
+		}
+
 		close(subcgroupfd);
 
 		reset_capabilities();

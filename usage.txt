@@ -45,6 +45,7 @@ Options:
 
       --cgroup <path>               Optionally set path for bst cgroup to be
                                     created if --limits specified.
+      --oom-group                   Treat the spacetime as a single unit on OOM.
       --limit <res>=<value>         Set the specified cgroup resource to the
                                     provided value(s).
       --rlimit <res>=<hard>:<soft>,

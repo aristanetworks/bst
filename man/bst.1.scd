@@ -234,6 +234,10 @@ _VAR=value_ before the executable to run.
 	cgroup sub-hierarchy at the <path>. If not provided, <path> will assume the
 	cgroup directory of the current process.
 
+\--oom-group
+	Enable the cgroups v2 memory.oom.group toggle, if available.
+	Causes the spacetime to be treated as an indivisible workload by the OOM killer.
+
 \--limit <resource>=<value>
 	Apply a cgroup quota <value> to the provided <resource>. Multiple limits can
 	be specified in conjunction.

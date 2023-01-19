@@ -98,6 +98,8 @@ struct entry_settings {
 	bool tty;
 	struct tty_opts ttyopts;
 
+	int oom_group;
+
 	int no_copy_hard_rlimits;
 	int no_fake_devtmpfs;
 	int no_derandomize;
