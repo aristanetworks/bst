@@ -21,6 +21,11 @@
 # include "userns.h"
 # include "tty.h"
 
+enum {
+	SOCKET_PARENT,
+	SOCKET_CHILD,
+};
+
 struct bst_rlimit {
 	bool present;
 	struct rlimit rlim;

@@ -128,110 +128,99 @@ static int cmp_epoll_handler(const void *a, const void *b)
 	return lhs->priority - rhs->priority;
 }
 
-int enter(struct entry_settings *opts)
+int open_timens_offsets(const char *shares[])
 {
-	int timens_offsets = -1;
-	if (opts->shares[NS_TIME] != SHARE_WITH_PARENT) {
+	/* Because this process is privileged, /proc/self/timens_offsets
+	   is unfortunately owned by root and not ourselves, so we have
+	   to give ourselves the capability to read our own file. Geez. */
 
-		/* Because this process is privileged, /proc/self/timens_offsets
-		   is unfortunately owned by root and not ourselves, so we have
-		   to give ourselves the capability to read our own file. Geez. */
+	make_capable(BST_CAP_DAC_OVERRIDE);
 
-		make_capable(BST_CAP_DAC_OVERRIDE);
-
-		timens_offsets = open("/proc/self/timens_offsets", O_WRONLY | O_CLOEXEC);
-		if (timens_offsets == -1) {
-			if (errno != ENOENT) {
-				err(1, "open /proc/self/timens_offsets");
-			}
-			/* The kernel evidently doesn't support time namespaces yet.
-			   Don't try to open the time namespace file with --share-all=<dir>,
-			   or try to unshare or setns the time namespace below. */
-			opts->shares[NS_TIME] = SHARE_WITH_PARENT;
+	int timens_offsets = open("/proc/self/timens_offsets", O_WRONLY | O_CLOEXEC);
+	if (timens_offsets == -1) {
+		if (errno != ENOENT) {
+			err(1, "open /proc/self/timens_offsets");
 		}
-
-		reset_capabilities();
+		/* The kernel evidently doesn't support time namespaces yet.
+		   Don't try to open the time namespace file with --share-all=<dir>,
+		   or try to unshare or setns the time namespace below. */
+		shares[NS_TIME] = SHARE_WITH_PARENT;
 	}
 
-	enum nsaction nsactions[MAX_NS];
-	opts_to_nsactions(opts->shares, nsactions);
+	reset_capabilities();
+	return timens_offsets;
+}
 
-	if (nsactions[NS_NET] != NSACTION_UNSHARE && opts->nnics > 0) {
-		errx(1, "cannot create NICs when not in a network namespace");
+char *get_self_cgroup_path()
+{
+	static char cgroup_path[PATH_MAX];
+
+	FILE *selfcgroupfd = fopen("/proc/self/cgroup", "r");
+	if (selfcgroupfd == NULL) {
+		err(1, "cannot open /proc/self/cgroup");
 	}
 
-	char cgroup_path[PATH_MAX];
-	/* If there is a cgroup specified we need to create bst.<pid> subcgroup to join
-	   Otherwise if no cgroup is specified but limits are applied bst will error out. */
-	if (opts->nactiveclimits != 0 || opts->cgroup_path != NULL) {
-		// If cgroup path is unspecified then attempt to derive from /proc/self/cgroup.
-		if (opts->cgroup_path == NULL) {
-			FILE *selfcgroupfd = fopen("/proc/self/cgroup", "r");
-			if (selfcgroupfd == NULL) {
-				err(1, "unable to derive current cgroup hierarchy from /proc/self/cgroup");
-			}
-
-			const char *selfcgroup = NULL;
-			char line[BUFSIZ];
-			while (fgets(line, sizeof (line), selfcgroupfd) != NULL) {
-				printf("%s\n", line);
-				if (strncmp(line, "0::/", sizeof ("0::/") - 1) == 0) {
-					// Remove newline character read by fgets
-					line[strcspn(line, "\n")] = '\0';
-					selfcgroup = line + 3;
-					printf("found self cgroup %s\n", selfcgroup);
-					break;
-				}
-			}
-			fclose(selfcgroupfd);
-
-			if (selfcgroup != NULL) {
-				makepath_r(cgroup_path, "/sys/fs/cgroup/%s", selfcgroup);
-				printf("new cgroup path: %s (from %s and %s)\n", cgroup_path, selfcgroup, line);
-			}
-			opts->cgroup_path = cgroup_path;
-		}
-
-		if (opts->nactiveclimits != 0 && opts->cgroup_path == NULL) {
-			errx(1, "unable to apply limits without --cgroup specified");
+	const char *selfcgroup = NULL;
+	char line[BUFSIZ];
+	while (fgets(line, sizeof (line), selfcgroupfd) != NULL) {
+		printf("%s\n", line);
+		if (strncmp(line, "0::/", sizeof ("0::/") - 1) == 0) {
+			// Remove newline character read by fgets
+			line[strcspn(line, "\n")] = '\0';
+			selfcgroup = line + 3;
+			printf("found self cgroup %s\n", selfcgroup);
+			break;
 		}
 	}
+	fclose(selfcgroupfd);
+	if (selfcgroup == NULL) {
+		err(1, "unable to derive current cgroup hierarchy from /proc/self/cgroup");
+	}
 
-	struct outer_helper outer_helper;
-	outer_helper.persist = opts->persist;
-	outer_helper.unshare_user = nsactions[NS_USER] == NSACTION_UNSHARE;
-	memcpy(outer_helper.uid_desired, opts->uid_map, sizeof (outer_helper.uid_desired));
-	memcpy(outer_helper.gid_desired, opts->gid_map, sizeof (outer_helper.gid_desired));
-	outer_helper.unshare_net = nsactions[NS_NET] == NSACTION_UNSHARE;
-	outer_helper.cgroup_enabled = (opts->nactiveclimits != 0 || opts->cgroup_path != NULL);
-	outer_helper.nics = opts->nics;
-	outer_helper.nnics = opts->nnics;
-	outer_helper.cgroup_path = opts->cgroup_path;
-	outer_helper.climits = opts->climits;
-	outer_helper.nclimits = opts->nactiveclimits;
-	outer_helper_spawn(&outer_helper);
+	makepath_r(cgroup_path, "/sys/fs/cgroup/%s", selfcgroup);
+	printf("new cgroup path: %s (from %s and %s)\n", cgroup_path, selfcgroup, line);
+	return cgroup_path;
+}
 
-	/* After this point, we must operate with the privilege set of the caller
-	   -- no suid bit, no calling make_capable. */
+void id_map_copy(id_map dest, const id_map src) {
+	memcpy(dest, src, sizeof (id_map));
+}
 
+int wants_unshare(enum nsaction *nsactions, enum nstype ns) {
+	return (nsactions[ns] == NSACTION_UNSHARE);
+}
+
+void setuid_drop_capabilities()
+{
 	/* This drops capabilities if we're being run as a setuid binary. */
 	if (setuid(getuid()) == -1) {
 		err(1, "setuid");
 	}
 	deny_new_capabilities = 1;
+}
 
-	const char *root = (opts->root != NULL) ? opts->root : "/";
+char *resolve_root(char *path)
+{
+	static char resolved_root[PATH_MAX];
 
-	char resolved_root[PATH_MAX];
+	char *root = (path ? path : "/");
 	if (realpath(root, resolved_root) == NULL) {
-		err(1, "realpath %s", root);
+		err(1, "realpath couldn't resolve %s", root);
 	}
 	cleanpath(resolved_root);
-	root = resolved_root;
+	return resolved_root;
+}
 
+int null_or_empty(char *s)
+{
+	return (s == NULL || s[0] == '\0');
+}
+
+char *get_workdir(char *path, char *root)
+{
 	char cwd[PATH_MAX];
-	char *workdir = opts->workdir;
-	if ((workdir == NULL || workdir[0] == '\0')) {
+	char *workdir = path;
+	if (null_or_empty(workdir)) {
 		if (getcwd(cwd, sizeof (cwd)) == NULL) {
 			err(1, "getcwd");
 		}
@@ -252,23 +241,475 @@ int enter(struct entry_settings *opts)
 	}
 	/* Our tentative to use the cwd failed, or it worked and the cwd _is_ the
 	   new root. In both cases, the workdir must be /. */
-	if (workdir == NULL || workdir[0] == '\0') {
+	if (null_or_empty(workdir)) {
 		workdir = "/";
 	}
+	return workdir;
+}
 
+int get_initfd(const char *init, char *root)
+{
 	// Only open by fd the target init if it resides outside of the target root.
 	// If it resides inside the root, we need symlink resolution to be done
 	// within the root itself.
 	int initfd = -1;
-	if (opts->init != NULL && opts->init[0] != '\0' && strncmp(opts->init, root, strlen(root)) != 0) {
-		initfd = open(opts->init, O_PATH | O_CLOEXEC);
+	if (init != NULL && init[0] != '\0' && strncmp(init, root, strlen(root)) != 0) {
+		initfd = open(init, O_PATH | O_CLOEXEC);
 		if (initfd == -1) {
-			err(1, "open %s", opts->init);
+			err(1, "open %s", init);
+		}
+	}
+	return initfd;
+}
+
+void make_root_mount_private()
+{
+	/* Just unsharing the mount namespace is not sufficient -- if we don't make
+	   every mount entry private, any change we make will be applied to the
+	   parent mount namespace if it happens to have MS_SHARED propagation. We
+	   don't like coin flips. */
+	if (mount("none", "/", "", MS_REC | MS_PRIVATE, "") == -1) {
+		err(1, "could not make / private: mount");
+	}
+}
+
+int write_int(int fd, int x)
+{
+	char data[64];
+
+	if ((size_t) snprintf(data, sizeof (data), "%d\n", x) >= sizeof (data)) {
+		errx(1, "'%d\n' takes more than %zu bytes.", x, sizeof (data));
+	}
+	size_t remain = sizeof (data);
+	char *ptr = data;
+	while (remain > 0) {
+		ssize_t written = write(fd, ptr, remain);
+		if (written == -1) {
+			return 0;
+		}
+		remain -= written;
+		ptr += written;
+	}
+	return 1;
+}
+
+void write_pidfile(const char *path, int pid)
+{
+	if (path == NULL) {
+		return;
+	}
+	int pidfile = open(path, O_WRONLY | O_CREAT | O_CLOEXEC | O_NOCTTY, 0666);
+	if (pidfile == -1) {
+		err(1, "open %s", path);
+	}
+
+	struct stat stat;
+	if (fstat(pidfile, &stat) == -1) {
+		err(1, "stat %s", path);
+	}
+
+	if (S_ISREG(stat.st_mode)) {
+		if (flock(pidfile, LOCK_EX | LOCK_NB) == -1) {
+			err(1, "flock %s", path);
+		}
+
+		if (ftruncate(pidfile, 0) == -1) {
+			err(1, "ftruncate %s, 0", path);
 		}
 	}
 
+	if (!write_int(pidfile, pid)) {
+		err(1, "writing pid to %s", path);
+	}
+}
+
+int sig_handler_loop(int sock, pid_t pid, pid_t outer_helper_pid,
+		bool tty, struct tty_opts *ttyopts)
+{
+	int epollfd = epoll_create1(EPOLL_CLOEXEC);
+
+	sigset_t mask;
+	sigfillset(&mask);
+
+	if (tty) {
+		/* tty_parent_setup handles SIGWINCH to resize the pty */
+		sigdelset(&mask, SIGWINCH);
+		tty_parent_setup(ttyopts, epollfd, sock);
+	}
+	sig_setup(epollfd, &mask, outer_helper_pid, sig_handler);
+
+	for (;;) {
+		/* 16 events is good enough */
+		struct epoll_event events[16];
+		int ready;
+		do {
+			ready = epoll_wait(epollfd, events, lengthof(events), -1);
+			if (ready == -1 && errno != EINTR) {
+				err(1, "epoll_wait");
+			}
+		} while (ready == -1);
+
+		/* Sort the handlers by priority */
+		qsort(events, (size_t) ready, sizeof (*events), cmp_epoll_handler);
+
+		for (int i = 0; i < ready; ++i) {
+			struct epoll_handler *handler = events[i].data.ptr;
+			int rc = handler->fn(epollfd, &events[i], handler->fd, pid);
+			if (rc >= 0) {
+				/* Cleanup and exit. We reset our proc mask to allow
+				   ourselves to get killed during anything that blocks. */
+				sigset_t mask;
+				sigemptyset(&mask);
+
+				if (sigprocmask(SIG_SETMASK, &mask, NULL) == -1) {
+					err(1, "sigprocmask");
+				}
+
+				if (tty) {
+					tty_parent_cleanup();
+				}
+				return rc;
+			}
+		}
+	}
+}
+
+void rename_interfaces(int rtnl, struct nic_options nics[], size_t nnics)
+{
+	for (size_t i = 0; i < nnics; ++i) {
+		if (i > (size_t) INT_MAX - 2) {
+			errx(1, "cannot iterate over more than %d interfaces", INT_MAX - 2);
+		}
+		/* interface indices start from 1, and we want to ignore interface 1 (lo),
+		   so we slide our indices by 2. */
+		net_if_rename(rtnl, (int)i + 2, nics[i].name);
+	}
+}
+
+void run_setup_program(char *root, const char *pathname,
+		const char *setup_program, char *const *setup_argv)
+{
+	pid_t pid = fork();
+	if (pid == -1) {
+		err(1, "run_setup_program: fork");
+	}
+	if (pid == 0) {
+		char *default_argv[2];
+		default_argv[0] = (char *) setup_program;
+		default_argv[1] = NULL;
+
+		/* Set some extra useful environment */
+		setenv("ROOT", root, 1);
+		setenv("EXECUTABLE", pathname, 1);
+
+		extern char **environ;
+
+		char *const *argv = default_argv;
+		if (argv != NULL) {
+			argv = setup_argv;
+		}
+
+		if (dup2(STDERR_FILENO, STDOUT_FILENO) == -1) {
+			err(1, "setup: dup2");
+		}
+
+		execvpe(setup_program, argv, environ);
+		err(1, "setup: execvpe %s", setup_program);
+	}
+
+	int status;
+	if (waitpid(pid, &status, 0) == -1) {
+		err(1, "setup: waitpid");
+	}
+
+	if (WIFEXITED(status) && WEXITSTATUS(status)) {
+		_exit(WEXITSTATUS(status));
+	} else if (WIFSIGNALED(status)) {
+		_exit(WTERMSIG(status) | 1 << 7);
+	}
+}
+
+void overmount_cgroups(char *root)
+{
+	int rootfd = open(root, O_PATH, 0);
+	if (rootfd == -1) {
+		err(1, "open %s", root);
+	}
+
+	struct stat cgroupst = { .st_dev = 0 };
+	if (fstatat(rootfd, "sys/fs/cgroup", &cgroupst, AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW) == -1 && errno != ENOENT) {
+		err(1, "fstatat %s/sys/fs/cgroup", root);
+	}
+
+	struct stat rootst;
+	if (fstat(rootfd, &rootst) == -1) {
+		err(1, "fstat %s", root);
+	}
+
+	close(rootfd);
+
+	/*
+	 * Check if sys/fs/cgroup is already a mount point
+	 * If it is we need to mount the current cgroup root over it so procs have a
+	 * coherent view of cgroup hierarchy. We cant just mount to sys/fs/cgroup
+	 * (as we do with /proc remount), so we mount a tmpfs and mount cgroups to that.
+	 */
+	if (cgroupst.st_dev != 0 && cgroupst.st_dev != rootst.st_dev) {
+		const char *target = makepath("%s/sys/fs/cgroup", root);
+
+		if (mount("tmpfs", target, "tmpfs", 0, NULL) == -1) {
+			err(1, "unable to mount tmpfs over %s", target);
+		}
+
+		if (mount("cgroup", target, "cgroup2", 0, NULL) == -1) {
+			err(1, "unable to mount tmpfs over %s", target);
+		}
+	}
+}
+
+void overmount_proc(char *root)
+{
+	int rootfd = open(root, O_PATH, 0);
+	if (rootfd == -1) {
+		err(1, "open %s", root);
+	}
+
+	struct stat procst = { .st_dev = 0 };
+	if (fstatat(rootfd, "proc", &procst, AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW) == -1 && errno != ENOENT) {
+		err(1, "fstatat %s/proc", root);
+	}
+
+	struct stat rootst;
+	if (fstat(rootfd, &rootst) == -1) {
+		err(1, "fstat %s", root);
+	}
+
+	close(rootfd);
+
+	/* <root>/proc is a mountpoint, remount it. And by remount, we mean mount over it,
+	   since the original mount is probably more privileged than us, or might not be a
+	   procfs one someone's oddball configuration. */
+	if (procst.st_dev != 0 && procst.st_dev != rootst.st_dev) {
+		const char *target = makepath("%s/proc", root);
+
+		int rc = mount("proc", target, "proc", 0, NULL);
+		if (rc == -1 && errno == EBUSY) {
+			/* This situation can arise on some kernels when we don't switch
+			   roots, and the mount namespace already has an entry for /proc.
+			   In this case, we have to unmount the original entry and
+			   mount a new one over it. */
+			if (umount2(target, MNT_DETACH) == -1) {
+				warn("umount2 %s", target);
+			}
+			rc = mount("proc", target, "proc", 0, NULL);
+		}
+		if (rc == -1) {
+			err(1, "mount: %s remount", target);
+		}
+	}
+}
+
+void configure_network(int rtnl, struct entry_settings *opts)
+{
+	/* Setup localhost */
+	if (!opts->no_loopback_setup) {
+		net_if_up(rtnl, "lo");
+	}
+
+	/* Add addresses */
+	for (size_t i = 0; i < opts->naddrs; ++i) {
+		net_addr_add(rtnl, &opts->addrs[i]);
+	}
+
+	/* Bring up the rest of the nics */
+	for (size_t i = 0; i < opts->nnics; ++i) {
+		net_if_up(rtnl, opts->nics[i].name);
+	}
+
+	/* Add routes */
+	for (size_t i = 0; i < opts->nroutes; ++i) {
+		net_route_add(rtnl, &opts->routes[i]);
+	}
+}
+
+void do_mounts(char *root, struct entry_settings *opts)
+{
+	if (opts->nmounts == 0) {
+		return;
+	}
+
+	if (!opts->no_fake_devtmpfs) {
+		for (struct mount_entry *mnt = opts->mounts; mnt < opts->mounts + opts->nmounts; ++mnt) {
+			if (strcmp(mnt->type, "devtmpfs") == 0) {
+				mnt->type = "bst_devtmpfs";
+			}
+		}
+	}
+	mount_entries(root, opts->mounts, opts->nmounts, opts->no_derandomize);
+}
+
+void do_pivot_root(char *root)
+{
+	if (chdir(root) == -1) {
+		err(1, "pivot_root: pre chdir");
+	}
+
+	/* Pivot the root to `root` (new_root) and mount the old root
+	   (old_dir) on top of it. Then, unmount "." to get rid of the
+	   old root.
+
+	   The pivot_root manpage documents this approach: old_dir is
+	   always layered on top of new_root, which means that we can
+	   use this technique to avoid creating a mount point for the
+	   old root under new_root, or assuming anything about the layout
+	   of the new root. */
+	if (syscall(SYS_pivot_root, ".", ".") == -1) {
+		err(1, "pivot_root");
+	}
+	if (umount2(".", MNT_DETACH)) {
+		err(1, "pivot_root: umount2");
+	}
+	if (chdir("/") == -1) {
+		err(1, "pivot_root: post chdir");
+	}
+}
+
+int set_x_name(int (f)(const char*, size_t), char *s, char *s_default)
+{
+	if (null_or_empty(s)) {
+		s = s_default;
+	}
+	return f(s, strlen(s));
+}
+
+void switch_users(struct entry_settings *opts)
+{
+	if (opts->ngroups != 0 && setgroups(opts->ngroups, opts->groups) == -1) {
+		err(1, "setgroups");
+	}
+	if (setregid(opts->gid, opts->gid) == -1) {
+		err(1, "setregid");
+	}
+	if (setreuid(opts->uid, opts->uid) == -1) {
+		err(1, "setreuid");
+	}
+}
+
+void chdir_or_slash(char *workdir)
+{
+	if (chdir(workdir) == -1) {
+		warn("chdir %s", workdir);
+		warnx("falling back work directory to /.");
+		if (chdir("/") == -1) {
+			err(1, "chdir /");
+		}
+	}
+}
+
+void do_rlimits(struct entry_settings *opts)
+{
+	for (size_t resource = 0; resource < lengthof(opts->rlimits); ++resource) {
+		struct rlimit const * value = NULL;
+		if (opts->rlimits[resource].present) {
+			value = &opts->rlimits[resource].rlim;
+		}
+		/* When no_copy_hard_rlimits is not set, we always want to call apply_rlimit, either
+		   with the explicitly configured value (value != NULL), or by copying hard->soft
+		   (value == NULL). */
+		if (value || !opts->no_copy_hard_rlimits) {
+			apply_rlimit(resource, value);
+		}
+	}
+}
+
+void do_exec(struct entry_settings *opts, char *root, int initfd) {
+	/* This size estimation is an overkill upper bound, but oh well... */
+	char *argv[ARG_MAX];
+	size_t argc = 0;
+
+	argc = append_argv(argv, argc, opts->argv[0]);
+	argc = append_argv(argv, argc, (char *) opts->pathname);
+	char *const *arg = opts->argv + 1;
+	for (; *arg != NULL; ++arg) {
+		argc = append_argv(argv, argc, *arg);
+	}
+	argv[argc] = NULL;
+
+	if (initfd != -1) {
+#ifdef SYS_execveat
+		syscall(SYS_execveat, initfd, "", argv, opts->envp, AT_EMPTY_PATH);
+		if (errno != ENOSYS) {
+			err(1, "execveat %s", opts->init);
+		}
+#else
+		char fdpath[PATH_MAX];
+		if ((size_t) snprintf(fdpath, sizeof (fdpath), "/proc/self/fd/%d", initfd) >= sizeof (fdpath)) {
+			errx(1, "/proc/self/fd/%d takes more than PATH_MAX bytes.", initfd);
+		}
+		execve(fdpath, argv, opts->envp);
+		err(1, "execve %s", opts->init);
+#endif
+	} else {
+		// If we hit this, it means the requested init is within the target root.
+		// We need init resolution to be done relative to the target root.
+		size_t rootlen = strlen(root);
+		assert(strncmp(opts->init, root, rootlen) == 0);
+
+		if (rootlen == 1 && root[0] == '/') {
+			rootlen = 0;
+		}
+		const char *init = opts->init + rootlen;
+
+		execve(init, argv, opts->envp);
+		err(1, "execve %s", init);
+	}
+}
+
+int enter(struct entry_settings *opts)
+{
+	int timens_offsets = -1;
+	if (opts->shares[NS_TIME] != SHARE_WITH_PARENT) {
+		timens_offsets = open_timens_offsets(opts->shares);
+	}
+
+	enum nsaction nsactions[MAX_NS];
+	opts_to_nsactions(opts->shares, nsactions);
+
+	if (nsactions[NS_NET] != NSACTION_UNSHARE && opts->nnics > 0) {
+		errx(1, "cannot create NICs when not in a network namespace");
+	}
+
+	/* If there is a cgroup specified we need to create bst.<pid> subcgroup to join
+	   Otherwise if no cgroup is specified but limits are applied bst will error out. */ //XXX WHAT
+	if (opts->nactiveclimits != 0 && opts->cgroup_path == NULL) {
+		opts->cgroup_path = get_self_cgroup_path();
+	}
+
+	struct outer_helper outer_helper = {
+		.persist        = opts->persist,
+		.unshare_user   = wants_unshare(nsactions, NS_USER),
+		.unshare_net    = wants_unshare(nsactions, NS_NET),
+		.cgroup_enabled = opts->nactiveclimits != 0,
+		.nics           = opts->nics,
+		.nnics          = opts->nnics,
+		.cgroup_path    = opts->cgroup_path,
+		.climits        = opts->climits,
+		.nclimits       = opts->nactiveclimits
+	};
+	id_map_copy(outer_helper.uid_desired, opts->uid_map);
+	id_map_copy(outer_helper.gid_desired, opts->gid_map);
+	outer_helper_spawn(&outer_helper);
+
+	/* After this point, we must operate with the privilege set of the caller
+	   -- no suid bit, no calling make_capable. */
+	setuid_drop_capabilities();
+
+	char *root = resolve_root(opts->root);
+	char *workdir = get_workdir(opts->workdir, root);
+	int initfd = get_initfd(opts->init, root);
+
+	/* User namespace must be entered first and foremost if unprivileged */
 	struct nsid namespaces[] = {
-		/* User namespace must be entered first and foremost if unprivileged */
 		{ NS_USER,   nsactions[NS_USER] },
 		{ NS_NET,    nsactions[NS_NET] },
 		{ NS_MNT,    nsactions[NS_MNT] },
@@ -278,50 +719,29 @@ int enter(struct entry_settings *opts)
 		{ NS_TIME,   nsactions[NS_TIME] },
 		{ NS_CGROUP, nsactions[NS_CGROUP] },
 	};
-
 	size_t ns_len = lengthof(namespaces);
 	ns_enter_prefork(namespaces, &ns_len);
 
-	/* Some convenience pre-checks */
-	int mnt_unshare    = nsactions[NS_MNT]    == NSACTION_UNSHARE;
-	int uts_unshare    = nsactions[NS_UTS]    == NSACTION_UNSHARE;
-	int pid_unshare    = nsactions[NS_PID]    == NSACTION_UNSHARE;
-	int net_unshare    = nsactions[NS_NET]    == NSACTION_UNSHARE;
-	int time_unshare   = nsactions[NS_TIME]   == NSACTION_UNSHARE;
-	int cgroup_unshare = nsactions[NS_CGROUP] == NSACTION_UNSHARE;
-
-	/* Just unsharing the mount namespace is not sufficient -- if we don't make
-	   every mount entry private, any change we make will be applied to the
-	   parent mount namespace if it happens to have MS_SHARED propagation. We
-	   don't like coin flips. */
-	if (mnt_unshare && mount("none", "/", "", MS_REC | MS_PRIVATE, "") == -1) {
-		err(1, "could not make / private: mount");
+	if (wants_unshare(nsactions, NS_MNT)) {
+		make_root_mount_private();
 	}
-
-	if (opts->arch != NULL && opts->arch[0] != '\0') {
+	if (!null_or_empty((char *) opts->arch)) {
 		setarch(opts->arch);
 	}
-
 	if (!opts->no_derandomize) {
 		unsigned long persona = (unsigned long) personality(0xffffffff) | ADDR_NO_RANDOMIZE;
 		if (personality(persona) == -1) {
 			err(1, "personality %lu", persona);
 		}
 	}
-
-	if (time_unshare) {
+	if (wants_unshare(nsactions, NS_TIME)) {
 		init_clocks(timens_offsets, opts->clockspecs, lengthof(opts->clockspecs));
 	}
-
 	if (timens_offsets != -1 && close(timens_offsets) == -1) {
 		err(1, "close timens_offsets");
 	}
 
 	/* Setup a socket pair for file-descriptor passing. Used by pty allocation. */
-	enum {
-		SOCKET_PARENT,
-		SOCKET_CHILD,
-	};
 	int socket_fdpass[2];
 	if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, socket_fdpass) < 0) {
 		err(1, "socketpair");
@@ -343,124 +763,34 @@ int enter(struct entry_settings *opts)
 		}
 		err(1, "fork");
 	}
-
 	if (pid) {
-
 		/* Past this point, drop all capabilities. This promises that we do not
 		   need to make any privileged adjustments past initialization, and
 		   makes us debuggable unprivileged during the wait loop. */
-
 		drop_capabilities();
-
 		if (prctl(PR_SET_DUMPABLE, 1) == -1) {
 			/* Not being debuggable is not the end of the world */
 			warn("prctl PR_SET_DUMPABLE");
 		}
-
 		close(socket_fdpass[SOCKET_CHILD]);
-		if (opts->pidfile != NULL) {
-			int pidfile = open(opts->pidfile, O_WRONLY | O_CREAT | O_CLOEXEC | O_NOCTTY , 0666);
-			if (pidfile == -1) {
-				err(1, "open %s", opts->pidfile);
-			}
-
-			struct stat stat;
-			if (fstat(pidfile, &stat) == -1) {
-				err(1, "stat %s", opts->pidfile);
-			}
-
-			if (S_ISREG(stat.st_mode)) {
-				if (flock(pidfile, LOCK_EX | LOCK_NB) == -1) {
-					err(1, "flock %s", opts->pidfile);
-				}
-
-				if (ftruncate(pidfile, 0) == -1) {
-					err(1, "ftruncate %s, 0", opts->pidfile);
-				}
-			}
-
-			char data[64];
-			if ((size_t) snprintf(data, sizeof (data), "%d\n", pid) >= sizeof (data)) {
-				errx(1, "'%d\n' takes more than %zu bytes.", pid, sizeof (data));
-			}
-			size_t remain = sizeof (data);
-			char *ptr = data;
-			while (remain > 0) {
-				ssize_t written = write(pidfile, ptr, remain);
-				if (written == -1) {
-					err(1, "writing pid to %s", opts->pidfile);
-				}
-				remain -= written;
-				ptr += written;
-			}
-		}
-
+		write_pidfile(opts->pidfile, pid);
 		outer_helper_sendpid(&outer_helper, pid);
 		outer_helper_close(&outer_helper);
-
-		int epollfd = epoll_create1(EPOLL_CLOEXEC);
-
-		sigset_t mask;
-		sigfillset(&mask);
-
-		if (opts->tty) {
-			/* tty_parent_setup handles SIGWINCH to resize the pty */
-			sigdelset(&mask, SIGWINCH);
-			tty_parent_setup(&opts->ttyopts, epollfd, socket_fdpass[SOCKET_PARENT]);
-		}
-		sig_setup(epollfd, &mask, outer_helper.pid, sig_handler);
-
-		for (;;) {
-
-			/* 16 events is good enough */
-			struct epoll_event events[16];
-			int ready;
-			do {
-				ready = epoll_wait(epollfd, events, lengthof(events), -1);
-				if (ready == -1 && errno != EINTR) {
-					err(1, "epoll_wait");
-				}
-			} while (ready == -1);
-
-			/* Sort the handlers by priority */
-			qsort(events, (size_t) ready, sizeof (*events), cmp_epoll_handler);
-
-			for (int i = 0; i < ready; ++i) {
-				struct epoll_handler *handler = events[i].data.ptr;
-				int rc = handler->fn(epollfd, &events[i], handler->fd, pid);
-				if (rc >= 0) {
-					/* Cleanup and exit. We reset our proc mask to allow
-					   ourselves to get killed during anything that blocks. */
-					sigset_t mask;
-					sigemptyset(&mask);
-
-					if (sigprocmask(SIG_SETMASK, &mask, NULL) == -1) {
-						err(1, "sigprocmask");
-					}
-
-					if (opts->tty) {
-						tty_parent_cleanup();
-					}
-					return rc;
-				}
-			}
-		}
+		return sig_handler_loop(socket_fdpass[SOCKET_PARENT],
+				pid, outer_helper.pid,
+				opts->tty, &opts->ttyopts);
 	}
-
 	/* err() and errx() cannot use exit(), since it's not fork-safe. */
 	err_exit = _exit;
-
 	close(socket_fdpass[SOCKET_PARENT]);
-
 	sigset_t mask;
 	sigemptyset(&mask);
-
 	if (sigprocmask(SIG_SETMASK, &mask, NULL) == -1) {
 		err(1, "sigprocmask");
 	}
 
 	/* We can't afford to leave the child alive in the background if bst
-	   dies from uncatcheable signals. Or at least, we could, but this makes us
+	   dies from uncatchable signals. Or at least, we could, but this makes us
 	   leaky by default which isn't great, and the obvious workaround to
 	   daemonize the process tree is to just nohup bst. */
 	if (prctl(PR_SET_PDEATHSIG, SIGKILL) == -1) {
@@ -468,269 +798,92 @@ int enter(struct entry_settings *opts)
 	}
 
 	outer_helper_sync(&outer_helper);
-
 	ns_enter_postfork(namespaces, ns_len);
-
 	outer_helper_close(&outer_helper);
 
-	int rtnl = init_rtnetlink_socket();
-
 	/* Rename interfaces according to their specifications */
-	if (net_unshare) {
-		for (size_t i = 0; i < opts->nnics; ++i) {
-			if (i > (size_t) INT_MAX - 2) {
-				errx(1, "cannot iterate over more than %d interfaces", INT_MAX - 2);
-			}
-			/* interface indices start from 1, and we want to ignore interface 1 (lo),
-			   so we slide our indices by 2. */
-			net_if_rename(rtnl, (int)i + 2, opts->nics[i].name);
-		}
+	int rtnl = init_rtnetlink_socket();
+	if (wants_unshare(nsactions, NS_NET)) {
+		rename_interfaces(rtnl, opts->nics, opts->nnics);
 	}
 
+	/* Run the setup program if defined. */
 	if (opts->setup_program != NULL) {
-		pid_t pid = fork();
-		if (pid == -1) {
-			err(1, "setup: fork");
-		}
-
-		if (!pid) {
-			char *default_argv[2];
-			default_argv[0] = (char *) opts->setup_program;
-			default_argv[1] = NULL;
-
-			/* Set some extra useful environment */
-			setenv("ROOT", root, 1);
-			setenv("EXECUTABLE", opts->pathname, 1);
-
-			extern char **environ;
-
-			char *const *argv = default_argv;
-			if (opts->setup_argv != NULL) {
-				argv = opts->setup_argv;
-			}
-
-			if (dup2(STDERR_FILENO, STDOUT_FILENO) == -1) {
-				err(1, "setup: dup2");
-			}
-
-			execvpe(opts->setup_program, argv, environ);
-			err(1, "setup: execvpe %s", opts->setup_program);
-		}
-
-		int status;
-		if (waitpid(pid, &status, 0) == -1) {
-			err(1, "setup: waitpid");
-		}
-
-		if (WIFEXITED(status) && WEXITSTATUS(status)) {
-			_exit(WEXITSTATUS(status));
-		} else if (WIFSIGNALED(status)) {
-			_exit(WTERMSIG(status) | 1 << 7);
-		}
+		run_setup_program(root, opts->pathname,opts->setup_program, opts->setup_argv);
 	}
 
-	/*
-	 * Only mount a a cgroup hierarchy over sys/fs/cgroup if:
-	 *  1) The user has not specified --no_cgroup_remount
-	 *  2) The mount namespaces are being unshared
-	 *  3) The cgroup namespaces are being unshared
-	 */
-	if (!opts->no_cgroup_remount && mnt_unshare && cgroup_unshare) {
-		int rootfd = open(root, O_PATH, 0);
-		if (rootfd == -1) {
-			err(1, "open %s", root);
-		}
-
-		struct stat cgroupst = { .st_dev = 0 };
-		if (fstatat(rootfd, "sys/fs/cgroup", &cgroupst, AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW) == -1 && errno != ENOENT) {
-			err(1, "fstatat %s/sys/fs/cgroup", root);
-		}
-
-		struct stat rootst;
-		if (fstat(rootfd, &rootst) == -1) {
-			err(1, "fstat %s", root);
-		}
-
-		close(rootfd);
-
+	if (wants_unshare(nsactions, NS_MNT)) {
 		/*
-		 * Check if sys/fs/cgroup is already a mount point
-		 * If it is we need to mount the current cgroup root over it so procs have a
-		 * coherent view of cgroup hierarchy. We cant just mount to sys/fs/cgroup
-		 * (as we do with /proc remount), so we mount a tmpfs and mount cgroups to that.
+		 * Only mount a a cgroup hierarchy over sys/fs/cgroup if:
+		 *  1) The user has not specified --no_cgroup_remount
+		 *  2) The mount namespaces are being unshared
+		 *  3) The cgroup namespaces are being unshared
 		 */
-		if (cgroupst.st_dev != 0 && cgroupst.st_dev != rootst.st_dev) {
-			const char *target = makepath("%s/sys/fs/cgroup", root);
-
-			if (mount("tmpfs", target, "tmpfs", 0, NULL) == -1) {
-				err(1, "unable to mount tmpfs over %s", target);
-			}
-
-			if (mount("cgroup", target, "cgroup2", 0, NULL) == -1) {
-				err(1, "unable to mount tmpfs over %s", target);
-			}
-		}
-	}
-
-	/* Check whether or not <root>/proc is a mountpoint. If so,
-	   and we're in a PID + mount namespace, mount a new /proc. */
-	if (!opts->no_proc_remount && mnt_unshare && pid_unshare) {
-		int rootfd = open(root, O_PATH, 0);
-		if (rootfd == -1) {
-			err(1, "open %s", root);
+		if (!opts->no_cgroup_remount && wants_unshare(nsactions, NS_CGROUP)) {
+			overmount_cgroups(root);
 		}
 
-		struct stat procst = { .st_dev = 0 };
-		if (fstatat(rootfd, "proc", &procst, AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW) == -1 && errno != ENOENT) {
-			err(1, "fstatat %s/proc", root);
-		}
-
-		struct stat rootst;
-		if (fstat(rootfd, &rootst) == -1) {
-			err(1, "fstat %s", root);
-		}
-
-		close(rootfd);
-
-		/* <root>/proc is a mountpoint, remount it. And by remount, we mean mount over it,
-		   since the original mount is probably more privileged than us, or might not be a
-		   procfs one someone's oddball configuration. */
-		if (procst.st_dev != 0 && procst.st_dev != rootst.st_dev) {
-			const char *target = makepath("%s/proc", root);
-
-			int rc = mount("proc", target, "proc", 0, NULL);
-			if (rc == -1 && errno == EBUSY) {
-				/* This situation can arise on some kernels when we don't switch
-				   roots, and the mount namespace already has an entry for /proc.
-				   In this case, we have to unmount the original entry and
-				   mount a new one over it. */
-				if (umount2(target, MNT_DETACH) == -1) {
-					warn("umount2 %s", target);
-				}
-				rc = mount("proc", target, "proc", 0, NULL);
-			}
-			if (rc == -1) {
-				err(1, "mount: %s remount", target);
-			}
+		/* Check whether or not <root>/proc is a mountpoint. If so,
+		   and we're in a PID + mount namespace, mount a new /proc. */
+		if (!opts->no_proc_remount && wants_unshare(nsactions, NS_PID)) {
+			overmount_proc(root);
 		}
 	}
 
 	/* Set the host and domain names only when in an UTS namespace. */
-	if ((opts->hostname != NULL || opts->domainname != NULL ) && !uts_unshare) {
+	if ((opts->hostname != NULL || opts->domainname != NULL) && !wants_unshare(nsactions, NS_UTS)) {
 		errx(1, "attempted to set host or domain names on the host UTS namespace.");
 	}
-
-	const char *hostname = opts->hostname;
-	if (hostname == NULL && uts_unshare) {
-		hostname = "localhost";
-	}
-	if (hostname != NULL && sethostname(hostname, strlen(hostname)) == -1) {
-		err(1, "sethostname");
+	if (wants_unshare(nsactions, NS_UTS)) {
+		set_x_name(sethostname, opts->hostname, "localhost");
+		set_x_name(setdomainname, opts->domainname, "localdomain");
 	}
 
-	const char *domainname = opts->domainname;
-	if (domainname == NULL && uts_unshare) {
-		domainname = "localdomain";
-	}
-	if (domainname != NULL && setdomainname(domainname, strlen(domainname)) == -1) {
-		err(1, "setdomainname");
-	}
-
-	if (net_unshare) {
-		/* Setup localhost */
-		if (!opts->no_loopback_setup) {
-			net_if_up(rtnl, "lo");
-		}
-
-		/* Add addresses */
-		for (size_t i = 0; i < opts->naddrs; ++i) {
-			net_addr_add(rtnl, &opts->addrs[i]);
-		}
-
-		/* Bring up the rest of the nics */
-		for (size_t i = 0; i < opts->nnics; ++i) {
-			net_if_up(rtnl, opts->nics[i].name);
-		}
-
-		/* Add routes */
-		for (size_t i = 0; i < opts->nroutes; ++i) {
-			net_route_add(rtnl, &opts->routes[i]);
-		}
+	/* Unshare the network. */
+	if (wants_unshare(nsactions, NS_NET)) {
+		configure_network(rtnl, opts);
 	}
 
 	/* We have a special case for pivot_root: the syscall wants the
 	   new root to be a mount point, so we indulge. */
-	if (mnt_unshare && strcmp(root, "/") != 0) {
+	if (wants_unshare(nsactions, NS_MNT) && strcmp(root, "/") != 0) {
 		if (mount(root, root, "none", MS_BIND|MS_REC, "") == -1) {
-			err(1, "mount(\"/\", \"/\", MS_BIND|MS_REC)");
+			err(1, "mount(\"%s\", \"%s\", MS_BIND|MS_REC)", root, root);
 		}
+	}
+
+	/* Don't shoot ourselves in the foot. It's technically possible to
+	   let users mount things in the host mount namespace but in practice
+	   it's a terrible idea due to the sheer amount of things that can go
+	   wrong, like "what do I do if one of the mounts failed but the previous
+	   ones didn't?", or "how do I clean up things that I've (re)mounted?". */
+	if (opts->nmounts > 0 && !wants_unshare(nsactions, NS_MNT)) {
+		errx(1, "attempted to mount things in an existing mount namespace.");
 	}
 
 	/* We have to do this after setuid/setgid/setgroups since mounting
 	   tmpfses in user namespaces forces the options uid=<real-uid> and
 	   gid=<real-gid>. */
-	if (opts->nmounts > 0) {
-		/* Don't shoot ourselves in the foot. It's technically possible to
-		   let users mount things in the host mount namespace but in practice
-		   it's a terrible idea due to the sheer amount of things that can go
-		   wrong, like "what do I do if one of the mounts failed but the previous
-		   ones didn't?", or "how do I clean up things that I've (re)mounted?". */
-		if (!mnt_unshare) {
-			errx(1, "attempted to mount things in an existing mount namespace.");
-		}
+	/* XXX but we're doing it BEFORE setuid etc., right ??? */
+	do_mounts(root, opts);
 
-		if (!opts->no_fake_devtmpfs) {
-			for (struct mount_entry *mnt = opts->mounts; mnt < opts->mounts + opts->nmounts; ++mnt) {
-				if (strcmp(mnt->type, "devtmpfs") == 0) {
-					mnt->type = "bst_devtmpfs";
-				}
-			}
-		}
-
-		mount_entries(root, opts->mounts, opts->nmounts, opts->no_derandomize);
-	}
-
-	/* Don't chroot if root is "/". This is a better default since it
+	/* Only chroot if root isn't "/". This is a better default since it
 	   allows us to run commands that unshare nothing unprivileged. */
 	if (strcmp(root, "/") != 0) {
-
 		/* The chroot-ing logic is a bit delicate. If we don't have a mount
 		   namespace, we just use chroot. This has its limitations though,
 		   namely, in that situation, you won't be able to nest user
 		   namespaces, and you'll instead get baffling EPERMs when calling
 		   unshare(CLONE_NEWUSER).
-
-		   In order to remediate that, we pivot the root. Since this actively
+		   The better method is to pivot the root. Since this actively
 		   changes the world for every running process, we *insist* that this
 		   must be done in a mount namespace, because otherwise pivot_root
 		   will burn your house, invoke dragons, and eat your children. */
-
-		if (!mnt_unshare) {
+		if (wants_unshare(nsactions, NS_MNT)) {
+			do_pivot_root(root);
+		} else {
 			if (chroot(root) == -1) {
 				err(1, "chroot");
-			}
-		} else {
-			if (chdir(root) == -1) {
-				err(1, "pivot_root: pre chdir");
-			}
-
-			/* Pivot the root to `root` (new_root) and mount the old root
-			   (old_dir) on top of it. Then, unmount "." to get rid of the
-			   old root.
-
-			   The pivot_root manpage documents this approach: old_dir is
-			   always layered on top of new_root, which means that we can
-			   use this technique to avoid creating a mount point for the
-			   old root under new_root, or assuming anything about the layout
-			   of the new root. */
-			if (syscall(SYS_pivot_root, ".", ".") == -1) {
-				err(1, "pivot_root");
-			}
-			if (umount2(".", MNT_DETACH)) {
-				err(1, "pivot_root: umount2");
-			}
-			if (chdir("/") == -1) {
-				err(1, "pivot_root: post chdir");
 			}
 		}
 	}
@@ -743,89 +896,22 @@ int enter(struct entry_settings *opts)
 	   Only operations that make sense to be privileged in the context of
 	   the specified credentials (and not the userns root) should be placed
 	   below. */
+	switch_users(opts);
 
-	if (opts->ngroups != 0 && setgroups(opts->ngroups, opts->groups) == -1) {
-		err(1, "setgroups");
-	}
-	if (setregid(opts->gid, opts->gid) == -1) {
-		err(1, "setregid");
-	}
-	if (setreuid(opts->uid, opts->uid) == -1) {
-		err(1, "setreuid");
-	}
-
-	if (chdir(workdir) == -1) {
-		warn("chdir %s", workdir);
-		warnx("falling back work directory to /.");
-		if (chdir("/") == -1) {
-			err(1, "chdir /");
-		}
-	}
-
-	for (size_t resource = 0; resource < lengthof(opts->rlimits); ++resource) {
-		struct rlimit const * value = NULL;
-		if (opts->rlimits[resource].present) {
-			value = &opts->rlimits[resource].rlim;
-		}
-		/* When no_copy_hard_rlimits is not set, we always want to call apply_rlimit, either
-		   with the explicitly configured value (value != NULL), or by copying hard->soft
-		   (value == NULL). */
-		if (value || !opts->no_copy_hard_rlimits) {
-			apply_rlimit(resource, value);
-		}
-	}
+	chdir_or_slash(workdir);
+	do_rlimits(opts);
 
 	if (opts->tty) {
 		tty_child(&opts->ttyopts, socket_fdpass[SOCKET_CHILD]);
 	}
 
-	if (opts->init != NULL && opts->init[0] != '\0') {
-
-		if (!pid_unshare && prctl(PR_SET_CHILD_SUBREAPER, 1) == -1) {
-			err(1, "prctl: could not set init as child subreaper");
-		}
-
-		/* This size estimation is an overkill upper bound, but oh well... */
-		char *argv[ARG_MAX];
-		size_t argc = 0;
-
-		argc = append_argv(argv, argc, opts->argv[0]);
-		argc = append_argv(argv, argc, (char *) opts->pathname);
-		char *const *arg = opts->argv + 1;
-		for (; *arg != NULL; ++arg) {
-			argc = append_argv(argv, argc, *arg);
-		}
-		argv[argc] = NULL;
-
-		if (initfd != -1) {
-#ifdef SYS_execveat
-			syscall(SYS_execveat, initfd, "", argv, opts->envp, AT_EMPTY_PATH);
-			if (errno != ENOSYS) {
-				err(1, "execveat %s", opts->init);
-			}
-#endif
-			char fdpath[PATH_MAX];
-			if ((size_t) snprintf(fdpath, sizeof (fdpath), "/proc/self/fd/%d", initfd) >= sizeof (fdpath)) {
-				errx(1, "/proc/self/fd/%d takes more than PATH_MAX bytes.", initfd);
-			}
-			execve(fdpath, argv, opts->envp);
-			err(1, "execve %s", opts->init);
-		} else {
-			// If we hit this, it means the requested init is within the target root.
-			// We need init resolution to be done relative to the target root.
-			size_t rootlen = strlen(root);
-			assert(strncmp(opts->init, root, rootlen) == 0);
-
-			if (rootlen == 1 && root[0] == '/') {
-				rootlen = 0;
-			}
-			const char *init = opts->init + rootlen;
-
-			execve(init, argv, opts->envp);
-			err(1, "execve %s", init);
-		}
-	} else {
+	if (null_or_empty((char *) opts->init)) {
 		execvpe(opts->pathname, opts->argv, opts->envp);
 		err(1, "execvpe %s", opts->pathname);
 	}
+	if (!wants_unshare(nsactions, NS_PID) && prctl(PR_SET_CHILD_SUBREAPER, 1) == -1) {
+		err(1, "prctl: could not set init as child subreaper");
+	}
+	do_exec(opts, root, initfd);
+	return 0; /* unreached */
 }
