@@ -193,6 +193,7 @@ static void add_ipvlan_attrs(struct nlpkt *pkt, const struct nic_options *nicopt
 		nlpkt_add_attr_nstr(pkt, IFLA_INFO_KIND, nicopts->type);
 		nlpkt_attrlist(pkt, IFLA_INFO_DATA) {
 			nlpkt_add_attr(pkt, IFLA_IPVLAN_MODE, nicopts->ipvlan.mode);
+			nlpkt_add_attr(pkt, IFLA_IPVLAN_FLAGS, nicopts->ipvlan.modeflags);
 		}
 	}
 }
@@ -437,6 +438,9 @@ struct valmap {
 
 static int parse_val(void *dst, size_t size, const struct valmap *map, const char *name)
 {
+	if (name == NULL) {
+		return -1;
+	}
 	for (const struct valmap *e = &map[0]; e->name != NULL; ++e) {
 		if (strcmp(name, e->name) != 0) {
 			continue;
@@ -470,10 +474,35 @@ static const struct valmap ipvlan_mode_values[] = {
 	{ NULL, NULL },
 };
 
+static const struct valmap ipvlan_modeflag_values[] = {
+	{ "bridge",  &(const uint32_t) { 0                } },
+	{ "private", &(const uint32_t) { IPVLAN_F_PRIVATE } },
+	{ "vepa",    &(const uint32_t) { IPVLAN_F_VEPA    } },
+	{ NULL, NULL },
+};
+
 static void nic_parse_ipvlan_mode(struct nic_options *nic, const char *v)
 {
-	if (parse_val(&nic->ipvlan.mode, sizeof (nic->ipvlan.mode), ipvlan_mode_values, v) == -1) {
-		errx(1, "invalid IPVLAN mode %s", v);
+	char buf[1024];
+	strncpy(buf, v, sizeof(buf)-1);
+	if (strnlen(buf, sizeof(buf)-1) >= sizeof(buf)-1) {
+		errx(1, "invalid IPVLAN mode %s: value too large", v);
+	}
+	char *saveptr;
+
+	char *mode = strtok_r(buf, "+", &saveptr);
+	if (parse_val(&nic->ipvlan.mode, sizeof (nic->ipvlan.mode), ipvlan_mode_values, mode) == -1) {
+		errx(1, "invalid IPVLAN mode %s in %s", mode, v);
+	}
+
+	char *flag;
+	while ((flag = strtok_r(NULL, "+", &saveptr)) != NULL) {
+		uint32_t flagval;
+		if (parse_val(&flagval, sizeof (flagval), ipvlan_modeflag_values, flag) == -1) {
+			errx(1, "invalid IPVLAN mode flag %s in %s", flag, v);
+		}
+
+		nic->ipvlan.modeflags |= flagval;
 	}
 }
 
@@ -510,7 +539,7 @@ void nic_parse(struct nic_options *nic, const char *key, const char *val)
 	static struct optmap opts[] = {
 		{ "macvlan", "mode",    nic_parse_macvlan_mode },
 		{ "macvlan", "link",    nic_parse_link },
-		{ "ipvlan",  "mode",    nic_parse_ipvlan_mode  },
+		{ "ipvlan",  "mode",    nic_parse_ipvlan_mode },
 		{ "ipvlan",  "link",    nic_parse_link },
 		{ "",        "address", nic_parse_address },
 		{ "",        "brd",     nic_parse_brd },
