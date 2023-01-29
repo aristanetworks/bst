@@ -514,10 +514,16 @@ Supported interface types are:
 	*link=<host-interface>*: attach the IPVLAN interface to the specified
 	host interface.
 
-	*mode=<mode>*: IPVLAN mode. Supported values are:
+	*mode=<mode>[+<flag>]*: IPVLAN operating mode. Supported values are:
 	- *l2* (default)
 	- *l3*
 	- *l3s*
+
+	Mode flags can be optionally added to the mode, by appending the flag with
+	a `+`. Supported values for the mode flag are:
+	- *bridge* (default)
+	- *private*
+	- *vepa*
 
 ## Adding routes
 
