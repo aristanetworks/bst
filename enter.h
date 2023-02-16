@@ -29,6 +29,7 @@ struct bst_rlimit {
 struct climit {
 	char *limit;
 	char *fname;
+	bool critical;
 };
 
 enum {

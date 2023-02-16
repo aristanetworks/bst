@@ -259,6 +259,9 @@ _VAR=value_ before the executable to run.
 	added to the cgroup.controller at the current process's cgroup or at the <path>
 	specified by --cgroup if provided.
 
+\--try-limit <resource>=<value>
+    Identical to _--limit_, but ignored if the resouce is unsupported by the kernel.
+
 \--rlimit <resource>=<value>++
 \--rlimit <resource>=[hard]:[soft]
 	Set the specified hard and soft resource limits of the specified resource
