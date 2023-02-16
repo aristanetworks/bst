@@ -47,6 +47,8 @@ Options:
                                     created if --limits specified.
       --limit <res>=<value>         Set the specified cgroup resource to the
                                     provided value(s).
+      --try-limit <res>=<value>     Same as --limit but fails silently when the
+                                    resource is unknown to the kernel.
       --rlimit <res>=<hard>:<soft>,
       --rlimit <res>=<value>        Set the specified resource to the provided
                                     value(s).

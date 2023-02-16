@@ -376,7 +376,9 @@ void outer_helper_spawn(struct outer_helper *helper)
 			if (burn(cgroupfd, lim->fname, lim->limit) == -1) {
 				switch (errno) {
 				case ENOENT:
-					errx(1, "unknown cgroup limit %s", lim->fname);
+					if (lim->critical) {
+						errx(1, "unknown cgroup limit %s", lim->fname);
+					}
 				default:
 					err(1, "setting cgroup limit %s to %s", lim->fname, lim->limit);
 				}

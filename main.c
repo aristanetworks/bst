@@ -54,6 +54,7 @@ enum {
 	OPTION_NIC,
 	OPTION_CGROUP,
 	OPTION_CLIMIT,
+	OPTION_CLIMIT_TRY,
 	OPTION_PIDFILE,
 	OPTION_IP,
 	OPTION_ROUTE,
@@ -171,7 +172,7 @@ static void process_unshare(const char **out, char *nsnames)
 	}
 }
 
-static void handle_climit_arg(struct entry_settings *opts, char *optarg) {
+static void handle_climit_arg(struct entry_settings *opts, char *optarg, bool critical) {
 	char *name = strtok(optarg, "=");
 	char *arg = strtok(NULL, "");
 
@@ -181,6 +182,7 @@ static void handle_climit_arg(struct entry_settings *opts, char *optarg) {
 
 	opts->climits[opts->nactiveclimits].fname = name;
 	opts->climits[opts->nactiveclimits].limit = arg;
+	opts->climits[opts->nactiveclimits].critical = critical;
 	opts->nactiveclimits++;
 }
 
@@ -300,6 +302,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ "nic",                required_argument, NULL, OPTION_NIC             },
 		{ "cgroup",             required_argument, NULL, OPTION_CGROUP          },
 		{ "limit",              required_argument, NULL, OPTION_CLIMIT          },
+		{ "try-limit",          required_argument, NULL, OPTION_CLIMIT_TRY      },
 		{ "pidfile",            required_argument, NULL, OPTION_PIDFILE         },
 		{ "ip",                 required_argument, NULL, OPTION_IP              },
 		{ "route",              required_argument, NULL, OPTION_ROUTE           },
@@ -412,7 +415,11 @@ int main(int argc, char *argv[], char *envp[])
 				break;
 
 			case OPTION_CLIMIT:
-				handle_climit_arg(&opts, optarg);
+				handle_climit_arg(&opts, optarg, true);
+				break;
+
+			case OPTION_CLIMIT_TRY:
+				handle_climit_arg(&opts, optarg, false);
 				break;
 
 			case OPTION_SHARE:
