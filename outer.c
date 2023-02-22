@@ -352,9 +352,20 @@ void outer_helper_spawn(struct outer_helper *helper)
 	}
 
 	if (helper->cgroup_enabled) {
+		int critical_limits = 0;
+		for (size_t i = 0; i < helper->nclimits; ++i) {
+			if (helper->climits[i].critical) {
+				critical_limits++;
+			}
+		}
+
 		int cgroupfd = open(helper->cgroup_path, O_PATH | O_DIRECTORY);
 		if (cgroupfd == -1) {
-			err(1, "outer_helper: unable to open cgroup %s", helper->cgroup_path);
+			if (critical_limits > 0) {
+				err(1, "outer_helper: unable to open cgroup %s", helper->cgroup_path);
+			} else {
+				goto unshare;
+			}
 		}
 
 		char *subcgroup = makepath("bst.%d", child_pid);
@@ -362,7 +373,13 @@ void outer_helper_spawn(struct outer_helper *helper)
 		make_capable(BST_CAP_DAC_OVERRIDE);
 
 		if (mkdirat(cgroupfd, subcgroup, 0777) == -1) {
-			err(1, "outer_helper: unable to create sub-hierachy cgroup %s", subcgroup);
+			if (critical_limits > 0) {
+				err(1, "outer_helper: unable to create sub-hierachy cgroup %s", subcgroup);
+			} else {
+				reset_capabilities();
+				close(cgroupfd);
+				goto unshare;
+			}
 		}
 
 		int subcgroupfd = openat(cgroupfd, subcgroup, O_DIRECTORY);
@@ -379,6 +396,7 @@ void outer_helper_spawn(struct outer_helper *helper)
 					if (lim->critical) {
 						errx(1, "unknown cgroup limit %s", lim->fname);
 					}
+					break;
 				default:
 					err(1, "setting cgroup limit %s to %s", lim->fname, lim->limit);
 				}
@@ -414,6 +432,7 @@ void outer_helper_spawn(struct outer_helper *helper)
 		close(cgroupfd);
 	}
 
+unshare:
 	if (helper->unshare_user) {
 		burn_uidmap_gidmap(child_pid, helper->uid_desired, helper->gid_desired);
 	}
