@@ -174,12 +174,10 @@ int enter(struct entry_settings *opts)
 			const char *selfcgroup = NULL;
 			char line[BUFSIZ];
 			while (fgets(line, sizeof (line), selfcgroupfd) != NULL) {
-				printf("%s\n", line);
 				if (strncmp(line, "0::/", sizeof ("0::/") - 1) == 0) {
 					// Remove newline character read by fgets
 					line[strcspn(line, "\n")] = '\0';
 					selfcgroup = line + 3;
-					printf("found self cgroup %s\n", selfcgroup);
 					break;
 				}
 			}
@@ -187,7 +185,6 @@ int enter(struct entry_settings *opts)
 
 			if (selfcgroup != NULL) {
 				makepath_r(cgroup_path, "/sys/fs/cgroup/%s", selfcgroup);
-				printf("new cgroup path: %s (from %s and %s)\n", cgroup_path, selfcgroup, line);
 			}
 			opts->cgroup_path = cgroup_path;
 		}
