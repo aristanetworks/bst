@@ -361,8 +361,19 @@ void outer_helper_spawn(struct outer_helper *helper)
 
 		make_capable(BST_CAP_DAC_OVERRIDE);
 
+		int critical_limits = 0;
+		for (size_t i = 0; i < helper->nclimits; ++i) {
+			if helper->climits[i].critical {
+				critical_limits++;
+			}
+		}
+
 		if (mkdirat(cgroupfd, subcgroup, 0777) == -1) {
-			err(1, "outer_helper: unable to create sub-hierachy cgroup %s", subcgroup);
+			if (critical_limits > 0) {
+				err(1, "outer_helper: unable to create sub-hierachy cgroup %s", subcgroup);
+			} else {
+				return
+			}
 		}
 
 		int subcgroupfd = openat(cgroupfd, subcgroup, O_DIRECTORY);
