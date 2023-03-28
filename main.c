@@ -67,6 +67,7 @@ enum {
 	OPTION_NO_ENV,
 	OPTION_NO_COPY_HARD_RLIMITS,
 	OPTION_TTY,
+	OPTION_CLOSE_FD,
 };
 
 static void process_nslist_entry(const char **out, const char *share, const char *path, int append_nsname)
@@ -307,6 +308,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ "ip",                 required_argument, NULL, OPTION_IP              },
 		{ "route",              required_argument, NULL, OPTION_ROUTE           },
 		{ "tty",                optional_argument, NULL, OPTION_TTY             },
+		{ "close-fd",           optional_argument, NULL, OPTION_CLOSE_FD        },
 
 		/* Opt-out feature flags */
 		{ "no-copy-hard-rlimits", no_argument, NULL, OPTION_NO_COPY_HARD_RLIMITS },
@@ -715,6 +717,47 @@ int main(int argc, char *argv[], char *envp[])
 				for (size_t i = 0; i < nopts && kvlist[i].key != NULL; ++i) {
 					tty_opt_parse(&opts.ttyopts, kvlist[i].key, kvlist[i].value);
 				}
+				break;
+			}
+
+			case OPTION_CLOSE_FD:
+			{
+				if (opts.nclose_fds >= MAX_CLOSE_FDS) {
+					errx(1, "can only close a maximum of %d fds or fd ranges", MAX_CLOSE_FDS);
+				}
+
+				struct close_range *range = &opts.close_fds[opts.nclose_fds];
+
+				/* If --close-fd is specified without parameters, "3-" is assumed */
+				char *from = "3";
+				char *to = "";
+
+				if (optarg) {
+					char *end = strchr(optarg, '-');
+					if (end == NULL) {
+						/* This is a single fd */
+						from = optarg;
+						to = from;
+					} else {
+						/* We have an fd range; split it */
+						*end = '\0';
+
+						from = optarg;
+						to = end + 1;
+					}
+				}
+
+				if ((range->from = parse_fd(from)) == -1) {
+					err(2, "close-fd: %s is not a valid file descriptor number", from);
+				}
+
+				if (to[0] == '\0') {
+					range->to = ~0;
+				} else if ((range->to = parse_fd(to)) == -1) {
+					err(2, "close-fd: %s is not a valid file descriptor number", to);
+				}
+
+				opts.nclose_fds++;
 				break;
 			}
 

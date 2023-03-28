@@ -54,6 +54,8 @@ Options:
                                     value(s).
       --pidfile <path>              Write PID in file and exclusive-lock it.
       --tty[=<options>]             Allocate a pty for the process.
+      --close-fd[=<fd>|<from>-[to]] Close specified file descriptor or fd range
+                                    before exec, but after setup.
 
       --no-copy-hard-rlimits        Don't copy hard limit values to soft limits.
       --no-fake-devtmpfs            Don't replace devtmpfs mounts with fake ones.

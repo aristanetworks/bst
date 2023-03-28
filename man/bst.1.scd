@@ -350,6 +350,21 @@ _VAR=value_ before the executable to run.
 	By default bst inherits the parent's terminal device (or lack thereof).  Use
 	the --tty option to allocate a new pty for the child process.
 
+\--close-fd[=<fd>|<from>-[to]]
+	Close the specified file descriptor or fd range.
+
+	In its first form, _--close-fd=<fd>_ is equivalent to _--close-fd=<fd>-<fd>_.
+
+	In its second form, _from_ designates the starting file descriptor to close,
+	and _to_ designates the end file descriptor to close. All file descriptors
+	between _from_ and _to_, inclusive, are then closed before _executable_
+	is started.
+
+	Note that setup programs still have access to the inherited file
+	descriptors -- that is, file descriptors specified via --close-fd will
+	only get closed after the setup program finishes executing. This can
+	be useful to pass out-of-band data to the setup program without leaking
+	file descriptors to the spacetime process.
 
 \--no-copy-hard-rlimits
 	Do not copy hard limit values to soft limits for all resources mentioned above.

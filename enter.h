@@ -32,12 +32,18 @@ struct climit {
 	bool critical;
 };
 
+struct close_range {
+	int from;
+	int to;
+};
+
 enum {
 	MAX_MOUNT = 4096,
 	MAX_NICS = 4096,
 	MAX_ADDRS = 4096,
 	MAX_ROUTES = 4096,
 	MAX_CGROUPS = 4096,
+	MAX_CLOSE_FDS = 4096,
 };
 
 /* SHARE_WITH_PARENT is a special value for entry_settings.shares[ns]. */
@@ -98,6 +104,9 @@ struct entry_settings {
 
 	bool tty;
 	struct tty_opts ttyopts;
+
+	size_t nclose_fds;
+	struct close_range close_fds[MAX_CLOSE_FDS];
 
 	int no_copy_hard_rlimits;
 	int no_fake_devtmpfs;
