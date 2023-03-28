@@ -410,7 +410,14 @@ void outer_helper_spawn(struct outer_helper *helper)
 
 		// Add bst subprocess to cgroup
 		if (burn(subcgroupfd, "cgroup.procs", pidstr) == -1) {
-			err(1, "outer_helper: burn process into cgroup.procs");
+			if (critical_limits > 0) {
+				err(1, "outer_helper: burn process into cgroup.procs");
+			} else {
+				reset_capabilities();
+				close(cgroupfd);
+				close(subcgroupfd);
+				goto unshare;
+			}
 		}
 
 		close(subcgroupfd);
