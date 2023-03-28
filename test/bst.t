@@ -252,3 +252,37 @@ Testing Environment
 	FOO=bar
 	ROOT=/
 	EXECUTABLE=/bin/true
+
+Testing close-fds
+
+	$ echo -n '--close-fd=3 should close fd 3: '
+	> bst --close-fd=3 --setup='cat 0<&3 && echo -n "setup OK, "' sh <<'EOF' 3</dev/null
+	> sh -c "cat 0<&3" 2>/dev/null \
+	>   && ( echo "exe KO: fd 3 was open in the spacetime"; exit 1 ) \
+	>   || echo "exe OK"
+	> EOF
+	--close-fd=3 should close fd 3: setup OK, exe OK
+
+	$ echo -n '--close-fd=3-7 should close fd 7: '
+	> bst --close-fd=3-7 --setup='cat 0<&7 && echo -n "setup OK, "' sh <<'EOF' 7</dev/null
+	> sh -c "cat 0<&7" 2>/dev/null \
+	>   && ( echo "exe KO: fd 7 was open in the spacetime"; exit 1 ) \
+	>   || echo "exe OK"
+	> EOF
+	--close-fd=3-7 should close fd 7: setup OK, exe OK
+
+	$ echo -n '--close-fd=3- should close fd 7: '
+	> bst --close-fd=3- --setup='cat 0<&7 && echo -n "setup OK, "' sh <<'EOF' 7</dev/null
+	> sh -c "cat 0<&7" 2>/dev/null \
+	>   && ( echo "exe KO: fd 7 was open in the spacetime"; exit 1 ) \
+	>   || echo "exe OK"
+	> EOF
+	--close-fd=3- should close fd 7: setup OK, exe OK
+
+	$ echo -n '--close-fd=3-7 should not close fd 8: '
+	> bst --close-fd=3-7 sh <<'EOF' 8</dev/null
+	> sh -c "cat 0<&8" 2>/dev/null \
+	>   && echo "OK" \
+	>   || ( echo "KO: fd 8 was closed in the spacetime"; exit 1 )
+	> EOF
+	--close-fd=3-7 should not close fd 8: OK

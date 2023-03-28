@@ -58,6 +58,7 @@ config.set('libexecdir', libexecdir)
 config.set('version', version)
 
 config.set('HAVE_SYS_mount_setattr', cc.has_header_symbol('syscall.h', 'SYS_mount_setattr'))
+config.set('HAVE_close_range', cc.has_function('close_range'))
 
 configure_file(input: 'config.h.in', output: 'config.h', configuration: config)
 

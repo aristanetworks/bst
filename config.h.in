@@ -13,5 +13,6 @@
 # define VERSION "@version@"
 
 #mesondefine HAVE_SYS_mount_setattr
+#mesondefine HAVE_close_range
 
 #endif /* !CONFIG_H_ */

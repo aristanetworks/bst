@@ -26,6 +26,7 @@
 
 #include "bst_limits.h"
 #include "capable.h"
+#include "compat.h"
 #include "enter.h"
 #include "errutil.h"
 #include "mount.h"
@@ -818,6 +819,11 @@ int enter(struct entry_settings *opts)
 			}
 			const char *init = opts->init + rootlen;
 
+			for (const struct close_range *range = opts->close_fds; range < opts->close_fds + opts->nclose_fds; ++range) {
+				if (bst_close_range(range->from, range->to, BST_CLOSE_RANGE_UNSHARE) == -1) {
+					err(1, "close_range %d %d", range->from, range->to);
+				}
+			}
 			execve(init, argv, opts->envp);
 			err(1, "execve %s", init);
 		}
