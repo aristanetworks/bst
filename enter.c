@@ -71,6 +71,29 @@ static void apply_rlimit(int resource, struct rlimit const *value)
 	}
 }
 
+ssize_t write_oom_score_adj(long value)
+{
+	int fd = open("/proc/self/oom_score_adj", O_WRONLY);
+	if (fd == -1) {
+		return -1;
+	}
+
+	char data[BUFSIZ];
+	if ((size_t) snprintf(data, sizeof (data), "%ld\n", value) >= sizeof (data)) {
+		errx(1, "'%ld\n' takes more than %zu bytes.", value, sizeof (data));
+	}
+
+	ssize_t written = write(fd, data, sizeof(data));
+	if (written == -1) {
+		return -1;
+	}
+
+	if (close(fd) == -1) {
+		return -1;
+	}
+	return written;
+}
+
 static int sig_handler(int epollfd, const struct epoll_event *ev, int fd, pid_t pid)
 {
 	siginfo_t info;
@@ -313,6 +336,10 @@ int enter(struct entry_settings *opts)
 
 	if (timens_offsets != -1 && close(timens_offsets) == -1) {
 		err(1, "close timens_offsets");
+	}
+
+	if (write_oom_score_adj(opts->oom_score_adj) == -1) {
+		err(1, "writing oom_score_adj");
 	}
 
 	/* Setup a socket pair for file-descriptor passing. Used by pty allocation. */

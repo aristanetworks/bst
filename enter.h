@@ -93,6 +93,8 @@ struct entry_settings {
 	struct climit climits[MAX_CGROUPS];
 	size_t nactiveclimits;
 
+	long oom_score_adj;
+
 	const char *arch;
 
 	struct bst_rlimit rlimits[BST_NLIMIT];

@@ -56,6 +56,7 @@ enum {
 	OPTION_CLIMIT,
 	OPTION_CLIMIT_TRY,
 	OPTION_PIDFILE,
+	OPTION_OOM_SCORE_ADJ,
 	OPTION_IP,
 	OPTION_ROUTE,
 	OPTION_NO_FAKE_DEVTMPFS,
@@ -304,6 +305,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ "cgroup",             required_argument, NULL, OPTION_CGROUP          },
 		{ "limit",              required_argument, NULL, OPTION_CLIMIT          },
 		{ "try-limit",          required_argument, NULL, OPTION_CLIMIT_TRY      },
+		{ "oom-score-adj",      required_argument, NULL, OPTION_OOM_SCORE_ADJ   },
 		{ "pidfile",            required_argument, NULL, OPTION_PIDFILE         },
 		{ "ip",                 required_argument, NULL, OPTION_IP              },
 		{ "route",              required_argument, NULL, OPTION_ROUTE           },
@@ -422,6 +424,13 @@ int main(int argc, char *argv[], char *envp[])
 
 			case OPTION_CLIMIT_TRY:
 				handle_climit_arg(&opts, optarg, false);
+				break;
+
+			case OPTION_OOM_SCORE_ADJ:
+				opts.oom_score_adj = strtol(optarg, NULL, 10);
+				if (errno != 0) {
+					errx(1, "oom score adjustment must be an integer");
+				}
 				break;
 
 			case OPTION_SHARE:
