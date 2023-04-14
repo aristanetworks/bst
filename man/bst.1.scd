@@ -260,7 +260,7 @@ _VAR=value_ before the executable to run.
 	specified by --cgroup if provided.
 
 \--try-limit <resource>=<value>
-    Identical to _--limit_, but ignored if the resouce is unsupported by the kernel.
+	Identical to _--limit_, but ignored if the resouce is unsupported by the kernel.
 
 \--rlimit <resource>=<value>++
 \--rlimit <resource>=[hard]:[soft]
