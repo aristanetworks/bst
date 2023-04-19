@@ -325,6 +325,11 @@ int enter(struct entry_settings *opts)
 		err(1, "socketpair");
 	}
 
+	/* Note that we need to get the parent pid here, as calling getppid()
+	   post-fork will not catch conditions where the parent gets SIGKILL'ed
+	   and the child ends up being reparented. */
+	pid_t expected_ppid = getpid();
+
 	/* You can't "really" unshare the PID namespace of a running process
 	   without forking, since for process hierarchy reasons only the next
 	   child process enters the namespace as init and subsequent calls to
@@ -461,9 +466,7 @@ int enter(struct entry_settings *opts)
 	   dies from uncatcheable signals. Or at least, we could, but this makes us
 	   leaky by default which isn't great, and the obvious workaround to
 	   daemonize the process tree is to just nohup bst. */
-	if (prctl(PR_SET_PDEATHSIG, SIGKILL) == -1) {
-		err(1, "prctl PR_SET_PDEATHSIG");
-	}
+	sig_setpdeathsig(SIGKILL, expected_ppid);
 
 	outer_helper_sync(&outer_helper);
 

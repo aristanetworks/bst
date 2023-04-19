@@ -16,7 +16,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mount.h>
-#include <sys/prctl.h>
 #include <sys/epoll.h>
 #include <unistd.h>
 
@@ -24,6 +23,7 @@
 #include "enter.h"
 #include "outer.h"
 #include "path.h"
+#include "sig.h"
 #include "userns.h"
 #include "util.h"
 #include "fd.h"
@@ -314,6 +314,11 @@ void outer_helper_spawn(struct outer_helper *helper)
 		err(1, "outer_helper: socketpair");
 	}
 
+	/* Note that we need to get the parent pid here, as calling getppid()
+	   post-fork will not catch conditions where the parent gets SIGKILL'ed
+	   and the child ends up being reparented. */
+	pid_t expected_ppid = getpid();
+
 	pid_t pid = fork();
 	if (pid == -1) {
 		err(1, "outer_helper: fork");
@@ -325,9 +330,7 @@ void outer_helper_spawn(struct outer_helper *helper)
 		helper->fd  = fdpair[SOCKET_PARENT];
 		return;
 	}
-	if (prctl(PR_SET_PDEATHSIG, SIGKILL) == -1) {
-		err(1, "prctl PR_SET_PDEATHSIG");
-	}
+	sig_setpdeathsig(SIGKILL, expected_ppid);
 
 	sigset_t mask;
 	sigemptyset(&mask);

@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <stddef.h>
 #include <sys/epoll.h>
+#include <sys/prctl.h>
 #include <sys/signalfd.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -73,5 +74,18 @@ void sig_setup(int epollfd, const sigset_t *set, pid_t helper_pid, epoll_handler
 
 	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, sigfd, &event) == -1) {
 		err(1, "epoll_ctl_add signalfd");
+	}
+}
+
+void sig_setpdeathsig(int signo, pid_t expected_ppid)
+{
+	if (prctl(PR_SET_PDEATHSIG, signo) == -1) {
+		err(1, "prctl PR_SET_PDEATHSIG");
+	}
+	if (getppid() != expected_ppid) {
+		/* The parent process died unexpectedly and we got reparented to the
+		   nearest subreaper. We won't get killed by the kernel anymore, because
+		   our new parent might be long lived, so just do it ourselves. */
+		raise(signo);
 	}
 }
