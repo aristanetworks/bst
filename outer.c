@@ -435,6 +435,7 @@ void outer_helper_spawn(struct outer_helper *helper)
 		/* This process is intentionally left to leak as the bst root process must have exited
 			 and thus been removed from bst's cgroup.procs for the cgroup hierarchy to be removed */
 		if (pid == 0) {
+			close(fdpair[SOCKET_CHILD]);
 			cgroup_helper(cgroupfd, child_pid);
 			_exit(0);
 		}
