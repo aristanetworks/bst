@@ -399,7 +399,7 @@ void outer_helper_spawn(struct outer_helper *helper)
 		// Cgroup subhierarchy is created, now apply specified limits
 		for (size_t i = 0; i < helper->nclimits; ++i) {
 			struct climit *lim = &helper->climits[i];
-			if (burn(cgroupfd, lim->fname, lim->limit) == -1) {
+			if (burn(subcgroupfd, lim->fname, lim->limit) == -1) {
 				switch (errno) {
 				case ENOENT:
 					if (lim->critical) {
