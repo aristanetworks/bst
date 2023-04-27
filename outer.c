@@ -20,6 +20,7 @@
 #include <unistd.h>
 
 #include "capable.h"
+#include "compat.h"
 #include "enter.h"
 #include "outer.h"
 #include "path.h"
@@ -330,6 +331,12 @@ void outer_helper_spawn(struct outer_helper *helper)
 		helper->fd  = fdpair[SOCKET_PARENT];
 		return;
 	}
+
+	/* Make sure all file descriptors except for the ones we're actually using
+	   get closed. This avoids keeping around file descriptors on which
+	   the parent process might be waiting on. */
+	rebind_fds_and_close_rest(3, &fdpair[SOCKET_CHILD], NULL);
+
 	sig_setpdeathsig(SIGKILL, expected_ppid);
 
 	sigset_t mask;
@@ -339,7 +346,6 @@ void outer_helper_spawn(struct outer_helper *helper)
 		err(1, "sigprocmask");
 	}
 
-	close(fdpair[SOCKET_PARENT]);
 	int fd = fdpair[SOCKET_CHILD];
 
 	pid_t child_pid;
@@ -435,7 +441,10 @@ void outer_helper_spawn(struct outer_helper *helper)
 		/* This process is intentionally left to leak as the bst root process must have exited
 			 and thus been removed from bst's cgroup.procs for the cgroup hierarchy to be removed */
 		if (pid == 0) {
-			close(fdpair[SOCKET_CHILD]);
+			/* Make sure all file descriptors except for the ones we're actually using
+			   get closed. This avoids keeping around file descriptors on which
+			   the parent process might be waiting on. */
+			rebind_fds_and_close_rest(3, &cgroupfd, NULL);
 			cgroup_helper(cgroupfd, child_pid);
 			_exit(0);
 		}

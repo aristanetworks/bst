@@ -5,9 +5,12 @@
  */
 
 #include <err.h>
+#include <stdarg.h>
 #include <stddef.h>
 #include <sys/socket.h>
+#include <unistd.h>
 
+#include "compat.h"
 #include "fd.h"
 
 int recv_fd(int socket)
@@ -75,5 +78,26 @@ void send_fd(int socket, int fd)
 	*((int*) CMSG_DATA(pCm)) = fd;
 	if (sendmsg(socket, &msg, 0) < 0) {
 		err(1, "send_fd: sendmsg");
+	}
+}
+
+void rebind_fds_and_close_rest(int start_fd, ...)
+{
+	va_list vl;
+	va_start(vl, start_fd);
+	for (;;) {
+		int *fd = va_arg(vl, int *);
+		if (!fd) {
+			break;
+		}
+		*fd = dup2(*fd, start_fd++);
+		if (*fd == -1) {
+			err(1, "dup2");
+		}
+	}
+	va_end(vl);
+
+	if (bst_close_range(start_fd, ~0U, 0) == -1) {
+		err(1, "close_range");
 	}
 }
