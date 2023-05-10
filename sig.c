@@ -77,15 +77,34 @@ void sig_setup(int epollfd, const sigset_t *set, pid_t helper_pid, epoll_handler
 	}
 }
 
-void sig_setpdeathsig(int signo, pid_t expected_ppid)
+void sig_setpdeathsig(int signo, int parent_handle)
 {
 	if (prctl(PR_SET_PDEATHSIG, signo) == -1) {
 		err(1, "prctl PR_SET_PDEATHSIG");
 	}
-	if (getppid() != expected_ppid) {
+
+	errno = 0;
+	int unused;
+	ssize_t ret = read(parent_handle, &unused, sizeof(unused));
+	if (ret == -1) {
+		ret = -errno;
+	}
+
+	switch (ret) {
+	case 0:
 		/* The parent process died unexpectedly and we got reparented to the
 		   nearest subreaper. We won't get killed by the kernel anymore, because
 		   our new parent might be long lived, so just do it ourselves. */
 		raise(signo);
+
+#if EWOULDBLOCK != EAGAIN
+	case -EWOULDBLOCK:
+#endif
+	case -EAGAIN:
+		/* The parent process is alive; continue on */
+		return;
+
+	default:
+		err(1, "sig_setpdeathsig: read");
 	}
 }
