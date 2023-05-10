@@ -325,10 +325,18 @@ int enter(struct entry_settings *opts)
 		err(1, "socketpair");
 	}
 
-	/* Note that we need to get the parent pid here, as calling getppid()
-	   post-fork will not catch conditions where the parent gets SIGKILL'ed
-	   and the child ends up being reparented. */
-	pid_t expected_ppid = getpid();
+	/* Set up a pipe that we do nothing with; we use the read end as the parent
+	   handle in sig_setpdeathsig, and the write end will get closed on
+	   process exit. This ensures that we are able to properly detect process
+	   reparenting before we've called prctl(PR_SET_PDEATHSIG). */
+	enum {
+		LIVENESS_CHECK,
+		LIVENESS_KEEP,
+	};
+	int liveness_fds[2];
+	if (pipe2(liveness_fds, O_CLOEXEC | O_NONBLOCK) == -1) {
+		err(1, "pipe2");
+	}
 
 	/* You can't "really" unshare the PID namespace of a running process
 	   without forking, since for process hierarchy reasons only the next
@@ -361,6 +369,8 @@ int enter(struct entry_settings *opts)
 		}
 
 		close(socket_fdpass[SOCKET_CHILD]);
+		close(liveness_fds[LIVENESS_CHECK]);
+
 		if (opts->pidfile != NULL) {
 			int pidfile = open(opts->pidfile, O_WRONLY | O_CREAT | O_CLOEXEC | O_NOCTTY , 0666);
 			if (pidfile == -1) {
@@ -450,6 +460,8 @@ int enter(struct entry_settings *opts)
 		}
 	}
 
+	close(liveness_fds[LIVENESS_KEEP]);
+
 	/* err() and errx() cannot use exit(), since it's not fork-safe. */
 	err_exit = _exit;
 
@@ -466,7 +478,7 @@ int enter(struct entry_settings *opts)
 	   dies from uncatcheable signals. Or at least, we could, but this makes us
 	   leaky by default which isn't great, and the obvious workaround to
 	   daemonize the process tree is to just nohup bst. */
-	sig_setpdeathsig(SIGKILL, expected_ppid);
+	sig_setpdeathsig(SIGKILL, liveness_fds[LIVENESS_CHECK]);
 
 	outer_helper_sync(&outer_helper);
 
