@@ -52,6 +52,7 @@ Options:
       --rlimit <res>=<hard>:<soft>,
       --rlimit <res>=<value>        Set the specified resource to the provided
                                     value(s).
+      --oom-score-adj <value>       Adjust the OOM score for the process.
       --pidfile <path>              Write PID in file and exclusive-lock it.
       --tty[=<options>]             Allocate a pty for the process.
       --close-fd[=<fd>|<from>-[to]] Close specified file descriptor or fd range
