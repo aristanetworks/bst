@@ -13,7 +13,9 @@
 # include <sys/stat.h>
 # include <time.h>
 # include <unistd.h>
+
 # include "bst_limits.h"
+# include "cgroup.h"
 # include "mount.h"
 # include "net.h"
 # include "ns.h"
@@ -88,6 +90,7 @@ struct entry_settings {
 
 	mode_t umask;
 
+	enum cgroup_driver cgroup_driver;
 	char *cgroup_path;
 
 	struct climit climits[MAX_CGROUPS];

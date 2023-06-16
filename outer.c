@@ -8,6 +8,7 @@
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #include <limits.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -16,18 +17,18 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mount.h>
-#include <sys/epoll.h>
 #include <unistd.h>
 
 #include "capable.h"
+#include "cgroup.h"
 #include "compat.h"
 #include "enter.h"
+#include "fd.h"
 #include "outer.h"
 #include "path.h"
 #include "sig.h"
 #include "userns.h"
 #include "util.h"
-#include "fd.h"
 
 enum {
 	/* This should be enough for defining our mappings. If we assign
@@ -192,96 +193,6 @@ static void persist_ns_files(pid_t pid, const char **persist)
 	}
 }
 
-/*
- * If bst has entered a cgroup this function will epoll the cgroup.events file
- * to detect when all pids have exited the cgroup ("populated 0"). The cgroup is 
- * destroyed when this condition is met.
- */
-static void cgroup_helper(int cgroupfd, pid_t pid)
-{
-	// Create a new session in case current group leader is killed
-	if (setsid() == -1) {
-		err(1, "unable to create new session leader for cgroup cleanup process");
-	}
-
-	char *subcgroup = makepath("bst.%d", pid);
-
-	int subcgroupfd = openat(cgroupfd, subcgroup, O_DIRECTORY);
-	if (subcgroupfd == -1) {
-		err(1, "unable to open bst.%d", pid);
-	}
-
-	int cevent = openat(subcgroupfd, "cgroup.events", 0);
-	if (cevent == -1) {
-		err(1, "unable to open cgroup.events");
-	}
-
-	/* Use EPOLLET to be notified of any changes to the cgroup.events file without
-	   needing to seek through the entire file (which seems problematic with this
-	   kernel interface).*/
-	struct epoll_event event = {
-		.events = EPOLLET,
-		.data.fd = 0
-	};
-
-	int epollfd = epoll_create1(0);
-	if (epollfd == -1) {
-		err(1, "epoll_create1");
-	}
-
-	// Notify about I/O changes to cgroupfd
-	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, cevent, &event) == -1) {
-		err(1, "epoll_ctl_add cgroupfd");
-	}
-
-	char populated[BUFSIZ];
-	for (;;) {
-		// Single event (update cgroup.events), block indefinitely
-		int ready = epoll_wait(epollfd, &event, 1, -1);
-		if (ready == -1) {
-			err(1, "epoll_wait cgroup.events");
-		}
-
-		// We need a new fd to read from the cgroup.events
-		int eventsfd = openat(subcgroupfd, "cgroup.events", O_RDONLY);
-		if (eventsfd == -1) {
-			err(1,"unable to open cgroup.events");
-		}
-
-		FILE *eventsfp = fdopen(eventsfd, "r");
-		if (eventsfp == NULL) {
-			err(1, "unable to open file pointer to cgroup.events");
-		}
-
-		// The order of elements in cgroup.events is not neccesarily specified 
-		while (fgets(populated, BUFSIZ, eventsfp) != NULL) {
-			if (strnlen(populated, sizeof(populated)) == sizeof(populated)) {
-				err(1, "exceeded cgroup.events line read buffer");
-			}
-			// Check if there are no procs within the bst cgroup -- if so, delete it
-			if (strncmp(populated, "populated 0", 11) == 0) {
-				char *subcgroup = makepath("bst.%d", pid);
-
-				make_capable(BST_CAP_DAC_OVERRIDE);
-
-				if (unlinkat(cgroupfd, subcgroup, AT_REMOVEDIR) == -1) {
-					err(1, "unable to clean cgroup %s", subcgroup);
-				}
-
-				reset_capabilities();
-
-				close(subcgroupfd);
-				close(cgroupfd);
-				close(cevent);
-				fclose(eventsfp);
-				return;
-			}
-		}
-
-		fclose(eventsfp);
-	}
-}
-
 /* outer_helper_spawn spawns a new process whose only purpose is to modify
    the uid and gid mappings of our target process (TP).
 
@@ -369,43 +280,78 @@ void outer_helper_spawn(struct outer_helper *helper)
 		_exit(1);
 	}
 
-	if (helper->cgroup_enabled) {
-		int critical_limits = 0;
-		for (size_t i = 0; i < helper->nclimits; ++i) {
-			if (helper->climits[i].critical) {
-				critical_limits++;
-			}
+	int critical_limits = 0;
+	for (size_t i = 0; i < helper->nclimits; ++i) {
+		if (helper->climits[i].critical) {
+			critical_limits++;
+		}
+	}
+
+	int cgroup_driver_rc = cgroup_driver_init(helper->cgroup_driver, !!critical_limits);
+
+	char cgroup_path[PATH_MAX];
+	if (cgroup_driver_rc >= 0 && (helper->nclimits != 0 || helper->cgroup_path != NULL)) {
+		if (helper->cgroup_path == NULL && cgroup_current_path(cgroup_path)) {
+			helper->cgroup_path = cgroup_path;
+		}
+		if (helper->nclimits != 0 && helper->cgroup_path == NULL) {
+			errx(1, "unable to apply limits without --cgroup specified");
+		}
+	}
+
+	if (cgroup_driver_rc >= 0 && helper->cgroup_path != NULL) {
+		char cgroupstr[PATH_MAX];
+		makepath_r(cgroupstr, "bst-%" PRIi32, child_pid);
+
+		int cgroupfd = cgroup_join(helper->cgroup_path, cgroupstr);
+		if (cgroupfd == -1) {
+			err(1, "outer_helper: unable to open current cgroup");
 		}
 
-		int cgroupfd = open(helper->cgroup_path, O_PATH | O_DIRECTORY);
-		if (cgroupfd == -1) {
+		/* Create two subcgroups; controller, which will contain this process,
+		   and worker, which will contain the child process.
+
+		   This is done to avoid the no-internal-process rule. */
+
+		/* NOTE: this is fine, since we did some access checks earlier on putting
+		   the current process into the parent cgroup */
+		make_capable(BST_CAP_DAC_OVERRIDE);
+
+		if (mkdirat(cgroupfd, "controller", 0777) == -1) {
 			if (critical_limits > 0) {
-				err(1, "outer_helper: unable to open cgroup %s", helper->cgroup_path);
+				err(1, "outer_helper: unable to create controller sub-cgroup");
 			} else {
+				close(cgroupfd);
 				goto unshare;
 			}
 		}
-
-		char *subcgroup = makepath("bst.%d", child_pid);
-
-		make_capable(BST_CAP_DAC_OVERRIDE);
-
-		if (mkdirat(cgroupfd, subcgroup, 0777) == -1) {
+		if (mkdirat(cgroupfd, "worker", 0777) == -1) {
 			if (critical_limits > 0) {
-				err(1, "outer_helper: unable to create sub-hierachy cgroup %s", subcgroup);
+				err(1, "outer_helper: unable to create worker sub-cgroup");
 			} else {
-				reset_capabilities();
 				close(cgroupfd);
 				goto unshare;
 			}
 		}
 
-		int subcgroupfd = openat(cgroupfd, subcgroup, O_DIRECTORY);
-		if (subcgroupfd == -1) {
-			err(1, "outer_helper: unable to open cgroup %s", subcgroup);
+		char pidstr[BUFSIZ];
+		if (sprintf(pidstr, "%d", child_pid) == -1) {
+			err(1, "outer_helper: unable to convert child_pid to string");
 		}
 
-		// Cgroup subhierarchy is created, now apply specified limits
+		/* Put ourselves in the controller cgroup & the child in the worker cgroup */
+		burn(cgroupfd, "controller/cgroup.procs", "0");
+		burn(cgroupfd, "worker/cgroup.procs", pidstr);
+		reset_capabilities();
+
+		cgroup_enable_controllers(cgroupfd);
+
+		/* Cgroup subhierarchy is created, now apply specified limits */
+		int subcgroupfd = openat(cgroupfd, "worker", O_DIRECTORY);
+		if (subcgroupfd == -1) {
+			err(1, "outer_helper: unable to open worker cgroup");
+		}
+
 		for (size_t i = 0; i < helper->nclimits; ++i) {
 			struct climit *lim = &helper->climits[i];
 			if (burn(subcgroupfd, lim->fname, lim->limit) == -1) {
@@ -421,44 +367,13 @@ void outer_helper_spawn(struct outer_helper *helper)
 			}
 		}
 
-		char pidstr[BUFSIZ];
-		if (sprintf(pidstr, "%d", child_pid) == -1) {
-			err(1, "outer_helper: unable to convert child_pid to string");
+		if (close(subcgroupfd) == -1) {
+			err(1, "outer_helper: close worker cgroup");
 		}
 
-		// Add bst subprocess to cgroup
-		if (burn(subcgroupfd, "cgroup.procs", pidstr) == -1) {
-			if (critical_limits > 0) {
-				err(1, "outer_helper: burn process into cgroup.procs");
-			} else {
-				reset_capabilities();
-				close(cgroupfd);
-				close(subcgroupfd);
-				goto unshare;
-			}
+		if (close(cgroupfd) == -1) {
+			err(1, "outer_helper: close cgroup");
 		}
-
-		close(subcgroupfd);
-
-		reset_capabilities();
-
-		pid_t pid = fork();
-		if (pid == -1) {
-			err(1, "outer_helper: cgroup cleanup fork");
-		}
-
-		/* This process is intentionally left to leak as the bst root process must have exited
-			 and thus been removed from bst's cgroup.procs for the cgroup hierarchy to be removed */
-		if (pid == 0) {
-			/* Make sure all file descriptors except for the ones we're actually using
-			   get closed. This avoids keeping around file descriptors on which
-			   the parent process might be waiting on. */
-			rebind_fds_and_close_rest(3, &cgroupfd, NULL);
-			cgroup_helper(cgroupfd, child_pid);
-			_exit(0);
-		}
-
-		close(cgroupfd);
 	}
 
 unshare:

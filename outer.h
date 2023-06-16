@@ -21,8 +21,7 @@ struct outer_helper {
 	struct nic_options *nics;
 	size_t nnics;
 
-	bool cgroup_enabled;
-
+	enum cgroup_driver cgroup_driver;
 	char *cgroup_path;
 	struct climit *climits;
 	size_t nclimits;
