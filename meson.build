@@ -86,6 +86,8 @@ bst_sources = [
 	'bst_limits.c',
 	'capable.c',
 	'compat.c',
+	'cgroup.c',
+	'cgroup_native.c',
 	'enter.c',
 	'err.c',
 	'fd.c',

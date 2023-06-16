@@ -161,49 +161,15 @@ int enter(struct entry_settings *opts)
 		errx(1, "cannot create NICs when not in a network namespace");
 	}
 
-	char cgroup_path[PATH_MAX];
-	/* If there is a cgroup specified we need to create bst.<pid> subcgroup to join
-	   Otherwise if no cgroup is specified but limits are applied bst will error out. */
-	if (opts->nactiveclimits != 0 || opts->cgroup_path != NULL) {
-		// If cgroup path is unspecified then attempt to derive from /proc/self/cgroup.
-		if (opts->cgroup_path == NULL) {
-			FILE *selfcgroupfd = fopen("/proc/self/cgroup", "r");
-			if (selfcgroupfd == NULL) {
-				err(1, "unable to derive current cgroup hierarchy from /proc/self/cgroup");
-			}
-
-			const char *selfcgroup = NULL;
-			char line[BUFSIZ];
-			while (fgets(line, sizeof (line), selfcgroupfd) != NULL) {
-				if (strncmp(line, "0::/", sizeof ("0::/") - 1) == 0) {
-					// Remove newline character read by fgets
-					line[strcspn(line, "\n")] = '\0';
-					selfcgroup = line + 3;
-					break;
-				}
-			}
-			fclose(selfcgroupfd);
-
-			if (selfcgroup != NULL) {
-				makepath_r(cgroup_path, "/sys/fs/cgroup/%s", selfcgroup);
-			}
-			opts->cgroup_path = cgroup_path;
-		}
-
-		if (opts->nactiveclimits != 0 && opts->cgroup_path == NULL) {
-			errx(1, "unable to apply limits without --cgroup specified");
-		}
-	}
-
 	struct outer_helper outer_helper;
 	outer_helper.persist = opts->persist;
 	outer_helper.unshare_user = nsactions[NS_USER] == NSACTION_UNSHARE;
 	memcpy(outer_helper.uid_desired, opts->uid_map, sizeof (outer_helper.uid_desired));
 	memcpy(outer_helper.gid_desired, opts->gid_map, sizeof (outer_helper.gid_desired));
 	outer_helper.unshare_net = nsactions[NS_NET] == NSACTION_UNSHARE;
-	outer_helper.cgroup_enabled = (opts->nactiveclimits != 0 || opts->cgroup_path != NULL);
 	outer_helper.nics = opts->nics;
 	outer_helper.nnics = opts->nnics;
+	outer_helper.cgroup_driver = opts->cgroup_driver;
 	outer_helper.cgroup_path = opts->cgroup_path;
 	outer_helper.climits = opts->climits;
 	outer_helper.nclimits = opts->nactiveclimits;

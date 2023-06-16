@@ -58,6 +58,10 @@ enum {
 	OPTION_PIDFILE,
 	OPTION_IP,
 	OPTION_ROUTE,
+	OPTION_TTY,
+	OPTION_CLOSE_FD,
+	OPTION_CGROUP_DRIVER,
+
 	OPTION_NO_FAKE_DEVTMPFS,
 	OPTION_NO_DERANDOMIZE,
 	OPTION_NO_PROC_REMOUNT,
@@ -66,8 +70,6 @@ enum {
 	OPTION_NO_INIT,
 	OPTION_NO_ENV,
 	OPTION_NO_COPY_HARD_RLIMITS,
-	OPTION_TTY,
-	OPTION_CLOSE_FD,
 };
 
 static void process_nslist_entry(const char **out, const char *share, const char *path, int append_nsname)
@@ -273,6 +275,7 @@ int main(int argc, char *argv[], char *envp[])
 	opts.uid   = (uid_t) -1;
 	opts.gid   = (gid_t) -1;
 	opts.umask = (mode_t) -1;
+	opts.cgroup_driver = (enum cgroup_driver) -1;
 
 	static struct option options[] = {
 		{ "help",       no_argument,        NULL,           'h' },
@@ -309,6 +312,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ "route",              required_argument, NULL, OPTION_ROUTE           },
 		{ "tty",                optional_argument, NULL, OPTION_TTY             },
 		{ "close-fd",           optional_argument, NULL, OPTION_CLOSE_FD        },
+		{ "cgroup-driver",      required_argument, NULL, OPTION_CGROUP_DRIVER   },
 
 		/* Opt-out feature flags */
 		{ "no-copy-hard-rlimits", no_argument, NULL, OPTION_NO_COPY_HARD_RLIMITS },
@@ -656,6 +660,14 @@ int main(int argc, char *argv[], char *envp[])
 
 			case OPTION_CGROUP:
 				opts.cgroup_path = optarg;
+				break;
+
+			case OPTION_CGROUP_DRIVER:
+				if (strcmp(optarg, "native") == 0) {
+					opts.cgroup_driver = CGROUP_DRIVER_NATIVE;
+				} else {
+					errx(2, "unsupported cgroup driver '%s'", optarg);
+				}
 				break;
 
 			case OPTION_NO_FAKE_DEVTMPFS:
