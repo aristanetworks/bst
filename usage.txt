@@ -43,8 +43,9 @@ Options:
       --ip <address>,<dev>          Add an IP address to the specified interface.
       --route <route>               Add a route in the network namespace.
 
-      --cgroup <path>               Optionally set path for bst cgroup to be
-                                    created if --limits specified.
+      --cgroup-driver <driver>      Specify cgroup driver to use (native, systemd).
+      --cgroup <name>               Specify cgroup to join -- value dependent
+                                    on the cgroup driver in use.
       --limit <res>=<value>         Set the specified cgroup resource to the
                                     provided value(s).
       --try-limit <res>=<value>     Same as --limit but fails silently when the
