@@ -60,6 +60,9 @@ config.set('version', version)
 config.set('HAVE_SYS_mount_setattr', cc.has_header_symbol('syscall.h', 'SYS_mount_setattr'))
 config.set('HAVE_close_range', cc.has_function('close_range'))
 
+libdbus = dependency('dbus-1', required: false)
+config.set('HAVE_SYSTEMD', libdbus.found())
+
 configure_file(input: 'config.h.in', output: 'config.h', configuration: config)
 
 bst_init_sources = [
@@ -106,7 +109,11 @@ bst_sources = [
 	'userns.c',
 ]
 
-executable('bst', bst_sources, install: true)
+if libdbus.found()
+	bst_sources += ['cgroup_systemd.c']
+endif
+
+executable('bst', bst_sources, install: true, dependencies: [libdbus])
 
 if not get_option('no-setcap-or-suid')
 	capabilities = {

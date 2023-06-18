@@ -665,6 +665,10 @@ int main(int argc, char *argv[], char *envp[])
 			case OPTION_CGROUP_DRIVER:
 				if (strcmp(optarg, "native") == 0) {
 					opts.cgroup_driver = CGROUP_DRIVER_NATIVE;
+#ifdef HAVE_SYSTEMD
+				} else if (strcmp(optarg, "systemd") == 0) {
+					opts.cgroup_driver = CGROUP_DRIVER_SYSTEMD;
+#endif
 				} else {
 					errx(2, "unsupported cgroup driver '%s'", optarg);
 				}

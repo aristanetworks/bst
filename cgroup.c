@@ -9,14 +9,21 @@
 #include <unistd.h>
 
 #include "cgroup.h"
+#include "config.h"
 #include "fd.h"
 #include "path.h"
 #include "util.h"
 
 extern const struct cgroup_driver_funcs cgroup_driver_native;
+#ifdef HAVE_SYSTEMD
+extern const struct cgroup_driver_funcs cgroup_driver_systemd;
+#endif
 
 static const struct cgroup_driver_funcs *cgroup_drivers[] = {
 	[CGROUP_DRIVER_NATIVE] = &cgroup_driver_native,
+#ifdef HAVE_SYSTEMD
+	[CGROUP_DRIVER_SYSTEMD] = &cgroup_driver_systemd,
+#endif
 };
 
 static enum cgroup_driver cgroup_detected_driver = -1;
@@ -33,6 +40,9 @@ int cgroup_driver_init(enum cgroup_driver driver, bool fatal)
 	}
 
 	static enum cgroup_driver attempts[] = {
+#ifdef HAVE_SYSTEMD
+		CGROUP_DRIVER_SYSTEMD,
+#endif
 		CGROUP_DRIVER_NATIVE,
 	};
 
