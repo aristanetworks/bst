@@ -14,5 +14,6 @@
 
 #mesondefine HAVE_SYS_mount_setattr
 #mesondefine HAVE_close_range
+#mesondefine HAVE_SYSTEMD
 
 #endif /* !CONFIG_H_ */

@@ -11,6 +11,7 @@ struct cgroup_driver_funcs {
 
 enum cgroup_driver {
     CGROUP_DRIVER_NATIVE,
+    CGROUP_DRIVER_SYSTEMD,
 };
 
 int cgroup_driver_init(enum cgroup_driver driver, bool fatal);
