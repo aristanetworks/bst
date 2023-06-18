@@ -232,38 +232,55 @@ spacetime process.
 
 	Supported options are described in more detail in the *NETWORKING* section.
 
-\--cgroup <path>
-	Optionally specify the cgroup directory that bst will operate within. bst will create a
-	cgroup sub-hierarchy at the <path>. If not provided, <path> will assume the
-	cgroup directory of the current process.
+\--cgroup-driver <driver>
+	Specify the cgroup driver to use.
+
+	Valid values are _native_, or _systemd_.
+
+	The _native_ driver manages and cleans up cgroups directly, with no
+	intermediary. It is appropriate to use in situations where nothing is
+	owning the cgroups tree, like in most containers.
+
+	The _systemd_ driver defers the management of the cgroup to systemd. It
+	does so by creating a systemd scope unit via the D-Bus API. This driver
+	is appropriate for systemd-managed systems, as directly creating cgroups
+	without informing systemd on these systems causes bst to step on systemd's
+	toes, and vice-versa.
+
+	By default, *bst* will attempt to use the _systemd_ driver before falling
+	back to the _native_ driver.
+
+\--cgroup <name>
+	Specify the cgroup that *bst* will operate within. The interpretation of the
+	value depends on the driver in use:
+
+	If the driver is _native_, then this is a path to the cgroup directory that
+	will be used to create the *bst* cgroup.
+
+	If the driver is _systemd_, then this is the name of a systemd slice unit
+	under which the *bst* cgroup will be placed.
 
 \--limit <resource>=<value>
 	Apply a cgroup quota <value> to the provided <resource>. Multiple limits can
 	be specified in conjunction.
 
-	<value>=<resource> follow the interface of the underlying cgroup.
+	<resource>=<value> follow the interface of the underlying cgroup.
 
-	Valid <resource>=<value> pairs are:
-	- cpu.max=$MAX
-	- cpu.max="$MAX $PERIOD"
-	- cpu.weight=$WEIGHT
-	- memory.min=$MIN
-	- memory.low=$LOW
-	- memory.high=$HIGH
-	- memory.max=$MAX
-	- memory.swap.high=$HIGH
-	- memory.swap.max=$MAX
-	- io.weight=$WEIGHT
-	- io.max="$MAJ:$MIN rbps=$RIOPS wbps=$WBPS riops=$RIOPS wiops=$WIOPS"
-	- io.latency="$MAJ:$MIN target$MS"
-	- pids.max=$MAX
+	Common <resource>=<value> pairs include, for instance:
+	- *cpu.max*=$MAX
+	- *cpu.weight*=$WEIGHT
+	- *memory.min*=$MIN
+	- *memory.max*=$MAX
 
-	To use a <resource> ensure that the proper controller (io, cpu, memory) is
-	added to the cgroup.controller at the current process's cgroup or at the <path>
-	specified by --cgroup if provided.
+	Consult the CGroupsV2 documentation of your kernel for a full list of
+	possible resources.
+
+	To use a <resource> ensure that the proper controller (io, cpu, memory) has
+	been enabled in the parent cgroup.
 
 \--try-limit <resource>=<value>
-	Identical to _--limit_, but ignored if the resouce is unsupported by the kernel.
+	Identical to _--limit_, but ignored if the resouce is unsupported by the
+	kernel, or hasn't been enabled in the cgroup.subtree_control file.
 
 \--rlimit <resource>=<value>++
 \--rlimit <resource>=[hard]:[soft]
