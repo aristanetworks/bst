@@ -6,7 +6,7 @@ bst - run executables in their own spacetime.
 
 # SYNOPSIS
 
-bst [options] [--] [VAR=value...] [executable [args...]]
+bst [options] [--] [<VAR=value...> [--]] [executable [args...]]
 
 # DESCRIPTION
 
@@ -24,7 +24,10 @@ time, namespaces, and filesystem structure.
 Users of bst may choose to opt-out of some of the isolation.
 
 Environment variables can be overriden for the spacetime process by specifying
-_VAR=value_ before the executable to run.
+_VAR=value_ before the executable to run. This can be useful in conjunction
+with --no-env if environment variables used by bst (LC_\*, TERM, ...) and
+the setup program should be different from the environment variables of the
+spacetime process.
 
 # OPTIONS
 

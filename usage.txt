@@ -1,4 +1,4 @@
-usage: %1$s [-h] [options] [--] [VAR=value...] [exe [args ...]]
+usage: %1$s [-h] [options] [--] [<VAR=value...> [--]] [exe [args ...]]
 
 Chroot into <root> and execute <exe> with the specified arguments,
 setting up namespaces and other low-level minutiae that are needed in

@@ -796,27 +796,58 @@ int main(int argc, char *argv[], char *envp[])
 	}
 
 	/* Intepret any NAME=value at the start of the command line as environment
-	   variable overrides. */
+	   variable overrides.
+
+	   The general form is [<VAR=val...> [--]] [args...]. This is how the
+	   parsing works for the following commands:
+
+	   * bst --no-env -- FOO-BAR=baz env
+	       argv = [env]
+	       envp = [FOO-BAR=baz]
+	   * bst --no-env -- FOO-BAR=baz -- env
+	       argv = [env]
+	       envp = [FOO-BAR=baz]
+	   * bst --no-env -- FOO-BAR=baz -- -- env
+	       argv = [--, env]
+	       envp = [FOO-BAR=baz]
+	   * bst --no-env -- -- env
+	       argv = [--, env]
+	       envp = []
+	   * bst --no-env -- env
+	       argv = [env]
+	       envp = []
+	 */
+	bool has_env = false;
 	for (; optind + 1 <= argc; ++optind) {
+		/* Specifying another -- means we end the environment list.
+		   This is necessary to handle the case where the program name
+		   is untrusted and may contain a '='. */
+		if (!strcmp(argv[optind], "--")) {
+			/* This is the case where no environment variables are specified,
+			   but two -- were passed (e.g. bst -- -- arg).
+
+			   In this situation, we do not interpret the second --; it needs
+			   to be passed as-is as the first argument to init. */
+			if (has_env) {
+				++optind;
+			}
+			break;
+		}
+
 		char *c = argv[optind];
 		for (; *c != '\0'; ++c) {
 			if (*c == '=' && c != argv[optind]) {
 				newenv[i++] = argv[optind];
+				has_env = true;
 				break;
-			}
-			if (!isalnum(*c) && *c != '_') {
-				/* This is not a word, and thus not an environment variable
-				   name, meaning this is the program name. */
-				goto end;
 			}
 		}
 		if (*c == '\0') {
-			/* This was a word, but we didn't encounter an '='; this is also the
+			/* This was a word, but we didn't encounter an '='; this is the
 			   program name. */
 			break;
 		}
 	}
-end:
 	newenv[i] = NULL;
 
 	/* Use our own default init if we unshare the pid namespace, and no

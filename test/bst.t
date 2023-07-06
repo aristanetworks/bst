@@ -253,6 +253,22 @@ Testing Environment
 	ROOT=/
 	EXECUTABLE=/bin/true
 
+	$ bst --no-env -- FOO-BAR=baz env
+	FOO-BAR=baz
+
+	$ bst --no-env -- FOO-BAR=baz -- env
+	FOO-BAR=baz
+
+	$ bst --no-env -- FOO-BAR=baz -- -- env
+	bst-init: execvpe --: No such file or directory
+	[1]
+
+	$ bst --no-env -- -- env
+	bst-init: execvpe --: No such file or directory
+	[1]
+
+	$ bst --no-env -- env
+
 Testing close-fds
 
 	$ echo -n '--close-fd=3 should close fd 3: '
