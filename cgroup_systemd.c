@@ -224,8 +224,9 @@ static int cgroup_systemd_join_cgroup(const char *parent, const char *name)
 	ok = ok && dbus_message_iter_open_container(&iter, DBUS_TYPE_ARRAY, "(sv)", &props);
 
 	ok = ok && bus_message_append(&props, "(sv)(sv)(sv)(sv)",
-			"Description", "s", "/usr/bin/true",
+			"Description", "s", "bst",
 			"Delegate", "b", 1, /* Delegate all cgroup controllers to us */
+			"CollectMode", "s", "inactive-or-failed", /* Make sure failed invocations are garbage-collected */
 			"Slice", "s", parent,
 			"PIDs", "au", 1, (uint32_t)getpid());
 
