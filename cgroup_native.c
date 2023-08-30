@@ -15,9 +15,21 @@ static int cgroup_native_driver_init(bool fatal)
 	if (!cgroup_read_current(NULL)) {
 		return -1;
 	}
-	if (access("/sys/fs/cgroup/cgroup.controllers", F_OK) == -1) {
+
+	/* Attempting to open /sys/fs/cgroup/cgroup.procs privileged checks two
+	   things: first, that the cgroup hierarchy is v2 by checking that the
+	   file exists; and second, that the mounted cgroup hierarchy can be
+	   operated on, which might not be the case if bst was left in its
+	   original cgroup. */
+	make_capable(BST_CAP_DAC_OVERRIDE);
+	int fd = open("/sys/fs/cgroup/cgroup.procs", O_WRONLY, 0);
+	reset_capabilities();
+
+	if (fd == -1) {
 		return -1;
 	}
+	close(fd);
+
 	return 0;
 }
 
