@@ -663,7 +663,9 @@ int main(int argc, char *argv[], char *envp[])
 				break;
 
 			case OPTION_CGROUP_DRIVER:
-				if (strcmp(optarg, "native") == 0) {
+				if (strcmp(optarg, "none") == 0) {
+					opts.cgroup_driver = CGROUP_DRIVER_NONE;
+				} else if (strcmp(optarg, "native") == 0) {
 					opts.cgroup_driver = CGROUP_DRIVER_NATIVE;
 #ifdef HAVE_SYSTEMD
 				} else if (strcmp(optarg, "systemd") == 0) {

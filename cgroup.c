@@ -14,12 +14,14 @@
 #include "path.h"
 #include "util.h"
 
+extern const struct cgroup_driver_funcs cgroup_driver_none;
 extern const struct cgroup_driver_funcs cgroup_driver_native;
 #ifdef HAVE_SYSTEMD
 extern const struct cgroup_driver_funcs cgroup_driver_systemd;
 #endif
 
 static const struct cgroup_driver_funcs *cgroup_drivers[] = {
+	[CGROUP_DRIVER_NONE]   = &cgroup_driver_none,
 	[CGROUP_DRIVER_NATIVE] = &cgroup_driver_native,
 #ifdef HAVE_SYSTEMD
 	[CGROUP_DRIVER_SYSTEMD] = &cgroup_driver_systemd,
@@ -36,7 +38,11 @@ int cgroup_driver_init(enum cgroup_driver driver, bool fatal)
 		if (cgroup_detected_driver < 0 || cgroup_detected_driver >= lengthof(cgroup_drivers)) {
 			errx(1, "unknown cgroup driver ID %d", cgroup_detected_driver);
 		}
-		return cgroup_drivers[cgroup_detected_driver]->init(fatal);
+		int rc = cgroup_drivers[cgroup_detected_driver]->init(fatal);
+		if (rc < 0 && fatal) {
+			errx(1, "cgroup_driver_init: cgroup driver failed to initialize");
+		}
+		return rc;
 	}
 
 	static enum cgroup_driver attempts[] = {
@@ -233,3 +239,24 @@ void cgroup_enable_controllers(int cgroupfd)
 		err(1, "cgroup_enable_controllers: close cgroup.subtree_control");
 	}
 }
+
+static int cgroup_none_driver_init(bool fatal)
+{
+	return -1;
+}
+
+static bool cgroup_none_current_path(char *path)
+{
+	return false;
+}
+
+static int cgroup_none_join_cgroup(const char *parent, const char *name)
+{
+	return -1;
+}
+
+const struct cgroup_driver_funcs cgroup_driver_none = {
+	.init         = cgroup_none_driver_init,
+	.join_cgroup  = cgroup_none_join_cgroup,
+	.current_path = cgroup_none_current_path,
+};

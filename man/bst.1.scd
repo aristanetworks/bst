@@ -235,7 +235,7 @@ spacetime process.
 \--cgroup-driver <driver>
 	Specify the cgroup driver to use.
 
-	Valid values are _native_, or _systemd_.
+	Valid values are _native_, _systemd_, or _none_.
 
 	The _native_ driver manages and cleans up cgroups directly, with no
 	intermediary. It is appropriate to use in situations where nothing is
@@ -246,6 +246,10 @@ spacetime process.
 	is appropriate for systemd-managed systems, as directly creating cgroups
 	without informing systemd on these systems causes bst to step on systemd's
 	toes, and vice-versa.
+
+	The _none_ driver disables cgroup support -- *bst* will leave the child
+	process in the parent control group. Using this driver is not recommended
+	for typical use, but has worth in testing or maintaining compatibility.
 
 	By default, *bst* will attempt to use the _systemd_ driver before falling
 	back to the _native_ driver.

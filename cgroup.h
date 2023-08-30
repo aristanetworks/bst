@@ -4,14 +4,15 @@
 # include <stdbool.h>
 
 struct cgroup_driver_funcs {
-    int (*init)(bool fatal);
-    int (*join_cgroup)(const char *parent, const char *name);
-    bool (*current_path)(char *out);
+	int (*init)(bool fatal);
+	int (*join_cgroup)(const char *parent, const char *name);
+	bool (*current_path)(char *out);
 };
 
 enum cgroup_driver {
-    CGROUP_DRIVER_NATIVE,
-    CGROUP_DRIVER_SYSTEMD,
+	CGROUP_DRIVER_NONE,
+	CGROUP_DRIVER_NATIVE,
+	CGROUP_DRIVER_SYSTEMD,
 };
 
 int cgroup_driver_init(enum cgroup_driver driver, bool fatal);
