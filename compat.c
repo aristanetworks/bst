@@ -9,6 +9,7 @@
 #include <dirent.h>
 #include <err.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
@@ -56,9 +57,9 @@ int bst_close_range(unsigned int from, unsigned int to, unsigned int flags)
 	errno = ENOSYS;
 #endif
 
-	if (rc == -1 && errno == ENOSYS) {
-		/* The system call is not implemented. Fall back to the good old
-		   fashioned method.
+	if (rc == -1 && (errno == ENOSYS || errno == EINVAL)) {
+		/* The system call is not implemented, or it doesn't support
+		   CLOSE_RANGE_CLOEXEC. Fall back to the good old fashioned method.
 
 		   Note that this isn't particularly efficient. bst_close_range is
 		   itself called in a loop, which means traversing the list of fds
@@ -88,13 +89,24 @@ int bst_close_range(unsigned int from, unsigned int to, unsigned int flags)
 				continue;
 			}
 
-			/* Note: close takes a signed int, while close_range takes unsigned
-			   ints. I'm not too sure how negative file descriptors are handled
-			   (and I don't care much to be honest) so I'll just hope that the
-			   system call just reads out an unsigned integer kernel-side. */
+			/* Note: close/fcntl takes a signed int, while close_range takes
+			   unsigned ints. I'm not too sure how negative file descriptors
+			   are handled (and I don't care much to be honest) so I'll just
+			   hope that the system call just reads out an unsigned integer
+			   kernel-side. */
 
-			if (close((int) fd) == -1) {
-				err(1, "bst_close_range: close %d", fd);
+			if (flags & BST_CLOSE_RANGE_CLOEXEC) {
+				int fdflags = fcntl((int) fd, F_GETFD);
+				if (fdflags == -1) {
+					err(1, "bst_close_range: fcntl %d F_GETFD", fd);
+				}
+				if (fcntl((int) fd, F_SETFD, fdflags | FD_CLOEXEC) == -1) {
+					err(1, "bst_close_range: fcntl %d F_SETFD", fd);
+				}
+			} else {
+				if (close((int) fd) == -1) {
+					err(1, "bst_close_range: close %d", fd);
+				}
 			}
 		}
 
