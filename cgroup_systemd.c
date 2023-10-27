@@ -223,7 +223,7 @@ static int cgroup_systemd_join_cgroup(const char *parent, const char *name)
 	/* Set properties */
 	ok = ok && dbus_message_iter_open_container(&iter, DBUS_TYPE_ARRAY, "(sv)", &props);
 
-	ok = ok && bus_message_append(&props, "(sv)(sv)(sv)(sv)",
+	ok = ok && bus_message_append(&props, "(sv)(sv)(sv)(sv)(sv)",
 			"Description", "s", "bst",
 			"Delegate", "b", 1, /* Delegate all cgroup controllers to us */
 			"CollectMode", "s", "inactive-or-failed", /* Make sure failed invocations are garbage-collected */
