@@ -448,6 +448,12 @@ int enter(struct entry_settings *opts)
 
 	outer_helper_sync(&outer_helper);
 
+	/* Read the current cgroup before ns_enter_postfork; this allows us
+	   to get the real path to the cgroup */
+	char cgroup_path[PATH_MAX];
+	if (!cgroup_read_current(cgroup_path)) {
+		errx(1, "could not determine current cgroup; are you using cgroups v2?");
+	}
 	ns_enter_postfork(namespaces, ns_len);
 
 	outer_helper_close(&outer_helper);
@@ -480,6 +486,7 @@ int enter(struct entry_settings *opts)
 			/* Set some extra useful environment */
 			setenv("ROOT", root, 1);
 			setenv("EXECUTABLE", opts->pathname, 1);
+			setenv("CGROUP_PATH", cgroup_path, 1);
 
 			extern char **environ;
 
