@@ -529,6 +529,9 @@ The following environment variables are accessible to the setup program:
 *EXECUTABLE*
 	Set to the executable name that will be executed after the setup is done.
 
+*CGROUP_PATH*
+	Set to the path of the cgroup of the process that will be executed.
+
 # NETWORKING
 
 ## Creating network interfaces
