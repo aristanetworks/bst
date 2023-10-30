@@ -530,7 +530,9 @@ The following environment variables are accessible to the setup program:
 	Set to the executable name that will be executed after the setup is done.
 
 *CGROUP_PATH*
-	Set to the path of the cgroup of the process that will be executed.
+	Set to the path of the cgroup of the process that will be executed. Can
+	be missing if bst could not determine the cgroup path (e.g. only cgroups v1
+	are available, or /proc isn't mounted)
 
 # NETWORKING
 

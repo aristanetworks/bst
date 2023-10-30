@@ -452,7 +452,7 @@ int enter(struct entry_settings *opts)
 	   to get the real path to the cgroup */
 	char cgroup_path[PATH_MAX];
 	if (!cgroup_read_current(cgroup_path)) {
-		errx(1, "could not determine current cgroup; are you using cgroups v2?");
+		cgroup_path[0] = '\0';
 	}
 	ns_enter_postfork(namespaces, ns_len);
 
@@ -486,7 +486,9 @@ int enter(struct entry_settings *opts)
 			/* Set some extra useful environment */
 			setenv("ROOT", root, 1);
 			setenv("EXECUTABLE", opts->pathname, 1);
-			setenv("CGROUP_PATH", cgroup_path, 1);
+			if (cgroup_path[0] != '\0') {
+				setenv("CGROUP_PATH", cgroup_path, 1);
+			}
 
 			extern char **environ;
 
