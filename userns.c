@@ -90,6 +90,7 @@ void id_map_parse(id_map map, char *opt)
 
        $ cat /etc/subuid
        barney:100000:65535
+       barney:200000:100000
 
    Then, calling the function as such:
 
@@ -97,8 +98,9 @@ void id_map_parse(id_map map, char *opt)
 
    will populate the contents of `map` with the following data:
 
-       inner=0 outer=1000 1
+       inner=0 outer=1000   1
        inner=0 outer=100000 65535
+       inner=0 outer=200000 100000
  */
 void id_map_load_subids(id_map map, const char *subid_path, const struct id *id)
 {
@@ -165,14 +167,19 @@ void id_map_generate(id_map allotted, id_map out, const char *subid_path, const 
 			continue;
 		}
 
-		/* Ignore the [0-65535) range. */
-		if (range.outer <= ID_MAX) {
-			uint32_t shift = ID_MAX + 1 - range.outer;
-			if (shift > range.length) {
-				shift = range.length;
+		/* The current id already has been assigned; ignore it if it comes up
+		   in the allotted map. */
+		if (range.outer <= id->id && id->id < range.outer + range.length) {
+			uint32_t len = id->id - range.outer;
+			if (len != 0) {
+				/* Add range up to (but excluding) id->id */
+				j = id_map_append(tmp, j, cur_id, range.outer, len);
+				cur_id += len;
 			}
-			range.outer += shift;
-			range.length -= shift;
+
+			/* Change the range to start one past id->id */
+			range.outer = id->id + 1;
+			range.length -= len + 1;
 			continue;
 		}
 
