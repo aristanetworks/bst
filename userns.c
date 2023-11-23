@@ -123,6 +123,7 @@ void id_map_load_subids(id_map map, const char *subid_path, const struct id *id)
 	   size assumptions tend to bite back, and pages are extremely cheap. */
 	char line[4096];
 
+	bool found = false;
 	while (fgets(line, sizeof (line), subids) != NULL) {
 		char entryname[ID_STR_MAX + 1];
 		entryname[ID_STR_MAX] = 0;
@@ -145,9 +146,18 @@ void id_map_load_subids(id_map map, const char *subid_path, const struct id *id)
 		}
 
 		range = id_map_append(map, range, 0, start, length);
+		found = true;
 	}
 
 	fclose(subids);
+
+	/* We're root. We don't care. Map the host range 1:1 if there are no
+	   allotted subids */
+	if (!found && id->id == 0) {
+		/* UINT32_MAX - 1 is explicitly left out because the kernel rejects it
+		   (see user_namespaces(7)). */
+		id_map_append(map, 0, 0, 0, UINT32_MAX - 2);
+	}
 }
 
 void id_map_generate(id_map allotted, id_map out, const char *subid_path, const struct id *id)
@@ -188,14 +198,6 @@ void id_map_generate(id_map allotted, id_map out, const char *subid_path, const 
 		range.length = 0;
 	}
 
-	/* We're root. We don't care. Map the host range 1:1. */
-	if (cur_id == 1 && id->id == 0) {
-		/* UINT32_MAX - 1 is explicitly left out because the kernel rejects it
-		   (see user_namespaces(7)). */
-		id_map_append(tmp, 0, 0, 0, UINT32_MAX - 2);
-		goto end;
-	}
-
 	/* Not enough subuids for a full mapping, but, well, it's not the end of
 	   the world. Things might break, so let's at least tell the user. */
 
@@ -211,7 +213,6 @@ void id_map_generate(id_map allotted, id_map out, const char *subid_path, const 
 				name, subid_path, cur_id, ID_MAX);
 	}
 
-end:
 	memcpy(out, tmp, sizeof (tmp));
 }
 
