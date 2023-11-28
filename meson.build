@@ -137,6 +137,9 @@ if not get_option('no-setcap-or-suid')
 			meson.add_install_script(sh.path(), '-c', '@0@ @1@ ${MESON_INSTALL_DESTDIR_PREFIX}/bin/@2@'.format(setcap.path(), ','.join(caps) + '=p', bin))
 		endforeach
 	else
+		if not get_option('suid-fallback')
+			error('no setcap program available, and suid-fallback=true was not set')
+		endif
 		chmod = find_program('chmod')
 		foreach bin, _ : capabilities
 			meson.add_install_script(sh.path(), '-c', '@0@ u+s ${MESON_INSTALL_DESTDIR_PREFIX}/bin/@1@'.format(chmod.path(), bin))
