@@ -10,7 +10,10 @@
 #include <stdlib.h>
 #include <stdnoreturn.h>
 #include <string.h>
+#include <syslog.h>
 #include <unistd.h>
+
+#include "errutil.h"
 
 /* The err(3) function family is generally not prepared to deal with error
    handling after the tty has been changed to raw mode. They do not call
@@ -21,6 +24,7 @@
 
 void (*err_exit)(int) = exit;
 const char *err_line_ending = "\n";
+int err_flags = 0;
 
 /* fdprintf and vfdprintf are fork-safe versions of fprintf and vfprintf. */
 
@@ -45,8 +49,25 @@ static void fdprintf(int fd, const char *fmt, ...)
 
 extern const char *__progname;
 
+static void vwarnsyslog(int errcode, const char *fmt, va_list vl)
+{
+	static const char suffix[] = ": %m";
+	char newfmt[BUFSIZ];
+
+	char *tail = stpncpy(newfmt, fmt, sizeof (newfmt) - sizeof (suffix));
+	if (errcode != 0) {
+		stpncpy(tail, suffix, sizeof (suffix));
+	}
+
+	vsyslog(LOG_ERR, fmt, vl);
+}
+
 void vwarn(const char *fmt, va_list vl)
 {
+	if (err_flags & ERR_USE_SYSLOG) {
+		vwarnsyslog(errno, fmt, vl);
+		return;
+	}
 	fdprintf(STDERR_FILENO, "%s: ", __progname);
 	vfdprintf(STDERR_FILENO, fmt, vl);
 	fdprintf(STDERR_FILENO, ": %s%s", strerror(errno), err_line_ending);
@@ -54,6 +75,10 @@ void vwarn(const char *fmt, va_list vl)
 
 void vwarnx(const char *fmt, va_list vl)
 {
+	if (err_flags & ERR_USE_SYSLOG) {
+		vwarnsyslog(0, fmt, vl);
+		return;
+	}
 	fdprintf(STDERR_FILENO, "%s: ", __progname);
 	vfdprintf(STDERR_FILENO, fmt, vl);
 	write(STDERR_FILENO, err_line_ending, strlen(err_line_ending));

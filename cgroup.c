@@ -6,10 +6,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/epoll.h>
+#include <syslog.h>
 #include <unistd.h>
 
 #include "cgroup.h"
 #include "config.h"
+#include "errutil.h"
 #include "fd.h"
 #include "path.h"
 #include "util.h"
@@ -201,6 +203,14 @@ void cgroup_run_cleaner(int cgroupfd, int parentfd, const char *name)
 		   get closed. This avoids keeping around file descriptors on which
 		   the parent process might be waiting on. */
 		rebind_fds_and_close_rest(3, &cgroupfd, &parentfd, NULL);
+
+		/* From now on, use syslog to report error messages. This is necessary
+		   since the parent bst process might be gone by the time there's an
+		   error, and whatever started it might not be there to report the
+		   error anymore. */
+		openlog("bst", LOG_CONS | LOG_PID, LOG_USER);
+		err_flags |= ERR_USE_SYSLOG;
+
 		run_cleaner_child(cgroupfd, parentfd, name);
 		_exit(0);
 	}
