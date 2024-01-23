@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mount.h>
+#include <sys/random.h>
 #include <unistd.h>
 
 #include "capable.h"
@@ -300,8 +301,18 @@ void outer_helper_spawn(struct outer_helper *helper)
 	}
 
 	if (cgroup_driver_rc >= 0 && helper->cgroup_path != NULL) {
+		uint64_t id[2];
+		switch (getrandom(id, sizeof (id), 0)) {
+		case -1:
+			err(1, "outer_helper: getrandom");
+		case sizeof (id):
+			break;
+		default:
+			errx(1, "outer_helper: getrandom: did not return enough bytes");
+		}
+
 		char cgroupstr[PATH_MAX];
-		makepath_r(cgroupstr, "bst-%" PRIi32, child_pid);
+		makepath_r(cgroupstr, "bst-%" PRIx64 "%" PRIx64, id[0], id[1]);
 
 		int cgroupfd = cgroup_join(helper->cgroup_path, cgroupstr);
 		if (cgroupfd == -1) {
