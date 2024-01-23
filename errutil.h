@@ -7,7 +7,12 @@
 #ifndef ERRUTIL_H_
 # define ERRUTIL_H_
 
+enum {
+	ERR_USE_SYSLOG = 1,
+};
+
 extern void (*err_exit)(int);
 extern const char *err_line_ending;
+extern int err_flags;
 
 #endif /* !ERRUTIL_H */
