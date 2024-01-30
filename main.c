@@ -263,6 +263,7 @@ int usage(int error, char *argv0)
 
 int main(int argc, char *argv[], char *envp[])
 {
+    init_logverbosity();
 	init_capabilities();
 
 	static struct entry_settings opts;

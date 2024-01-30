@@ -26,6 +26,36 @@ void (*err_exit)(int) = exit;
 const char *err_line_ending = "\n";
 int err_flags = 0;
 
+/* Parse the BST_VERBOSITY environment variable to determine the requested
+   verbosity. Higher numbers are associated with more verbosity, with 9
+   being the most verbose and 0 being the least verbose. The default
+   verbosity level is 1. */
+
+static int parsedverbosity()
+{
+    char *pszVerbosity = getenv("BST_VERBOSITY");
+    if (pszVerbosity == NULL) {
+        return 1;
+    }
+    char *endPtr;
+    int iVerbosity = strtol(pszVerbosity, &endPtr, 10);
+    if (*endPtr != '\0') {
+        // Soemthing went wrong during parsing. This isn't
+        // critical so let's just ignore the parameter.
+        return 1;
+    }
+    return iVerbosity;
+}
+
+void init_logverbosity()
+{
+    int iVerbosity = parsedverbosity();
+
+    if (iVerbosity >= 1) {
+        err_flags |= ERR_VERBOSE;
+    }
+}
+
 /* fdprintf and vfdprintf are fork-safe versions of fprintf and vfprintf. */
 
 static void vfdprintf(int fd, const char *fmt, va_list vl)
@@ -64,6 +94,9 @@ static void vwarnsyslog(int errcode, const char *fmt, va_list vl)
 
 void vwarn(const char *fmt, va_list vl)
 {
+    if (!(err_flags & ERR_VERBOSE)) {
+        return;
+    }
 	if (err_flags & ERR_USE_SYSLOG) {
 		vwarnsyslog(errno, fmt, vl);
 		return;
@@ -75,6 +108,9 @@ void vwarn(const char *fmt, va_list vl)
 
 void vwarnx(const char *fmt, va_list vl)
 {
+    if (!(err_flags & ERR_VERBOSE)) {
+        return;
+    }
 	if (err_flags & ERR_USE_SYSLOG) {
 		vwarnsyslog(0, fmt, vl);
 		return;
