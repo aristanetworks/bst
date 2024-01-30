@@ -24,6 +24,7 @@
 #include "capable.h"
 #include "compat.h"
 #include "enter.h"
+#include "errutil.h"
 #include "kvlist.h"
 #include "util.h"
 #include "path.h"
