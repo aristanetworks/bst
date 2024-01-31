@@ -31,29 +31,28 @@ int err_flags = 0;
    being the most verbose and 0 being the least verbose. The default
    verbosity level is 1. */
 
-static int parsedverbosity()
+noreturn void err(int eval, const char *fmt, ...);
+static int parsedverbosity(void)
 {
-    char *pszVerbosity = getenv("BST_VERBOSITY");
-    if (pszVerbosity == NULL) {
-        return 1;
-    }
-    char *endPtr;
-    int iVerbosity = strtol(pszVerbosity, &endPtr, 10);
-    if (*endPtr != '\0') {
-        // Soemthing went wrong during parsing. This isn't
-        // critical so let's just ignore the parameter.
-        return 1;
-    }
-    return iVerbosity;
+	char *pszVerbosity = getenv("BST_VERBOSITY");
+	if (pszVerbosity == NULL) {
+		return 1;
+	}
+	char *endPtr;
+	int iVerbosity = strtol(pszVerbosity, &endPtr, 10);
+	if (*endPtr != '\0') {
+        err(2, "un-parsable value of BST_VERBOSITY");
+	}
+	return iVerbosity;
 }
 
-void init_logverbosity()
+void init_logverbosity(void)
 {
-    int iVerbosity = parsedverbosity();
+	int iVerbosity = parsedverbosity();
 
-    if (iVerbosity >= 1) {
-        err_flags |= ERR_VERBOSE;
-    }
+	if (iVerbosity >= 1) {
+		err_flags |= ERR_VERBOSE;
+	}
 }
 
 /* fdprintf and vfdprintf are fork-safe versions of fprintf and vfprintf. */

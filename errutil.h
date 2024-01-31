@@ -10,7 +10,7 @@
 enum {
 	ERR_USE_SYSLOG = 1,
 
-    ERR_VERBOSE = 2,
+	ERR_VERBOSE = 2,
 };
 
 extern void (*err_exit)(int);
