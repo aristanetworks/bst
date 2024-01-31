@@ -31,7 +31,6 @@ int err_flags = 0;
    being the most verbose and 0 being the least verbose. The default
    verbosity level is 1. */
 
-noreturn void err(int eval, const char *fmt, ...);
 static int parsedverbosity(void)
 {
 	char *pszVerbosity = getenv("BST_VERBOSITY");
@@ -41,7 +40,7 @@ static int parsedverbosity(void)
 	char *endPtr;
 	int iVerbosity = strtol(pszVerbosity, &endPtr, 10);
 	if (*endPtr != '\0') {
-        err(2, "un-parsable value of BST_VERBOSITY");
+		err(2, "un-parsable value of BST_VERBOSITY");
 	}
 	return iVerbosity;
 }
