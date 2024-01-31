@@ -40,7 +40,7 @@ static int parsedverbosity(void)
 	char *endPtr;
 	int iVerbosity = strtol(pszVerbosity, &endPtr, 10);
 	if (*endPtr != '\0') {
-		err(2, "un-parsable value of BST_VERBOSITY");
+		err(2, "un-parsable value of BST_VERBOSITY\n");
 	}
 	return iVerbosity;
 }
@@ -90,11 +90,8 @@ static void vwarnsyslog(int errcode, const char *fmt, va_list vl)
 	vsyslog(LOG_ERR, fmt, vl);
 }
 
-void vwarn(const char *fmt, va_list vl)
+static void vwarn(const char *fmt, va_list vl)
 {
-    if (!(err_flags & ERR_VERBOSE)) {
-        return;
-    }
 	if (err_flags & ERR_USE_SYSLOG) {
 		vwarnsyslog(errno, fmt, vl);
 		return;
@@ -104,11 +101,8 @@ void vwarn(const char *fmt, va_list vl)
 	fdprintf(STDERR_FILENO, ": %s%s", strerror(errno), err_line_ending);
 }
 
-void vwarnx(const char *fmt, va_list vl)
+static void vwarnx(const char *fmt, va_list vl)
 {
-    if (!(err_flags & ERR_VERBOSE)) {
-        return;
-    }
 	if (err_flags & ERR_USE_SYSLOG) {
 		vwarnsyslog(0, fmt, vl);
 		return;
@@ -120,6 +114,9 @@ void vwarnx(const char *fmt, va_list vl)
 
 void warn(const char *fmt, ...)
 {
+	if (!(err_flags & ERR_VERBOSE)) {
+		return;
+	}
 	va_list vl;
 	va_start(vl, fmt);
 	vwarn(fmt, vl);
@@ -128,6 +125,9 @@ void warn(const char *fmt, ...)
 
 void warnx(const char *fmt, ...)
 {
+	if (!(err_flags & ERR_VERBOSE)) {
+		return;
+	}
 	va_list vl;
 	va_start(vl, fmt);
 	vwarnx(fmt, vl);
