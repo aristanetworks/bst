@@ -24,6 +24,7 @@
 #include "capable.h"
 #include "compat.h"
 #include "enter.h"
+#include "errutil.h"
 #include "kvlist.h"
 #include "util.h"
 #include "path.h"
@@ -263,6 +264,7 @@ int usage(int error, char *argv0)
 
 int main(int argc, char *argv[], char *envp[])
 {
+    init_logverbosity();
 	init_capabilities();
 
 	static struct entry_settings opts;
