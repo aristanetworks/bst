@@ -191,7 +191,7 @@ static void run_cleaner_child(int lock, int parentfd, const char *name)
 	char populated[BUFSIZ];
 	for (;;) {
 		int ready = epoll_wait(epollfd, &event, 1, -1);
-		if (ready == -1) {
+		if (ready == -1 && errno != EINTR) {
 			warn("run_cgroup_child: epoll_wait cgroup.events");
 			goto recursiveClean;
 		}
