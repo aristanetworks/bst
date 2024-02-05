@@ -164,7 +164,7 @@ static void run_cleaner_child(int lock, int parentfd, const char *name)
 	}
 
 	struct epoll_event event = {
-		.events = EPOLLET,
+		.events = 0,
 	};
 
 	int epollfd = epoll_create1(0);
