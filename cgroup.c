@@ -1,4 +1,5 @@
 #include <err.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <ftw.h>
 #include <libgen.h>
@@ -123,19 +124,43 @@ static int rm_cgroup(const char *fpath, const struct stat *sb, int tflag, struct
 /* If bst has entered a cgroup this function will epoll the cgroup.events file
    to detect when all pids have exited the cgroup ("populated 0"). The cgroup is
    destroyed when this condition is met. */
-static void run_cleaner_child(int cgroupfd, int parentfd, const char *name)
+static void run_cleaner_child(int lock, int parentfd, const char *name)
 {
+	/* Wait for the parent to die before proceeding */
+	int ok;
+	switch (read(lock, &ok, sizeof (ok))) {
+	case -1:
+		warn("run_cgroup_child: read on lock");
+		goto lastDitchEffort;
+	case 0:
+		break;
+	}
+
+	int cgroupfd = openat(parentfd, name, O_RDONLY | O_DIRECTORY, 0);
+	if (cgroupfd == -1) {
+		switch (errno) {
+		case ENOENT:
+			/* Parent died before it made the cgroup; nothing to do */
+			return;
+		default:
+			warn("run_cgroup_child: open %s", name);
+			goto lastDitchEffort;
+		}
+	}
+
 	char fdpath[PATH_MAX];
 	makepath_r(fdpath, "/proc/self/fd/%d", cgroupfd);
 
 	char cgroup_path[PATH_MAX];
 	if (readlink(fdpath, cgroup_path, sizeof (cgroup_path)) == -1) {
-		err(1, "cgroup_run_cleaner: readlink");
+		warn("run_cgroup_child: readlink");
+		goto lastDitchEffort;
 	}
 
 	int eventfd = openat(cgroupfd, "cgroup.events", 0);
 	if (eventfd == -1) {
-		err(1, "unable to open cgroup.events");
+		warn("run_cgroup_child: open cgroup.events");
+		goto recursiveClean;
 	}
 
 	struct epoll_event event = {
@@ -144,11 +169,13 @@ static void run_cleaner_child(int cgroupfd, int parentfd, const char *name)
 
 	int epollfd = epoll_create1(0);
 	if (epollfd == -1) {
-		err(1, "epoll_create1");
+		warn("run_cgroup_child: epoll_create1");
+		goto recursiveClean;
 	}
 
 	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, eventfd, &event) == -1) {
-		err(1, "epoll_ctl_add cgroupfd");
+		warn("run_cgroup_child: epoll_ctl_add cgroupfd");
+		goto recursiveClean;
 	}
 
 	/* The first event is the initial state of the file; skip it, because
@@ -157,14 +184,16 @@ static void run_cleaner_child(int cgroupfd, int parentfd, const char *name)
 
 	FILE *eventsfp = fdopen(eventfd, "r");
 	if (eventsfp == NULL) {
-		err(1, "unable to open file pointer to cgroup.events");
+		warn("run_cgroup_child: fdopen cgroup.events");
+		goto recursiveClean;
 	}
 
 	char populated[BUFSIZ];
 	for (;;) {
 		int ready = epoll_wait(epollfd, &event, 1, -1);
 		if (ready == -1) {
-			err(1, "epoll_wait cgroup.events");
+			warn("run_cgroup_child: epoll_wait cgroup.events");
+			goto recursiveClean;
 		}
 
 		rewind(eventsfp);
@@ -172,37 +201,53 @@ static void run_cleaner_child(int cgroupfd, int parentfd, const char *name)
 		/* The order of elements in cgroup.events is not necessarily specified. */
 		while (fgets(populated, BUFSIZ, eventsfp) != NULL) {
 			if (strnlen(populated, sizeof(populated)) == sizeof(populated)) {
-				err(1, "exceeded cgroup.events line read buffer");
+				warn("run_cgroup_child: exceeded cgroup.events line read buffer");
+				goto recursiveClean;
 			}
 			if (strncmp(populated, "populated 0", 11) == 0) {
-				nftw(cgroup_path, rm_cgroup, 128, 0);
-
-				/* Let the process exit; no need to clean up fds */
-				return;
+				goto recursiveClean;
 			}
 		}
 	}
+
+	/* Let the process exit; no need to clean up fds. We don't need to
+	   set any exit code since no parent process cares about them. */
+
+recursiveClean:
+	nftw(cgroup_path, rm_cgroup, 128, 0);
+	return;
+
+lastDitchEffort:
+	if (unlinkat(parentfd, name, AT_REMOVEDIR) == -1) {
+		warn("run_cgroup_child: unlinkat");
+	}
+	return;
 }
 
-void cgroup_run_cleaner(int cgroupfd, int parentfd, const char *name)
+void cgroup_start_cleaner(int parentfd, const char *name)
 {
+	int fds[2];
+	if (pipe2(fds, O_CLOEXEC) == -1) {
+		err(1, "cgroup_start_cleaner: pipe2");
+	}
+
 	pid_t pid = fork();
 	if (pid == -1) {
-		err(1, "cgroup_run_cleaner: fork");
+		err(1, "cgroup_start_cleaner: fork");
 	}
 
 	/* This process is intentionally left to leak as the bst root process must have exited
-		 and thus been removed from bst's cgroup.procs for the cgroup hierarchy to be removed */
+	   and thus been removed from bst's cgroup.procs for the cgroup hierarchy to be removed */
 	if (pid == 0) {
 		/* Create a new session in case current group leader is killed */
 		if (setsid() == -1) {
-			err(1, "unable to create new session leader for cgroup cleanup process");
+			err(1, "cgroup_start_cleaner: setsid");
 		}
 
 		/* Make sure all file descriptors except for the ones we're actually using
 		   get closed. This avoids keeping around file descriptors on which
 		   the parent process might be waiting on. */
-		rebind_fds_and_close_rest(3, &cgroupfd, &parentfd, NULL);
+		rebind_fds_and_close_rest(3, &fds[0], &parentfd, NULL);
 
 		/* From now on, use syslog to report error messages. This is necessary
 		   since the parent bst process might be gone by the time there's an
@@ -211,9 +256,15 @@ void cgroup_run_cleaner(int cgroupfd, int parentfd, const char *name)
 		openlog("bst", LOG_CONS | LOG_PID, LOG_USER);
 		err_flags |= ERR_USE_SYSLOG;
 
-		run_cleaner_child(cgroupfd, parentfd, name);
+		run_cleaner_child(fds[0], parentfd, name);
 		_exit(0);
 	}
+
+	close(fds[0]);
+
+	/* Deliberately leak fds[1]. This _is_ important. It will get closed
+	   once this process dies, releasing the read(2) lock of the cgroup
+	   cleaner. */
 }
 
 void cgroup_enable_controllers(int cgroupfd)
