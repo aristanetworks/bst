@@ -45,6 +45,9 @@ static int cgroup_native_join_cgroup(const char *parent, const char *name)
 		err(1, "cgroup_native_join_cgroup: open %s", parent);
 	}
 
+	/* Start cleaner daemon; it will remove the cgroup once this process dies. */
+	cgroup_start_cleaner(parentfd, name);
+
 	if (mkdirat(parentfd, name, 0777) == -1) {
 		err(1, "cgroup_native_join_cgroup: mkdir %s under %s", name, parent);
 	}
@@ -70,9 +73,6 @@ static int cgroup_native_join_cgroup(const char *parent, const char *name)
 		warn("cgroup_native_join_cgroup: access cgroup.procs under %s", parent);
 		goto unlink;
 	}
-
-	/* Start cleaner daemon; it will remove the cgroup once this process dies. */
-	cgroup_run_cleaner(cgroupfd, parentfd, name);
 
 	if (write(procs, "0", 1) == (ssize_t)-1) {
 		warn("cgroup_native_join_cgroup: write cgroup.procs");
