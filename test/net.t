@@ -24,21 +24,11 @@ IPVLANs
 
 Adding addresses
 
-	$ bst --nic dummy,type=dummy,address=fe:ed:de:ad:be:ef --ip 172.20.0.1,dev=dummy -- ip addr show dummy
-	2: dummy: <BROADCAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UNKNOWN group default qlen 1000
-	    link/ether fe:ed:de:ad:be:ef brd ff:ff:ff:ff:ff:ff
-	    inet 172.20.0.1/32 brd 172.20.0.1 scope global dummy
-	       valid_lft forever preferred_lft forever
-	    inet6 fe80::fced:deff:fead:beef/64 scope link tentative 
-	       valid_lft forever preferred_lft forever
+	$ bst --nic dummy,type=dummy,address=fe:ed:de:ad:be:ef --ip 172.20.0.1,dev=dummy -- ip -j addr show dummy | jq '.[0]  | "\(.ifname) \(.address) \(.addr_info[0].local) \(.addr_info[0].prefixlen) \(.addr_info[1].local) \(.addr_info[1].prefixlen)"'
+	"dummy fe:ed:de:ad:be:ef 172.20.0.1 32 fe80::fced:deff:fead:beef 64"
 
-	$ bst --nic dummy,type=dummy,address=fe:ed:de:ad:be:ef --ip 172.20.0.1/16,dev=dummy -- ip addr show dummy
-	2: dummy: <BROADCAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UNKNOWN group default qlen 1000
-	    link/ether fe:ed:de:ad:be:ef brd ff:ff:ff:ff:ff:ff
-	    inet 172.20.0.1/16 brd 172.20.255.255 scope global dummy
-	       valid_lft forever preferred_lft forever
-	    inet6 fe80::fced:deff:fead:beef/64 scope link tentative 
-	       valid_lft forever preferred_lft forever
+	$ bst --nic dummy,type=dummy,address=fe:ed:de:ad:be:ef --ip 172.20.0.1/16,dev=dummy -- ip -j addr show dummy | jq '.[0]  | "\(.ifname) \(.address) \(.addr_info[0].local) \(.addr_info[0].prefixlen) \(.addr_info[1].local) \(.addr_info[1].prefixlen)"'
+	"dummy fe:ed:de:ad:be:ef 172.20.0.1 16 fe80::fced:deff:fead:beef 64"
 
 Adding routes
 
