@@ -5,6 +5,7 @@
  */
 
 #include <err.h>
+#include <fcntl.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <sys/socket.h>
@@ -99,5 +100,24 @@ void rebind_fds_and_close_rest(int start_fd, ...)
 
 	if (bst_close_range(start_fd, ~0U, 0) == -1) {
 		err(1, "close_range");
+	}
+}
+
+/* close_null closes fd by rebinding it to /dev/null.
+   This is done to avoid leaving the old fd number unoccupied,
+   which can cause issues for the standard file descriptor numbers. */
+void close_null(int fd)
+{
+	int nfd = open("/dev/null", O_RDWR | O_CLOEXEC);
+	if (nfd == -1) {
+		err(1, "close_null: open /dev/null");
+	}
+
+	if (dup3(nfd, fd, O_CLOEXEC) == -1) {
+		err(1, "close_null: dup2 fd %d -> /dev/null", fd);
+	}
+
+	if (close(nfd) == -1) {
+		err(1, "close_null: close");
 	}
 }

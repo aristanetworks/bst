@@ -10,5 +10,6 @@
 int recv_fd(int socket);
 void send_fd(int socket, int fd);
 void rebind_fds_and_close_rest(int start_fd, ...);
+void close_null(int fd);
 
 #endif /* !FD_H */
