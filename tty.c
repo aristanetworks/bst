@@ -125,6 +125,12 @@ static int send_veof(int ptm)
 		err(1, "send_veof: tcgetattr");
 	}
 
+	/* The terminal is is noncanonical mode; VEOF won't be interpreted. */
+	if (!(tios.c_lflag & ICANON)) {
+		errno = ENOTSUP;
+		return -1;
+	}
+
 	return write(ptm, &tios.c_cc[VEOF], 1);
 }
 
@@ -180,6 +186,11 @@ static struct buffer inbound_buffer, outbound_buffer;
 
 static int tty_handle_io(int epollfd, const struct epoll_event *ev, int fd, pid_t pid)
 {
+	/* The terminal got closed -- don't try to handle I/O any further */
+	if (info.termfd == -1) {
+		return EPOLL_HANDLER_CONTINUE;
+	}
+
 	struct epoll_handler *handler = ev->data.ptr;
 
 	if (fd == inbound_handler.fd) {
@@ -232,7 +243,12 @@ static int tty_handle_io(int epollfd, const struct epoll_event *ev, int fd, pid_
 			err(1, "epoll_ctl_mod stdin");
 		}
 	} else if ((inbound_handler.ready & (WRITE_READY | HANGUP)) == (WRITE_READY | HANGUP)) {
+		inbound_handler.ready &= ~HANGUP;
+
 		if (send_veof(inbound_handler.peer_fd) == -1) {
+			if (errno == ENOTSUP) {
+				goto hangup;
+			}
 			err(1, "send_eof: write");
 		}
 
@@ -242,15 +258,16 @@ static int tty_handle_io(int epollfd, const struct epoll_event *ev, int fd, pid_
 		   EOF. */
 		if (send_veof(inbound_handler.peer_fd) == -1) {
 			switch (errno) {
+			case ENOTSUP:
+				goto hangup;
 			case EAGAIN:
 				/* The pty device isn't ready for a second VEOF -- that's fine,
-				   we'll just send it later */
+				   we'll just send it later, so re-set the hangup flag */
+				inbound_handler.ready |= HANGUP;
 				break;
 			default:
 				err(1, "send_eof: write");
 			}
-		} else {
-			inbound_handler.ready &= ~HANGUP;
 		}
 	}
 
@@ -291,6 +308,11 @@ static int tty_handle_io(int epollfd, const struct epoll_event *ev, int fd, pid_
 		}
 	}
 
+	return EPOLL_HANDLER_CONTINUE;
+
+hangup:
+	close(info.termfd);
+	info.termfd = -1;
 	return EPOLL_HANDLER_CONTINUE;
 }
 
