@@ -97,6 +97,9 @@ static ssize_t io_copy(int out_fd, int in_fd, struct buffer *buf)
 			}
 			return -1;
 		}
+		if (rd == 0) {
+			return copied;
+		}
 		buf->size = (size_t) rd;
 		buf->index = 0;
 	}
@@ -134,26 +137,37 @@ static int send_veof(int ptm)
 	return write(ptm, &tios.c_cc[VEOF], 1);
 }
 
+static void tty_parent_resetterm(void)
+{
+	tcsetattr(STDIN_FILENO, TCSADRAIN, &info.orig);
+	info.stdinIsatty = false;
+}
+
+static void tty_parent_drain(void)
+{
+	/* Drain any remaining data in the terminal buffer */
+	set_nonblock(STDOUT_FILENO, 0);
+	set_nonblock(info.termfd, 0);
+	struct buffer drain = {
+		.size = 0,
+	};
+
+	if (io_copy(STDOUT_FILENO, info.termfd, &drain) == -1 && errno != EIO) {
+		warn("copy tty -> stdout");
+	}
+
+	close_null(STDOUT_FILENO);
+	close(info.termfd);
+	info.termfd = -1;
+}
+
 void tty_parent_cleanup(void)
 {
 	if (info.termfd >= 0) {
-		/* Drain any remaining data in the terminal buffer */
-		set_nonblock(STDOUT_FILENO, 0);
-		set_nonblock(info.termfd, 0);
-		struct buffer drain = {
-			.size = 0,
-		};
-
-		if (io_copy(STDOUT_FILENO, info.termfd, &drain) == -1 && errno != EIO) {
-			warn("copy tty -> stdout");
-		}
-
-		close(info.termfd);
-		info.termfd = -1;
+		tty_parent_drain();
 	}
 	if (info.stdinIsatty) {
-		tcsetattr(STDIN_FILENO, TCSADRAIN, &info.orig);
-		info.stdinIsatty = false;
+		tty_parent_resetterm();
 	}
 }
 
@@ -235,6 +249,11 @@ static int tty_handle_io(int epollfd, const struct epoll_event *ev, int fd, pid_
 
 		inbound_handler.ready &= ~(READ_READY|WRITE_READY);
 
+		if (copied == 0) {
+			tty_parent_drain();
+			return EPOLL_HANDLER_CONTINUE;
+		}
+
 		struct epoll_event newev = {
 			.events = EPOLLIN | EPOLLONESHOT,
 			.data.ptr = &inbound_handler,
@@ -276,11 +295,17 @@ static int tty_handle_io(int epollfd, const struct epoll_event *ev, int fd, pid_
 		/* outbound_handler.fd might contain our eventfd workaround */
 		int write_fd = STDOUT_FILENO;
 
-		if (io_copy(write_fd, read_fd, &outbound_buffer) == -1) {
+		ssize_t copied = io_copy(write_fd, read_fd, &outbound_buffer);
+		if (copied == -1) {
 			err(1, "copy tty -> stdout");
 		}
 
 		outbound_handler.ready = 0;
+
+		if (copied == 0) {
+			close_null(write_fd);
+			return EPOLL_HANDLER_CONTINUE;
+		}
 
 		struct epoll_event newev = {
 			.events = EPOLLOUT | EPOLLONESHOT,
@@ -338,8 +363,9 @@ void tty_parent_setup(struct tty_opts *opts, int epollfd, int socket)
 		/* We changed the terminal to raw mode. Line-endings now need carriage
 		   returns in order to be palatable. */
 		err_line_ending = "\r\n";
+
+		atexit(tty_parent_resetterm);
 	}
-	atexit(tty_parent_cleanup);
 
 	// Wait for the child to create the pty pair and pass the master back.
 	info.termfd = recv_fd(socket);
