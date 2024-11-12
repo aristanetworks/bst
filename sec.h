@@ -12,4 +12,6 @@
 int sec_seccomp_install_filter(void);
 noreturn void sec_seccomp_supervisor(int);
 
+extern int sec_seccomp_fix_stat_32bit;
+
 #endif /* !SEC_H_ */
