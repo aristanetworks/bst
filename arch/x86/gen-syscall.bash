@@ -13,6 +13,12 @@ declare -A x86_64_syscalls=(
 declare -A i386_syscalls=(
 	["mknod"]="14"
 	["mknodat"]="297"
+
+	["stat64"]="195"
+	["lstat64"]="196"
+	["fstat64"]="197"
+	["fstatat64"]="300"
+	["statx"]="383"
 )
 
 prelude=(

@@ -29,6 +29,8 @@
 #include "sec.h"
 #include "util.h"
 
+int sec_seccomp_fix_stat_32bit = 0;
+
 typedef int syscall_handler_func(int, int, struct seccomp_notif *);
 
 enum {
@@ -308,6 +310,259 @@ static int sec__mknodat(int seccomp_fd, int procfd, struct seccomp_notif *req)
 	return sec__mknodat_impl(seccomp_fd, procfd, req, dirfd, pathnameaddr, mode, dev);
 }
 
+struct statx_args {
+	int dirfd;
+	char pathname[PATH_MAX];
+	int flags;
+	unsigned int mask;
+	struct statx statxbuf;
+};
+
+static int do_statx(int dirfd, char *pathname, int flags, unsigned int mask, struct statx *statxbuf)
+{
+	/* We always mock timestamps, so no need to query them. */
+	mask &= ~(STATX_ATIME | STATX_BTIME | STATX_MTIME | STATX_CTIME);
+
+	if (statx(dirfd, pathname, flags, mask, statxbuf) == -1) {
+		return -errno;
+	}
+
+	/* Normalize the timestamps to a fixed 32-bit date. */
+	struct statx_timestamp well_known_date = {
+		.tv_sec = 946728000, /* 2000-01-01 12:00:00 +0000 UTC */
+	};
+
+	statxbuf->stx_atime = well_known_date;
+	statxbuf->stx_btime = well_known_date;
+	statxbuf->stx_mtime = well_known_date;
+	statxbuf->stx_ctime = well_known_date;
+
+	/* Normalize the inode so that it fits in 32-bit space.
+	   There's no good way to solve this perfectly, but a reasonable compromise
+	   that keeps the (dev, ino) pair unique is to move the upper 32-bits into
+	   st_dev. On the 32-bit stat struct however, st_dev is also 32-bit wide,
+	   which means we have to split the upper and lower 16 bits of the upper
+	   32-bits of stx_ino into the minor and major numbers of st_dev
+	   respectively.
+	  */
+	const uint32_t prime32 = 3432918353;
+	const uint16_t prime16 = 62533;
+
+	if (statxbuf->stx_ino > UINT32_MAX) {
+		uint32_t major, minor;
+		minor  = (uint32_t)statxbuf->stx_dev_minor * prime32;
+		minor ^= ((statxbuf->stx_ino >> 48) & 0xffff);
+		statxbuf->stx_dev_minor = minor;
+		major  = (uint32_t)statxbuf->stx_dev_major * prime32;
+		major ^= ((statxbuf->stx_ino >> 32) & 0xffff);
+		statxbuf->stx_dev_major = major;
+		statxbuf->stx_ino &= 0xffffffff;
+	}
+	if (statxbuf->stx_dev_major > UINT16_MAX) {
+		uint16_t major;
+		major  = (uint16_t)statxbuf->stx_dev_major * prime16;
+		major ^= (uint16_t)(statxbuf->stx_dev_major >> 16);
+		statxbuf->stx_dev_major = major;
+	}
+	if (statxbuf->stx_dev_minor > UINT16_MAX) {
+		uint16_t minor;
+		minor  = (uint16_t)statxbuf->stx_dev_minor * prime16;
+		minor ^= (uint16_t)(statxbuf->stx_dev_minor >> 16);
+		statxbuf->stx_dev_minor = minor;
+	}
+	return 0;
+}
+
+static int sec__statx_callback(int procfd, void *cookie)
+{
+	struct statx_args *args = cookie;
+	return do_statx(args->dirfd, args->pathname, args->flags, args->mask, &args->statxbuf);
+}
+
+static int sec__statx(int seccomp_fd, int procfd, struct seccomp_notif *req)
+{
+	int dirfd = req->data.args[0];
+	uintptr_t pathnameaddr = req->data.args[1];
+	int flags = req->data.args[2];
+	unsigned int mask = req->data.args[3];
+	uintptr_t statxbufaddr = req->data.args[4];
+
+	int realdirfd = resolve_dirfd(procfd, dirfd);
+	if (realdirfd < 0) {
+		return realdirfd;
+	}
+
+	struct statx_args args = {
+		.dirfd = realdirfd,
+		.flags = flags,
+		.mask = mask,
+	};
+
+	struct arg_buf in[] = {
+		{
+			.addr = pathnameaddr,
+			.buf  = &args.pathname[0],
+			.size = PATH_MAX-1,
+		},
+		{
+			.addr = 0,
+		},
+	};
+
+	struct arg_buf out[] = {
+		{
+			.addr = statxbufaddr,
+			.buf  = (char *)&args.statxbuf,
+			.size = sizeof (struct statx),
+		},
+		{
+			.addr = 0,
+		},
+	};
+
+	int rc = run_in_process_context(seccomp_fd, procfd, req, in, out, &args, sec__statx_callback);
+
+	close(realdirfd);
+	return rc;
+}
+
+struct sec__stat64 {
+	uint64_t dev;
+	uint64_t ino;
+	uint64_t nlink;
+
+	uint32_t mode;
+	uint32_t uid;
+	uint32_t gid;
+	uint32_t __pad0;
+	uint64_t rdev;
+	int64_t size;
+	int64_t blksize;
+	int64_t blocks;
+
+	uint64_t atime;
+	uint64_t atime_nsec;
+	uint64_t mtime;
+	uint64_t mtime_nsec;
+	uint64_t ctime;
+	uint64_t ctime_nsec;
+	int64_t __unused[3];
+};
+
+struct fstatat64_args {
+	int dirfd;
+	char pathname[PATH_MAX];
+	int flags;
+	unsigned int mask;
+	struct sec__stat64 statbuf;
+};
+
+static inline uint64_t makedev64(uint32_t major, uint32_t minor)
+{
+	/* We can't use makedev() since it's bit-dependent */
+	uint64_t dev;
+	dev  = (((dev_t) (major & 0x00000fffu)) <<  8);
+	dev |= (((dev_t) (major & 0xfffff000u)) << 32);
+	dev |= (((dev_t) (minor & 0x000000ffu)) <<  0);
+	dev |= (((dev_t) (minor & 0xffffff00u)) << 12);
+	return dev;
+}
+
+static int sec__fstatat64_callback(int procfd, void *cookie)
+{
+	struct fstatat64_args *args = cookie;
+	struct statx statxbuf;
+
+	int rc = do_statx(args->dirfd, args->pathname, args->flags, STATX_BASIC_STATS, &statxbuf);
+	if (rc < 0) {
+		return rc;
+	}
+
+	args->statbuf.dev = makedev64(statxbuf.stx_dev_major, statxbuf.stx_dev_minor);
+	args->statbuf.ino = statxbuf.stx_ino;
+	args->statbuf.nlink = statxbuf.stx_nlink;
+	args->statbuf.mode = statxbuf.stx_mode;
+	args->statbuf.uid = statxbuf.stx_uid;
+	args->statbuf.gid = statxbuf.stx_gid;
+	args->statbuf.rdev = makedev64(statxbuf.stx_rdev_major, statxbuf.stx_rdev_minor);
+	args->statbuf.size = statxbuf.stx_size;
+	args->statbuf.blksize = statxbuf.stx_blksize;
+	args->statbuf.blocks = statxbuf.stx_blocks;
+	args->statbuf.atime = statxbuf.stx_atime.tv_sec;
+	args->statbuf.atime_nsec = statxbuf.stx_atime.tv_nsec;
+	args->statbuf.mtime = statxbuf.stx_mtime.tv_sec;
+	args->statbuf.mtime_nsec = statxbuf.stx_mtime.tv_nsec;
+	args->statbuf.ctime = statxbuf.stx_ctime.tv_sec;
+	args->statbuf.ctime_nsec = statxbuf.stx_ctime.tv_nsec;
+
+	return 0;
+}
+
+static int sec__fstatat64_impl(int seccomp_fd, int procfd,
+		struct seccomp_notif *req,
+		int dirfd,
+		uintptr_t pathnameaddr,
+		uintptr_t statbufaddr,
+		int flags)
+{
+	int realdirfd = resolve_dirfd(procfd, dirfd);
+	if (realdirfd < 0) {
+		return realdirfd;
+	}
+
+	struct fstatat64_args args = {
+		.dirfd = realdirfd,
+		.flags = flags,
+	};
+
+	struct arg_buf in[] = {
+		{
+			.addr = pathnameaddr,
+			.buf  = &args.pathname[0],
+			.size = PATH_MAX-1,
+		},
+		{
+			.addr = 0,
+		},
+	};
+
+	struct arg_buf out[] = {
+		{
+			.addr = statbufaddr,
+			.buf  = (char *)&args.statbuf,
+			.size = sizeof (struct sec__stat64),
+		},
+		{
+			.addr = 0,
+		},
+	};
+
+	int rc = run_in_process_context(seccomp_fd, procfd, req, in, out, &args, sec__fstatat64_callback);
+
+	close(realdirfd);
+	return rc;
+}
+
+static int sec__stat64(int seccomp_fd, int procfd, struct seccomp_notif *req)
+{
+	return sec__fstatat64_impl(seccomp_fd, procfd, req, AT_FDCWD, req->data.args[0], req->data.args[1], 0);
+}
+
+static int sec__lstat64(int seccomp_fd, int procfd, struct seccomp_notif *req)
+{
+	return sec__fstatat64_impl(seccomp_fd, procfd, req, AT_FDCWD, req->data.args[0], req->data.args[1], AT_SYMLINK_NOFOLLOW);
+}
+
+static int sec__fstat64(int seccomp_fd, int procfd, struct seccomp_notif *req)
+{
+	return sec__fstatat64_impl(seccomp_fd, procfd, req, req->data.args[0], 0, req->data.args[1], AT_EMPTY_PATH);
+}
+
+static int sec__fstatat64(int seccomp_fd, int procfd, struct seccomp_notif *req)
+{
+	return sec__fstatat64_impl(seccomp_fd, procfd, req, req->data.args[0], req->data.args[1], req->data.args[2], req->data.args[3]);
+}
+
 static int seccomp(unsigned int op, unsigned int flags, void *args)
 {
 	return syscall(__NR_seccomp, op, flags, args);
@@ -350,6 +605,22 @@ static void sec_seccomp_dispatch_syscall(int seccomp_fd,
 #endif
 		[BST_NR_mknodat_32] = sec__mknodat,
 	};
+
+	if (sec_seccomp_fix_stat_32bit) {
+#ifdef BST_NR_stat64_32
+		syscall_table_32[BST_NR_stat64_32] = sec__stat64;
+#endif
+#ifdef BST_NR_lstat64_32
+		syscall_table_32[BST_NR_lstat64_32] = sec__lstat64;
+#endif
+#ifdef BST_NR_fstat64_32
+		syscall_table_32[BST_NR_fstat64_32] = sec__fstat64;
+#endif
+#ifdef BST_NR_fstatat64_32
+		syscall_table_32[BST_NR_fstatat64_32] = sec__fstatat64;
+#endif
+		syscall_table_32[BST_NR_statx_32] = sec__statx;
+	}
 #endif
 
 	resp->id = req->id;
