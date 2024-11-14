@@ -131,6 +131,16 @@ static int cmp_epoll_handler(const void *a, const void *b)
 
 int enter(struct entry_settings *opts)
 {
+	int procfsfd = open("/proc", O_PATH | O_DIRECTORY | O_CLOEXEC);
+	if (procfsfd == -1) {
+		err(1, "open /proc");
+	}
+
+	int procfd = openat(procfsfd, "self", O_PATH | O_DIRECTORY | O_CLOEXEC);
+	if (procfd == -1) {
+		err(1, "open /proc/self");
+	}
+
 	int timens_offsets = -1;
 	if (opts->shares[NS_TIME] != SHARE_WITH_PARENT) {
 
@@ -426,6 +436,12 @@ int enter(struct entry_settings *opts)
 		}
 	}
 
+	close(procfd);
+	procfd = openat(procfsfd, "self", O_PATH | O_DIRECTORY | O_CLOEXEC);
+	if (procfd == -1) {
+		err(1, "open /proc/self");
+	}
+
 	close(liveness_fds[LIVENESS_KEEP]);
 
 	/* err() and errx() cannot use exit(), since it's not fork-safe. */
@@ -451,7 +467,7 @@ int enter(struct entry_settings *opts)
 	/* Read the current cgroup before ns_enter_postfork; this allows us
 	   to get the real path to the cgroup */
 	char cgroup_path[PATH_MAX];
-	if (!cgroup_read_current(cgroup_path)) {
+	if (!cgroup_read_current(procfd, cgroup_path)) {
 		cgroup_path[0] = '\0';
 	}
 	ns_enter_postfork(namespaces, ns_len);

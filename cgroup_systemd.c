@@ -308,7 +308,7 @@ static int cgroup_systemd_join_cgroup(const char *parent, const char *name)
 	}
 
 	char selfcgroup[PATH_MAX];
-	if (!cgroup_read_current(selfcgroup)) {
+	if (!cgroup_read_current(-1, selfcgroup)) {
 		errx(1, "could not determine current cgroup; are you using cgroups v2?");
 	}
 	int cgroupfd = open(selfcgroup, O_RDONLY | O_DIRECTORY, 0);
