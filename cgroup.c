@@ -80,11 +80,24 @@ bool cgroup_current_path(char *path)
 	return cgroup_drivers[cgroup_detected_driver]->current_path(path);
 }
 
-bool cgroup_read_current(char *path)
+bool cgroup_read_current(int procfd, char *path)
 {
-	FILE *selfcgroupfd = fopen("/proc/self/cgroup", "r");
-	if (selfcgroupfd == NULL) {
-		err(1, "unable to derive current cgroup hierarchy from /proc/self/cgroup");
+	FILE *selfcgroupfd;
+	if (procfd == -1) {
+		selfcgroupfd = fopen("/proc/self/cgroup", "r");
+		if (!selfcgroupfd) {
+			err(1, "unable to derive current cgroup hierarchy from /proc/self/cgroup");
+		}
+	} else {
+		int fd = openat(procfd, "cgroup", O_RDONLY | O_CLOEXEC);
+		if (fd == -1) {
+			err(1, "unable to derive current cgroup hierarchy from /proc/self/cgroup");
+		}
+
+		selfcgroupfd = fdopen(fd, "r");
+		if (!selfcgroupfd) {
+			err(1, "fdopen /proc/self/cgroup");
+		}
 	}
 
 	const char *selfcgroup = NULL;

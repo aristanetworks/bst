@@ -12,7 +12,7 @@ static int cgroup_native_driver_init(bool fatal)
 {
 	/* The native driver can only work with cgroup v2. Perform some sanity
 	   checks to verify this. */
-	if (!cgroup_read_current(NULL)) {
+	if (!cgroup_read_current(-1, NULL)) {
 		return -1;
 	}
 
@@ -35,7 +35,7 @@ static int cgroup_native_driver_init(bool fatal)
 
 static bool cgroup_native_current_path(char *path)
 {
-	return cgroup_read_current(path);
+	return cgroup_read_current(-1, path);
 }
 
 static int cgroup_native_join_cgroup(const char *parent, const char *name)
