@@ -390,6 +390,23 @@ spacetime process.
 	be useful to pass out-of-band data to the setup program without leaking
 	file descriptors to the spacetime process.
 
+\--fix-stat-32bit-overflow
+	Hijack calls to the stat64 family of system calls and return quantities
+	within 32-bit boundaries.
+
+	On most i686 distributions, glibc implements stat() for programs compiled
+	without -D_FILE_OFFSET_BITS=64 by calling the corresponding stat64 system
+	call, and if any of the 64-bit quantities in the statbuf are larger than
+	2^32-1, the glibc wrapper pretends the file does not exist by returning
+	ENOENT.
+
+	This flag mitigates the issue by pulling the rug under glibc and rewriting
+	the quantities to stay within bounds. For timestamps, a fixed date within
+	range is used. For inode numbers, the value is rewritten in a way that
+	keeps the (device, inode) pair unique.
+
+	This flag has no effect on programs running with a 64-bit personality.
+
 \--no-copy-hard-rlimits
 	Do not copy hard limit values to soft limits for all resources mentioned above.
 

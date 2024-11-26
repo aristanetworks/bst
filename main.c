@@ -29,6 +29,7 @@
 #include "util.h"
 #include "path.h"
 #include "util.h"
+#include "sec.h"
 
 enum {
 	OPTION_VERSION = 128,
@@ -63,6 +64,10 @@ enum {
 	OPTION_CLOSE_FD,
 	OPTION_CGROUP_DRIVER,
 
+	/* Opt-in feature flags */
+	OPTION_FIX_STAT_32BIT_OVERFLOW,
+
+	/* Opt-out feature flags */
 	OPTION_NO_FAKE_DEVTMPFS,
 	OPTION_NO_DERANDOMIZE,
 	OPTION_NO_PROC_REMOUNT,
@@ -315,6 +320,9 @@ int main(int argc, char *argv[], char *envp[])
 		{ "tty",                optional_argument, NULL, OPTION_TTY             },
 		{ "close-fd",           optional_argument, NULL, OPTION_CLOSE_FD        },
 		{ "cgroup-driver",      required_argument, NULL, OPTION_CGROUP_DRIVER   },
+
+		/* Opt-in feature flags */
+		{ "fix-stat-32bit-overflow", no_argument, NULL, OPTION_FIX_STAT_32BIT_OVERFLOW },
 
 		/* Opt-out feature flags */
 		{ "no-copy-hard-rlimits", no_argument, NULL, OPTION_NO_COPY_HARD_RLIMITS },
@@ -778,6 +786,12 @@ int main(int argc, char *argv[], char *envp[])
 				}
 
 				opts.nclose_fds++;
+				break;
+			}
+
+			case OPTION_FIX_STAT_32BIT_OVERFLOW:
+			{
+				sec_seccomp_fix_stat_32bit = 1;
 				break;
 			}
 
