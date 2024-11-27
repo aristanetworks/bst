@@ -5,3 +5,5 @@ bst
 bst-unpersist
 bst-init
 tags
+version/
+bst_limits./
