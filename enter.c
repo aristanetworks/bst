@@ -142,7 +142,7 @@ int enter(struct entry_settings *opts)
 	}
 
 	int timens_offsets = -1;
-	if (opts->shares[NS_TIME] != SHARE_WITH_PARENT) {
+	if (opts->nsactions[NS_TIME] != NSACTION_SHARE_WITH_PARENT) {
 
 		/* Because this process is privileged, /proc/self/timens_offsets
 		   is unfortunately owned by root and not ourselves, so we have
@@ -158,14 +158,13 @@ int enter(struct entry_settings *opts)
 			/* The kernel evidently doesn't support time namespaces yet.
 			   Don't try to open the time namespace file with --share-all=<dir>,
 			   or try to unshare or setns the time namespace below. */
-			opts->shares[NS_TIME] = SHARE_WITH_PARENT;
+			opts->nsactions[NS_TIME] = NSACTION_SHARE_WITH_PARENT;
 		}
 
 		reset_capabilities();
 	}
 
-	enum nsaction nsactions[MAX_NS];
-	opts_to_nsactions(opts->shares, nsactions);
+	enum nsaction *nsactions = opts->nsactions;
 
 	if (nsactions[NS_NET] != NSACTION_UNSHARE && opts->nnics > 0) {
 		errx(1, "cannot create NICs when not in a network namespace");
