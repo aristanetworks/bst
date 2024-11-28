@@ -8,6 +8,7 @@
 #include <ctype.h>
 #include <err.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <getopt.h>
 #include <inttypes.h>
 #include <limits.h>
@@ -73,25 +74,25 @@ enum {
 	OPTION_NO_COPY_HARD_RLIMITS,
 };
 
-static void process_nslist_entry(const char **out, const char *share, const char *path, int append_nsname)
+/* SHARE_WITH_PARENT is a special value for the path passed to process_nslist_entry
+ * that means sharing with the parent. */
+# define SHARE_WITH_PARENT ((char *) -1)
+
+static enum nstype find_nstype_by_name(const char *nsname)
 {
-	if (!strcmp(share, "network")) {
-		share = "net";
+	if (!strcmp(nsname, "network")) {
+		nsname = "net";
 	}
-	if (!strcmp(share, "mount")) {
-		share = "mnt";
+	if (!strcmp(nsname, "mount")) {
+		nsname = "mnt";
 	}
 	for (enum nstype ns = 0; ns < MAX_NS; ns++) {
-		if (!strcmp(share, ns_name(ns))) {
-			if (append_nsname) {
-				out[ns] = strdup(makepath("%s/%s", path, ns_name(ns)));
-			} else {
-				out[ns] = path;
-			}
-			return;
+		if (!strcmp(nsname, ns_name(ns))) {
+			return ns;
 		}
 	}
-	fprintf(stderr, "namespace `%s` does not exist.\n", share);
+
+	fprintf(stderr, "namespace `%s` does not exist.\n", nsname);
 	fprintf(stderr, "valid namespaces are: ");
 	for (enum nstype ns = 0; ns < MAX_NS; ns++) {
 		fprintf(stderr, "%s%s", ns == 0 ? "" : ", ", ns_name(ns));
@@ -100,9 +101,56 @@ static void process_nslist_entry(const char **out, const char *share, const char
 	exit(2);
 }
 
+static void process_nslist_entry(enum nsaction *nsactions, const char *nsname, int dirfd, const char *path)
+{
+	enum nstype ns = find_nstype_by_name(nsname);
+	enum nsaction *action = &nsactions[ns];
+
+	if (*action >= 0) {
+		close(*action);
+	}
+
+	if (path == NULL) {
+		*action = NSACTION_UNSHARE;
+	} else if (path == SHARE_WITH_PARENT) {
+		*action = NSACTION_SHARE_WITH_PARENT;
+	} else {
+		/* nsname might not be the canonical filename, so fix it */
+		nsname = ns_name(ns);
+
+		int fd = openat(dirfd, nsname, O_RDONLY | O_CLOEXEC);
+		if (fd == -1) {
+			err(1, "open <nsdir>/%s", nsname);
+		}
+
+		/* If the nsfd refers to the same namespace as the one we are
+		   currently in, treat as for SHARE_WITH_PARENT.
+
+		   We want to give semantics to --share <ns>=/proc/self/ns/<ns>
+		   being the same as --share <ns>. */
+		if (is_nsfd_current(fd, nsname)) {
+			close(fd);
+			fd = NSACTION_SHARE_WITH_PARENT;
+		}
+
+		*action = fd;
+	}
+}
+
+static void build_ns_path(const char **out, const char *nsname, const char *path, int append_nsname)
+{
+	enum nstype ns = find_nstype_by_name(nsname);
+
+	if (append_nsname) {
+		out[ns] = strdup(makepath("%s/%s", path, ns_name(ns)));
+	} else {
+		out[ns] = path;
+	}
+}
+
 #define ALL_NAMESPACES "cgroup,ipc,mnt,net,pid,time,user,uts"
 
-static void process_share(const char **out, const char *optarg)
+static void process_share(enum nsaction *nsactions, const char *optarg)
 {
 	char *nsnames = strtok((char *) optarg, "=");
 	char *path    = strtok(NULL, "");
@@ -119,18 +167,27 @@ static void process_share(const char **out, const char *optarg)
 	}
 
 	size_t nsnames_len = strlen(nsnames);
-	const char *share = strtok(nsnames, ",");
+	const char *nsname = strtok(nsnames, ",");
 
-	/* Only append the ns name to the path if there is more than one
-	   namespace specified. */
-	bool append_nsname = share + strlen(share) != nsnames + nsnames_len;
+	int dirfd = AT_FDCWD;
+
 	if (path == NULL) {
 		path = SHARE_WITH_PARENT;
-		append_nsname = false;
+	} else if (nsname + strlen(nsname) != nsnames + nsnames_len) {
+		/* We have more that one ns name specified, which means the path
+		   refers to a directory of nsfs files */
+		dirfd = open(path, O_PATH | O_DIRECTORY | O_CLOEXEC);
+		if (dirfd == -1) {
+			err(1, "open %s", path);
+		}
 	}
 
-	for (; share != NULL; share = strtok(NULL, ",")) {
-		process_nslist_entry(out, share, path, append_nsname);
+	for (; nsname != NULL; nsname = strtok(NULL, ",")) {
+		process_nslist_entry(nsactions, nsname, dirfd, path);
+	}
+
+	if (dirfd != AT_FDCWD) {
+		close(dirfd);
 	}
 }
 
@@ -158,11 +215,11 @@ static void process_persist(const char **out, const char *optarg)
 	bool multiple = share + strlen(share) != nsnames + nsnames_len;
 
 	for (; share != NULL; share = strtok(NULL, ",")) {
-		process_nslist_entry(out, share, path, multiple);
+		build_ns_path(out, share, path, multiple);
 	}
 }
 
-static void process_unshare(const char **out, char *nsnames)
+static void process_unshare(enum nsaction *nsactions, char *nsnames)
 {
 	/* Similar rules as for process_share, but we do not take in paths. */
 
@@ -172,7 +229,7 @@ static void process_unshare(const char **out, char *nsnames)
 	}
 
 	for (const char *ns = strtok(nsnames, ","); ns != NULL; ns = strtok(NULL, ",")) {
-		process_nslist_entry(out, ns, NULL, false);
+		process_nslist_entry(nsactions, ns, 0, NULL);
 	}
 }
 
@@ -278,6 +335,10 @@ int main(int argc, char *argv[], char *envp[])
 	opts.gid   = (gid_t) -1;
 	opts.umask = (mode_t) -1;
 	opts.cgroup_driver = (enum cgroup_driver) -1;
+
+	for (enum nstype ns = 0; ns < MAX_NS; ns++) {
+		opts.nsactions[ns] = NSACTION_UNSHARE;
+	}
 
 	static struct option options[] = {
 		{ "help",       no_argument,        NULL,           'h' },
@@ -431,11 +492,11 @@ int main(int argc, char *argv[], char *envp[])
 				break;
 
 			case OPTION_SHARE:
-				process_share(opts.shares, optarg);
+				process_share(opts.nsactions, optarg);
 				break;
 
 			case OPTION_UNSHARE:
-				process_unshare(opts.shares, optarg);
+				process_unshare(opts.nsactions, optarg);
 				break;
 
 			case OPTION_PERSIST:
@@ -872,7 +933,7 @@ int main(int argc, char *argv[], char *envp[])
 
 	/* Use our own default init if we unshare the pid namespace, and no
 	   --init has been specified. */
-	if (opts.shares[NS_PID] == NULL && opts.init == NULL) {
+	if (opts.nsactions[NS_PID] == NSACTION_UNSHARE && opts.init == NULL) {
 		opts.init = BINDIR "/bst-init";
 	}
 

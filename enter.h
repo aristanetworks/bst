@@ -48,15 +48,9 @@ enum {
 	MAX_CLOSE_FDS = 4096,
 };
 
-/* SHARE_WITH_PARENT is a special value for entry_settings.shares[ns]. */
-# define SHARE_WITH_PARENT ((char *) -1)
-
 struct entry_settings {
-	/* shares[] is indexed by SHARE_CGROUP, etc.  Legal values are:
-	   NULL: unshare.
-	   SHARE_WITH_PARENT: special marker meaning don't unshare or setns.
-	   filename: setns to the given namespace file. */
-	const char *shares[MAX_NS];
+	/* nsactions[] is indexed by NS_CGROUP, etc.  */
+	enum nsaction nsactions[MAX_NS];
 	const char *persist[MAX_NS];
 
 	const char *pathname;

@@ -61,7 +61,7 @@ struct nsid {
 const char *ns_name(enum nstype);
 int ns_cloneflag(enum nstype);
 
-void opts_to_nsactions(const char *shares[], enum nsaction *nsactions);
+bool is_nsfd_current(int nsfd, const char *name);
 void ns_enter_prefork(struct nsid *namespaces, size_t *len);
 void ns_enter_postfork(struct nsid *namespaces, size_t len);
 

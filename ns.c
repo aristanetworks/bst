@@ -40,7 +40,7 @@ int ns_cloneflag(enum nstype ns)
 	return flags[ns].flag;
 }
 
-static bool is_nsfd_current(int nsfd, const char *name)
+bool is_nsfd_current(int nsfd, const char *name)
 {
 	const char *path = makepath("/proc/self/ns/%s", name);
 
@@ -59,33 +59,6 @@ static bool is_nsfd_current(int nsfd, const char *name)
 	}
 
 	return self.st_ino == stat.st_ino;
-}
-
-void opts_to_nsactions(const char *shares[], enum nsaction *nsactions)
-{
-	for (enum nstype ns = 0; ns < MAX_NS; ns++) {
-		const char *share = shares[ns];
-		if (share == NULL) {
-			nsactions[ns] = NSACTION_UNSHARE;
-		} else if (share == SHARE_WITH_PARENT) {
-			nsactions[ns] = NSACTION_SHARE_WITH_PARENT;
-		} else {
-			nsactions[ns] = open(share, O_RDONLY | O_CLOEXEC);
-			if (nsactions[ns] < 0) {
-				err(1, "open %s", share);
-			}
-
-			/* If the nsfd refers to the same namespace as the one we are
-			   currently in, treat as for SHARE_WITH_PARENT.
-
-			   We want to give semantics to --share <ns>=/proc/self/ns/<ns>
-			   being the same as --share <ns>. */
-			if (is_nsfd_current(nsactions[ns], ns_name(ns))) {
-				close(nsactions[ns]);
-				nsactions[ns] = NSACTION_SHARE_WITH_PARENT;
-			}
-		}
-	}
 }
 
 static int is_setns(const struct nsid *ns)
