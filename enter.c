@@ -392,8 +392,9 @@ int enter(struct entry_settings *opts)
 		sigfillset(&mask);
 
 		if (opts->tty) {
-			/* tty_parent_setup handles SIGWINCH to resize the pty */
+			/* tty_parent_setup handles SIGWINCH to resize the pty and SIGHUP to close the pty master */
 			sigdelset(&mask, SIGWINCH);
+			sigdelset(&mask, SIGHUP);
 			tty_parent_setup(&opts->ttyopts, epollfd, socket_fdpass[SOCKET_PARENT]);
 		}
 		sig_setup(epollfd, &mask, outer_helper.pid, sig_handler);
