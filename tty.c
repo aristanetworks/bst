@@ -189,8 +189,18 @@ static int tty_handle_sig(int epollfd, const struct epoll_event *ev, int fd, pid
 	siginfo_t siginfo;
 	sig_read(fd, &siginfo);
 
-	assert(siginfo.si_signo == SIGWINCH && "tty_handle_sig can only handle SIGWINCH");
-	tty_set_winsize();
+	assert((siginfo.si_signo == SIGWINCH || siginfo.si_signo == SIGHUP) && "tty_handle_sig can only handle SIGWINCH and SIGHUP");
+	switch (siginfo.si_signo) {
+	case SIGWINCH:
+		tty_set_winsize();
+		break;
+	case SIGHUP:
+		if (info.termfd > 0) {
+			close(info.termfd);
+			info.termfd = -1;
+		}
+		break;
+	}
 	return EPOLL_HANDLER_CONTINUE;
 }
 
@@ -398,6 +408,7 @@ void tty_parent_setup(struct tty_opts *opts, int epollfd, int socket)
 	sigset_t sigmask;
 	sigemptyset(&sigmask);
 	sigaddset(&sigmask, SIGWINCH);
+	sigaddset(&sigmask, SIGHUP);
 
 	int sigfd = signalfd(-1, &sigmask, 0);
 	if (sigfd == -1) {
