@@ -39,8 +39,10 @@ static struct tty_parent_info_s {
 	int termfd;
 	struct termios orig;
 	bool stdinIsatty;
+	bool drain;
 } info = {
 	.termfd = -1,
+	.drain = true,
 };
 
 static ssize_t io_copy(int out_fd, int in_fd, struct buffer *buf)
@@ -145,15 +147,17 @@ static void tty_parent_resetterm(void)
 
 static void tty_parent_drain(void)
 {
-	/* Drain any remaining data in the terminal buffer */
-	set_nonblock(STDOUT_FILENO, 0);
-	set_nonblock(info.termfd, 0);
-	struct buffer drain = {
-		.size = 0,
-	};
+	if (info.drain) {
+		/* Drain any remaining data in the terminal buffer */
+		set_nonblock(STDOUT_FILENO, 0);
+		set_nonblock(info.termfd, 0);
+		struct buffer drain = {
+			.size = 0,
+		};
 
-	if (io_copy(STDOUT_FILENO, info.termfd, &drain) == -1 && errno != EIO) {
-		warn("copy tty -> stdout");
+		if (io_copy(STDOUT_FILENO, info.termfd, &drain) == -1 && errno != EIO) {
+			warn("copy tty -> stdout");
+		}
 	}
 
 	close_null(STDOUT_FILENO);
@@ -357,6 +361,10 @@ void tty_parent_setup(struct tty_opts *opts, int epollfd, int socket)
 	set_nonblock(STDOUT_FILENO, 1);
 
 	struct termios tios;
+
+	if (opts->drain != NULL) {
+		info.drain = *opts->drain;
+	}
 
 	info.stdinIsatty = tcgetattr(STDIN_FILENO, &tios) == 0;
 	if (!info.stdinIsatty && errno != ENOTTY) {
@@ -656,6 +664,15 @@ static void parse_ptmx(struct tty_opts *opts, const char *key, const char *val, 
 	opts->ptmx = val;
 }
 
+static void parse_drain(struct tty_opts *opts, const char *key, const char *val, const void *cookie)
+{
+	if (val != NULL) {
+		errx(2, "tty option '%s' must have no value", key);
+	}
+	opts->drain = malloc(sizeof(bool));
+	*opts->drain = (key[0] != '-');
+}
+
 static int cmp_flag(const void *key, const void *elem)
 {
 	return strcmp(key, ((const struct valmap *)elem)->name);
@@ -675,6 +692,7 @@ void tty_opt_parse(struct tty_opts *opts, const char *key, const char *val)
 		{ "cread",      parse_flag,  .cookie = &(const struct termios) { .c_cflag = CREAD    } },
 		{ "crtscts",    parse_flag,  .cookie = &(const struct termios) { .c_cflag = CRTSCTS  } },
 		{ "cstopb",     parse_flag,  .cookie = &(const struct termios) { .c_cflag = CSTOPB   } },
+		{ "drain",      parse_drain, .cookie = NULL                                            },
 		{ "echo",       parse_flag,  .cookie = &(const struct termios) { .c_lflag = ECHO     } },
 		{ "echoctl",    parse_flag,  .cookie = &(const struct termios) { .c_lflag = ECHOCTL  } },
 		{ "echoe",      parse_flag,  .cookie = &(const struct termios) { .c_lflag = ECHOE    } },
