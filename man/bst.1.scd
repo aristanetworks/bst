@@ -371,6 +371,9 @@ spacetime process.
 	- *ptmx*=<path>: use the specified ptmx device (relative to the target root)
 	  to allocated the pty.
 
+	- *drain*: whether to drain the tty on stdin closure.  The default is true,
+	  so prepend a _'-'_ to this option to prevent draining.
+
 	By default bst inherits the parent's terminal device (or lack thereof).  Use
 	the --tty option to allocate a new pty for the child process.
 

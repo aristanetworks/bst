@@ -362,9 +362,7 @@ void tty_parent_setup(struct tty_opts *opts, int epollfd, int socket)
 
 	struct termios tios;
 
-	if (opts->drain != NULL) {
-		info.drain = *opts->drain;
-	}
+	info.drain = opts->drain;
 
 	info.stdinIsatty = tcgetattr(STDIN_FILENO, &tios) == 0;
 	if (!info.stdinIsatty && errno != ENOTTY) {
@@ -669,8 +667,7 @@ static void parse_drain(struct tty_opts *opts, const char *key, const char *val,
 	if (val != NULL) {
 		errx(2, "tty option '%s' must have no value", key);
 	}
-	opts->drain = malloc(sizeof(bool));
-	*opts->drain = (key[0] != '-');
+	opts->drain = (key[0] != '-');
 }
 
 static int cmp_flag(const void *key, const void *elem)
