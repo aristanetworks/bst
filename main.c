@@ -789,6 +789,7 @@ int main(int argc, char *argv[], char *envp[])
 			{
 				opts.tty = 1;
 				opts.ttyopts.ptmx = tty_default_ptmx;
+				opts.ttyopts.drain = true;
 
 				/* 128 is enough to support everything */
 				struct kvlist kvlist[128];

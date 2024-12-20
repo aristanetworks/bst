@@ -15,6 +15,7 @@ struct tty_opts {
 	const char *ptmx;
 	struct termios termios;
 	struct termios neg_termios;
+	bool drain;
 };
 
 extern const char *tty_default_ptmx;
