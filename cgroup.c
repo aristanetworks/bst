@@ -282,7 +282,7 @@ void cgroup_start_cleaner(int parentfd, const char *name)
 
 void cgroup_enable_controllers(int cgroupfd)
 {
-	char controllers[BUFSIZ];
+	char controllers[BUFSIZ] = {0};
 	int cfd = openat(cgroupfd, "cgroup.controllers", O_RDONLY, 0);
 	if (cfd == -1) {
 		err(1, "cgroup_enable_controllers: open cgroup.controllers");
