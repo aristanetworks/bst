@@ -371,7 +371,7 @@ int enter(struct entry_settings *opts)
 			if ((size_t) snprintf(data, sizeof (data), "%d\n", pid) >= sizeof (data)) {
 				errx(1, "'%d\n' takes more than %zu bytes.", pid, sizeof (data));
 			}
-			size_t remain = sizeof (data);
+			size_t remain = strlen (data);
 			char *ptr = data;
 			while (remain > 0) {
 				ssize_t written = write(pidfile, ptr, remain);
