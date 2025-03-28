@@ -252,60 +252,58 @@ static int cgroup_systemd_join_cgroup(const char *parent, const char *name)
 	/* Wait for the scope creation job to complete */
 	for (;;) {
 		dbus_connection_read_write(bus, -1);
-		msg = dbus_connection_pop_message(bus);
+		while ((msg = dbus_connection_pop_message(bus))) {
+			if (!dbus_message_is_signal(msg, INTERFACE, "JobRemoved")) {
+				dbus_message_unref(msg);
+				continue;
+			}
+			if (!dbus_message_iter_init(msg, &iter)) {
+				errx(1, "cgroup_systemd_join_cgroup: JobRemoved signal message has no arguments");
+			}
 
-		if (msg == NULL) {
-			continue;
-		}
+			// ID
+			if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_UINT32) {
+				goto bad_sig;
+			}
+			if (!dbus_message_iter_next(&iter)) {
+				goto bad_sig;
+			}
 
-		if (!dbus_message_is_signal(msg, INTERFACE, "JobRemoved")) {
-			goto next;
-		}
-		if (!dbus_message_iter_init(msg, &iter)) {
-			errx(1, "cgroup_systemd_join_cgroup: JobRemoved signal message has no arguments");
-		}
+			// Path
+			if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_OBJECT_PATH) {
+				goto bad_sig;
+			}
+			if (!dbus_message_iter_next(&iter)) {
+				goto bad_sig;
+			}
 
-		// ID
-		if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_UINT32) {
-			goto bad_sig;
-		}
-		if (!dbus_message_iter_next(&iter)) {
-			goto bad_sig;
-		}
+			// Unit
+			if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_STRING) {
+				goto bad_sig;
+			}
+			if (!dbus_message_iter_next(&iter)) {
+				goto bad_sig;
+			}
 
-		// Path
-		if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_OBJECT_PATH) {
-			goto bad_sig;
+			// Result
+			if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_STRING) {
+				goto bad_sig;
+			}
+			char *result;
+			dbus_message_iter_get_basic(&iter, &result);
+			if (strcmp(result, "done")) {
+				errx(1, "cgroup_systemd_join_cgroup: failed to start transient scope unit: job finished with result '%s'", result);
+			}
+			goto done;
 		}
-		if (!dbus_message_iter_next(&iter)) {
-			goto bad_sig;
-		}
-
-		// Unit
-		if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_STRING) {
-			goto bad_sig;
-		}
-		if (!dbus_message_iter_next(&iter)) {
-			goto bad_sig;
-		}
-
-		// Result
-		if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_STRING) {
-			goto bad_sig;
-		}
-		char *result;
-		dbus_message_iter_get_basic(&iter, &result);
-		if (strcmp(result, "done")) {
-			errx(1, "cgroup_systemd_join_cgroup: failed to start transient scope unit: job finished with result '%s'", result);
-		}
-
-	next:
-		dbus_message_unref(msg);
-		break;
+		continue;
 
 	bad_sig:
 		errx(1, "cgroup_systemd_join_cgroup: JobRemoved signal message does not have signature 'uoss'");
 	}
+
+done:
+	dbus_message_unref(msg);
 
 	char selfcgroup[PATH_MAX];
 	if (!cgroup_read_current(-1, selfcgroup)) {
