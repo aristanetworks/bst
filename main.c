@@ -118,7 +118,7 @@ static void process_nslist_entry(enum nsaction *nsactions, const char *nsname, i
 		/* nsname might not be the canonical filename, so fix it */
 		nsname = ns_name(ns);
 
-		int fd = openat(dirfd, nsname, O_RDONLY | O_CLOEXEC);
+		int fd = openat(dirfd, path, O_RDONLY | O_CLOEXEC);
 		if (fd == -1) {
 			err(1, "open <nsdir>/%s", nsname);
 		}
@@ -171,6 +171,10 @@ static void process_share(enum nsaction *nsactions, const char *optarg)
 
 	int dirfd = AT_FDCWD;
 
+	// This is a special value we use to replace the path down below
+	// with the ns name when we're sharing with a directory of namespace files
+	char *share_with_dir = ((char *) -2);
+
 	if (path == NULL) {
 		path = SHARE_WITH_PARENT;
 	} else if (nsname + strlen(nsname) != nsnames + nsnames_len) {
@@ -180,10 +184,16 @@ static void process_share(enum nsaction *nsactions, const char *optarg)
 		if (dirfd == -1) {
 			err(1, "open %s", path);
 		}
+
+		path = share_with_dir;
 	}
 
 	for (; nsname != NULL; nsname = strtok(NULL, ",")) {
-		process_nslist_entry(nsactions, nsname, dirfd, path);
+		if (path == share_with_dir) {
+			process_nslist_entry(nsactions, nsname, dirfd, nsname);
+		} else {
+			process_nslist_entry(nsactions, nsname, dirfd, path);
+		}
 	}
 
 	if (dirfd != AT_FDCWD) {
