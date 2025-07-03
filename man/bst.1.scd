@@ -410,6 +410,23 @@ spacetime process.
 
 	This flag has no effect on programs running with a 64-bit personality.
 
+\--emulate-safe-mknod
+	Emulate the mknod system call in user programs for safe devices.
+
+	If turned on, this will cause inner programs to successfully use the mknod
+	system call to create character devices deemed safe.
+
+	Character devices that are safe to create, along with their (major, minor)
+	device number pair, are:
+
+	- *whiteout* (0, 0)
+	- *null* (1, 3)
+	- *zero* (1, 5)
+	- *full* (1, 7)
+	- *random* (1, 8)
+	- *urandom* (1, 9)
+	- *tty* (5, 0)
+
 \--no-copy-hard-rlimits
 	Do not copy hard limit values to soft limits for all resources mentioned above.
 

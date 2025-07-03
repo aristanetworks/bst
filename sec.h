@@ -13,5 +13,6 @@ int sec_seccomp_install_filter(void);
 noreturn void sec_seccomp_supervisor(int);
 
 extern int sec_seccomp_fix_stat_32bit;
+extern int sec_seccomp_emulate_mknod;
 
 #endif /* !SEC_H_ */

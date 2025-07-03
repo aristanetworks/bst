@@ -68,3 +68,6 @@ Options:
                                     namespaces.
       --no-env                      Clear the environment before running the
                                     executable.
+
+      --fix-stat-32bit-overflow     Make 32-bit stat work on 64-bit filesystems.
+      --emulate-mknod               Emulate mknod for safe character devices.
