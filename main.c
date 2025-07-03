@@ -67,6 +67,7 @@ enum {
 
 	/* Opt-in feature flags */
 	OPTION_FIX_STAT_32BIT_OVERFLOW,
+	OPTION_EMULATE_MKNOD,
 
 	/* Opt-out feature flags */
 	OPTION_NO_FAKE_DEVTMPFS,
@@ -395,6 +396,7 @@ int main(int argc, char *argv[], char *envp[])
 		/* Opt-in feature flags */
 #ifdef HAVE_SECCOMP_UNOTIFY
 		{ "fix-stat-32bit-overflow", no_argument, NULL, OPTION_FIX_STAT_32BIT_OVERFLOW },
+		{ "emulate-mknod",           no_argument, NULL, OPTION_EMULATE_MKNOD           },
 #endif
 
 		/* Opt-out feature flags */
@@ -867,6 +869,12 @@ int main(int argc, char *argv[], char *envp[])
 			case OPTION_FIX_STAT_32BIT_OVERFLOW:
 			{
 				sec_seccomp_fix_stat_32bit = 1;
+				break;
+			}
+
+			case OPTION_EMULATE_MKNOD:
+			{
+				sec_seccomp_emulate_mknod = 1;
 				break;
 			}
 #endif

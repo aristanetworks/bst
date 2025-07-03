@@ -30,6 +30,7 @@
 #include "util.h"
 
 int sec_seccomp_fix_stat_32bit = 0;
+int sec_seccomp_emulate_mknod = 0;
 
 typedef int syscall_handler_func(int, int, struct seccomp_notif *);
 
@@ -568,61 +569,13 @@ static int seccomp(unsigned int op, unsigned int flags, void *args)
 	return syscall(__NR_seccomp, op, flags, args);
 }
 
-int sec_seccomp_install_filter(void)
-{
-	struct sock_fprog prog = {
-		.len    = syscall_filter_length,
-		.filter = (struct sock_filter *)syscall_filter,
-	};
-
-	int fd = seccomp(SECCOMP_SET_MODE_FILTER, SECCOMP_FILTER_FLAG_NEW_LISTENER, &prog);
-	if (fd == -1) {
-		if (errno == EBUSY) {
-			// We're likely running bst in bst; ignore the error, and return
-			// a useless file descriptor to pass to the seccomp supervisor
-			return epoll_create1(EPOLL_CLOEXEC);
-		}
-		err(1, "seccomp SECCOMP_SET_MODE_FILTER");
-	}
-	return fd;
-}
+static syscall_handler_func *syscall_table[BST_NR_MAX+1];
+static syscall_handler_func *syscall_table_32[BST_NR_MAX32+1];
 
 static void sec_seccomp_dispatch_syscall(int seccomp_fd,
 		struct seccomp_notif *req,
 		struct seccomp_notif_resp *resp)
 {
-	static syscall_handler_func *const syscall_table[BST_NR_MAX+1] = {
-#ifdef BST_NR_mknod
-		[BST_NR_mknod]   = sec__mknod,
-#endif
-		[BST_NR_mknodat] = sec__mknodat,
-	};
-
-#ifdef BST_SECCOMP_32
-	syscall_handler_func *syscall_table_32[BST_NR_MAX32+1] = {
-#ifdef BST_NR_mknod_32
-		[BST_NR_mknod_32]   = sec__mknod,
-#endif
-		[BST_NR_mknodat_32] = sec__mknodat,
-	};
-
-	if (sec_seccomp_fix_stat_32bit) {
-#ifdef BST_NR_stat64_32
-		syscall_table_32[BST_NR_stat64_32] = sec__stat64;
-#endif
-#ifdef BST_NR_lstat64_32
-		syscall_table_32[BST_NR_lstat64_32] = sec__lstat64;
-#endif
-#ifdef BST_NR_fstat64_32
-		syscall_table_32[BST_NR_fstat64_32] = sec__fstat64;
-#endif
-#ifdef BST_NR_fstatat64_32
-		syscall_table_32[BST_NR_fstatat64_32] = sec__fstatat64;
-#endif
-		syscall_table_32[BST_NR_statx_32] = sec__statx;
-	}
-#endif
-
 	resp->id = req->id;
 
 	syscall_handler_func *const *table = syscall_table;
@@ -746,3 +699,53 @@ noreturn void sec_seccomp_supervisor(int seccomp_fd)
 	}
 }
 
+int sec_seccomp_install_filter(void)
+{
+	struct sock_fprog prog = {
+		.len    = syscall_filter_length,
+		.filter = (struct sock_filter *)syscall_filter,
+	};
+
+#ifdef BST_SECCOMP_32
+	if (sec_seccomp_fix_stat_32bit) {
+#ifdef BST_NR_stat64_32
+		syscall_table_32[BST_NR_stat64_32] = sec__stat64;
+#endif
+#ifdef BST_NR_lstat64_32
+		syscall_table_32[BST_NR_lstat64_32] = sec__lstat64;
+#endif
+#ifdef BST_NR_fstat64_32
+		syscall_table_32[BST_NR_fstat64_32] = sec__fstat64;
+#endif
+#ifdef BST_NR_fstatat64_32
+		syscall_table_32[BST_NR_fstatat64_32] = sec__fstatat64;
+#endif
+		syscall_table_32[BST_NR_statx_32] = sec__statx;
+	}
+#endif
+
+	if (sec_seccomp_emulate_mknod) {
+#ifdef BST_NR_mknod
+		syscall_table[BST_NR_mknod] = sec__mknod;
+#endif
+		syscall_table[BST_NR_mknodat] = sec__mknodat;
+
+#ifdef BST_SECCOMP_32
+#ifdef BST_NR_mknod_32
+		syscall_table_32[BST_NR_mknod_32] = sec__mknod;
+#endif
+		syscall_table_32[BST_NR_mknodat_32] = sec__mknodat;
+#endif
+	}
+
+	int fd = seccomp(SECCOMP_SET_MODE_FILTER, SECCOMP_FILTER_FLAG_NEW_LISTENER, &prog);
+	if (fd == -1) {
+		if (errno == EBUSY) {
+			// We're likely running bst in bst; ignore the error, and return
+			// a useless file descriptor to pass to the seccomp supervisor
+			return epoll_create1(EPOLL_CLOEXEC);
+		}
+		err(1, "seccomp SECCOMP_SET_MODE_FILTER");
+	}
+	return fd;
+}
