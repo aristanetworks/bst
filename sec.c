@@ -311,6 +311,7 @@ static int sec__mknodat(int seccomp_fd, int procfd, struct seccomp_notif *req)
 	return sec__mknodat_impl(seccomp_fd, procfd, req, dirfd, pathnameaddr, mode, dev);
 }
 
+#ifdef BST_SECCOMP_32
 struct statx_args {
 	int dirfd;
 	char pathname[PATH_MAX];
@@ -563,6 +564,7 @@ static int sec__fstatat64(int seccomp_fd, int procfd, struct seccomp_notif *req)
 {
 	return sec__fstatat64_impl(seccomp_fd, procfd, req, req->data.args[0], req->data.args[1], req->data.args[2], req->data.args[3]);
 }
+#endif /* !BST_SECCOMP_32 */
 
 static int seccomp(unsigned int op, unsigned int flags, void *args)
 {
@@ -570,7 +572,9 @@ static int seccomp(unsigned int op, unsigned int flags, void *args)
 }
 
 static syscall_handler_func *syscall_table[BST_NR_MAX+1];
+#ifdef BST_SECCOMP_32
 static syscall_handler_func *syscall_table_32[BST_NR_MAX32+1];
+#endif
 
 static void sec_seccomp_dispatch_syscall(int seccomp_fd,
 		struct seccomp_notif *req,
