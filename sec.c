@@ -690,6 +690,9 @@ noreturn void sec_seccomp_supervisor(int seccomp_fd)
 
 		if (ioctl(seccomp_fd, SECCOMP_IOCTL_NOTIF_RECV, req) == -1) {
 			switch (errno) {
+			case ENOENT:
+				/* Target was killed during the syscall but before we have
+				   the chance to handle it */
 			case EINTR:
 				continue;
 			case ENOTTY:
