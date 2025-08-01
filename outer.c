@@ -411,6 +411,12 @@ unshare:
 
 #ifdef HAVE_SECCOMP_UNOTIFY
 	int seccomp_fd = recv_fd(fd);
+
+	/* Don't hold onto any file descriptors before running our supervisor loop,
+	   because doing so may keep other children stuck waiting on fds that
+	   are still held by the supervisor. */
+	rebind_fds_and_close_rest(3, &seccomp_fd, NULL);
+
 	sec_seccomp_supervisor(seccomp_fd);
 	__builtin_unreachable();
 #else
