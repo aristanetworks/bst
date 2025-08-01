@@ -258,6 +258,10 @@ void outer_helper_spawn(struct outer_helper *helper)
 		return;
 	}
 
+	/* This needs to be closed before sig_setpdeathsig, since holding onto
+	   the keep end means the check end will always read-block. */
+	close(liveness_fds[LIVENESS_KEEP]);
+
 	sig_setpdeathsig(SIGKILL, liveness_fds[LIVENESS_CHECK]);
 
 	/* Make sure all file descriptors except for the ones we're actually using

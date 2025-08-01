@@ -448,6 +448,8 @@ int enter(struct entry_settings *opts)
 		err(1, "open /proc/self");
 	}
 
+	/* This needs to be closed before sig_setpdeathsig, since holding onto
+	   the keep end means the check end will always read-block. */
 	close(liveness_fds[LIVENESS_KEEP]);
 
 	/* err() and errx() cannot use exit(), since it's not fork-safe. */
