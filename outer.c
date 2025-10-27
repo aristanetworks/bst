@@ -28,6 +28,7 @@
 #include "fd.h"
 #include "outer.h"
 #include "path.h"
+#include "pdeathsig.h"
 #include "sig.h"
 #include "userns.h"
 #include "util.h"
@@ -232,18 +233,8 @@ void outer_helper_spawn(struct outer_helper *helper)
 		err(1, "outer_helper: socketpair");
 	}
 
-	/* Set up a pipe that we do nothing with; we use the read end as the parent
-	   handle in sig_setpdeathsig, and the write end will get closed on
-	   process exit. This ensures that we are able to properly detect process
-	   reparenting before we've called prctl(PR_SET_PDEATHSIG). */
-	enum {
-		LIVENESS_CHECK,
-		LIVENESS_KEEP,
-	};
-	int liveness_fds[2];
-	if (pipe2(liveness_fds, O_CLOEXEC | O_NONBLOCK) == -1) {
-		err(1, "pipe2");
-	}
+	struct sig_pdeathsig_cookie liveness;
+	sig_pdeathsig_cookie_init(&liveness);
 
 	pid_t pid = fork();
 	if (pid == -1) {
@@ -251,18 +242,15 @@ void outer_helper_spawn(struct outer_helper *helper)
 	}
 
 	if (pid) {
+		sig_pdeathsig_cookie_close(&liveness);
 		close(fdpair[SOCKET_CHILD]);
-		close(liveness_fds[LIVENESS_CHECK]);
 		helper->pid = pid;
 		helper->fd  = fdpair[SOCKET_PARENT];
 		return;
 	}
 
-	/* This needs to be closed before sig_setpdeathsig, since holding onto
-	   the keep end means the check end will always read-block. */
-	close(liveness_fds[LIVENESS_KEEP]);
-
-	sig_setpdeathsig(SIGKILL, liveness_fds[LIVENESS_CHECK]);
+	sig_setpdeathsig(SIGKILL, &liveness);
+	sig_pdeathsig_cookie_close(&liveness);
 
 	/* Make sure all file descriptors except for the ones we're actually using
 	   get closed. This avoids keeping around file descriptors on which

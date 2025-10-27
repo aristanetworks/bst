@@ -31,16 +31,17 @@
 #include "enter.h"
 #include "errutil.h"
 #include "fd.h"
+#include "fd.h"
 #include "mount.h"
 #include "net.h"
 #include "ns.h"
 #include "outer.h"
 #include "path.h"
-#include "tty.h"
+#include "pdeathsig.h"
 #include "setarch.h"
 #include "sig.h"
+#include "tty.h"
 #include "util.h"
-#include "fd.h"
 
 #ifdef HAVE_SECCOMP_UNOTIFY
 # include "sec.h"
@@ -306,18 +307,8 @@ int enter(struct entry_settings *opts)
 		err(1, "socketpair");
 	}
 
-	/* Set up a pipe that we do nothing with; we use the read end as the parent
-	   handle in sig_setpdeathsig, and the write end will get closed on
-	   process exit. This ensures that we are able to properly detect process
-	   reparenting before we've called prctl(PR_SET_PDEATHSIG). */
-	enum {
-		LIVENESS_CHECK,
-		LIVENESS_KEEP,
-	};
-	int liveness_fds[2];
-	if (pipe2(liveness_fds, O_CLOEXEC | O_NONBLOCK) == -1) {
-		err(1, "pipe2");
-	}
+	struct sig_pdeathsig_cookie liveness;
+	sig_pdeathsig_cookie_init(&liveness);
 
 	/* You can't "really" unshare the PID namespace of a running process
 	   without forking, since for process hierarchy reasons only the next
@@ -350,7 +341,7 @@ int enter(struct entry_settings *opts)
 		}
 
 		close(socket_fdpass[SOCKET_CHILD]);
-		close(liveness_fds[LIVENESS_CHECK]);
+		sig_pdeathsig_cookie_close(&liveness);
 
 		if (opts->pidfile != NULL) {
 			int pidfile = open(opts->pidfile, O_WRONLY | O_CREAT | O_CLOEXEC | O_NOCTTY , 0666);
@@ -448,10 +439,6 @@ int enter(struct entry_settings *opts)
 		err(1, "open /proc/self");
 	}
 
-	/* This needs to be closed before sig_setpdeathsig, since holding onto
-	   the keep end means the check end will always read-block. */
-	close(liveness_fds[LIVENESS_KEEP]);
-
 	/* err() and errx() cannot use exit(), since it's not fork-safe. */
 	err_exit = _exit;
 
@@ -468,7 +455,8 @@ int enter(struct entry_settings *opts)
 	   dies from uncatcheable signals. Or at least, we could, but this makes us
 	   leaky by default which isn't great, and the obvious workaround to
 	   daemonize the process tree is to just nohup bst. */
-	sig_setpdeathsig(SIGKILL, liveness_fds[LIVENESS_CHECK]);
+	sig_setpdeathsig(SIGKILL, &liveness);
+	sig_pdeathsig_cookie_close(&liveness);
 
 	outer_helper_sync(&outer_helper);
 
