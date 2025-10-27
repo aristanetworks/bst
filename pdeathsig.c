@@ -136,5 +136,10 @@ void sig_setpdeathsig(int signo, struct sig_pdeathsig_cookie *cookie)
 		   nearest subreaper. We won't get killed by the kernel anymore, because
 		   our new parent might be long lived, so just do it ourselves. */
 		kill(getpid(), signo);
+
+		if (signo == SIGKILL) {
+			/* Uh oh, we were not supposed to survive this. We might be init; exit. */
+			_exit(128 + signo);
+		}
 	}
 }
