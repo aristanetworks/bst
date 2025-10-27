@@ -109,6 +109,7 @@ bst_sources = [
 	'ns.c',
 	'outer.c',
 	'path.c',
+	'pdeathsig.c',
 	'setarch.c',
 	'sig.c',
 	'timens.c',

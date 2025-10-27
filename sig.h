@@ -51,6 +51,5 @@ void sig_wait(const sigset_t *set, siginfo_t *info);
 void sig_forward(const siginfo_t *info, pid_t pid);
 void sig_read(int sigfd, siginfo_t *info);
 void sig_setup(int epollfd, const sigset_t *set, pid_t helper_pid, epoll_handler_fn *fn);
-void sig_setpdeathsig(int signo, int parent_handle);
 
 #endif /* !SIG_H_ */
