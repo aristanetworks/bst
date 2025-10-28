@@ -468,16 +468,16 @@ static void nic_parse_macvlan_mode(struct nic_options *nic, const char *v)
 }
 
 static const struct valmap ipvlan_mode_values[] = {
-	{ "l2",  &(const uint32_t) { IPVLAN_MODE_L2  } },
-	{ "l3",  &(const uint32_t) { IPVLAN_MODE_L3  } },
-	{ "l3s", &(const uint32_t) { IPVLAN_MODE_L3S } },
+	{ "l2",  &(const uint16_t) { IPVLAN_MODE_L2  } },
+	{ "l3",  &(const uint16_t) { IPVLAN_MODE_L3  } },
+	{ "l3s", &(const uint16_t) { IPVLAN_MODE_L3S } },
 	{ NULL, NULL },
 };
 
 static const struct valmap ipvlan_modeflag_values[] = {
-	{ "bridge",  &(const uint32_t) { 0                } },
-	{ "private", &(const uint32_t) { IPVLAN_F_PRIVATE } },
-	{ "vepa",    &(const uint32_t) { IPVLAN_F_VEPA    } },
+	{ "bridge",  &(const uint16_t) { 0                } },
+	{ "private", &(const uint16_t) { IPVLAN_F_PRIVATE } },
+	{ "vepa",    &(const uint16_t) { IPVLAN_F_VEPA    } },
 	{ NULL, NULL },
 };
 
@@ -497,7 +497,7 @@ static void nic_parse_ipvlan_mode(struct nic_options *nic, const char *v)
 
 	char *flag;
 	while ((flag = strtok_r(NULL, "+", &saveptr)) != NULL) {
-		uint32_t flagval;
+		uint16_t flagval;
 		if (parse_val(&flagval, sizeof (flagval), ipvlan_modeflag_values, flag) == -1) {
 			errx(1, "invalid IPVLAN mode flag %s in %s", flag, v);
 		}

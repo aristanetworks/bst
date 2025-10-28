@@ -17,8 +17,8 @@ struct macvlan {
 };
 
 struct ipvlan {
-	uint32_t mode;
-	uint32_t modeflags;
+	uint16_t mode;
+	uint16_t modeflags;
 };
 
 struct nic_options {
