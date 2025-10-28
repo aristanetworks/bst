@@ -11,8 +11,8 @@
 
 struct sig_pdeathsig_cookie {
 	int pid;
-	int pidfd;
-	bool pollable;
+	int rfd;
+	int wfd;
 };
 
 /* sig_pdeathsig_cookie initializes the pdeathsig cookie with the current
@@ -20,8 +20,12 @@ struct sig_pdeathsig_cookie {
 void sig_pdeathsig_cookie_init(struct sig_pdeathsig_cookie *cookie);
 
 /* sig_pdeathsig_cookie_close releases any resource associated with the
-   pdeathsig cookie. */
-void sig_pdeathsig_cookie_close(struct sig_pdeathsig_cookie *cookie);
+   pdeathsig cookie for the parent process. */
+void sig_pdeathsig_cookie_close_parent(struct sig_pdeathsig_cookie *cookie);
+
+/* sig_pdeathsig_cookie_close releases any resource associated with the
+   pdeathsig cookie in the child process. */
+void sig_pdeathsig_cookie_close_child(struct sig_pdeathsig_cookie *cookie);
 
 /* sig_pdeathsig_cookie checks whether the parent process represented by the
    cookie is alive. The function is undefined if the cookie was not initialized

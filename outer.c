@@ -242,15 +242,16 @@ void outer_helper_spawn(struct outer_helper *helper)
 	}
 
 	if (pid) {
-		sig_pdeathsig_cookie_close(&liveness);
+		sig_pdeathsig_cookie_close_parent(&liveness);
 		close(fdpair[SOCKET_CHILD]);
 		helper->pid = pid;
 		helper->fd  = fdpair[SOCKET_PARENT];
 		return;
 	}
 
+	sig_pdeathsig_cookie_close_child(&liveness);
 	sig_setpdeathsig(SIGKILL, &liveness);
-	sig_pdeathsig_cookie_close(&liveness);
+	sig_pdeathsig_cookie_close_parent(&liveness);
 
 	/* Make sure all file descriptors except for the ones we're actually using
 	   get closed. This avoids keeping around file descriptors on which
