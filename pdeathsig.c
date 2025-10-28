@@ -20,115 +20,65 @@
 
 void sig_pdeathsig_cookie_init(struct sig_pdeathsig_cookie *cookie)
 {
-	int pid = getpid();
-	int pidfd = -1;
-	bool pollable = false;
+	pid_t pid = getpid();
+	int fds[2] = {-1, -1};
 
 #ifdef SYS_pidfd_open
-	pidfd = syscall(SYS_pidfd_open, pid, 0);
-	if (pidfd != -1) {
-		pollable = 1;
-	} else if (errno != ENOSYS) {
-		err(1, "pidfd_open");
+	fds[0] = syscall(SYS_pidfd_open, pid, 0);
+	if (fds[0] == -1 && errno != ENOSYS) {
+		err(1, "sig_pdeathsig_cookie_init: pidfd_open");
 	}
 #endif
 
-	if (pidfd == -1) {
-		char procpath[PATH_MAX];
-		makepath_r(procpath, "/proc/%d", pid);
-
-		pidfd = open(procpath, O_RDONLY | O_DIRECTORY);
-		if (pidfd == -1) {
-			err(1, "open %s", procpath);
+	if (fds[0] == -1) {
+		if (pipe2(fds, O_CLOEXEC | O_NONBLOCK) == -1) {
+			err(1, "sig_pdeathsig_cookie_init: pipe2");
 		}
 	}
 
 	*cookie = (struct sig_pdeathsig_cookie) {
 		.pid = pid,
-		.pidfd = pidfd,
-		.pollable = pollable,
+		.rfd = fds[0],
+		.wfd = fds[1],
 	};
 }
 
 int sig_pdeathsig_cookie_check(struct sig_pdeathsig_cookie *cookie)
 {
-	int rc;
-
-#ifdef SYS_pidfd_send_signal
-	rc = syscall(SYS_pidfd_send_signal, cookie->pidfd, 0, NULL, 0);
-	if (rc == 0) {
-		return 1;
-	} else {
-		switch (errno) {
-		/* Same case as ENOSYS; this happens when the cookie is created
-		   outside of the current pid namespace, meaning the pidfd can't
-		   be killed from this context. */
-		case EINVAL:
-			/* fallthrough */
-		case ENOSYS:
-			goto fallback;
-		case ESRCH:
-			return 0;
-		default:
-			err(1, "pidfd_send_signal");
-		}
-	}
-fallback: {}
-#endif
-
 	pid_t pid = getppid();
-	if (pid != cookie->pid) {
+	if (pid != 0 && pid != cookie->pid) {
 		return 0;
 	}
 
-	if (cookie->pollable) {
-		/* if the pidfd is pollable, it will be read-ready once the process exits. */
-		struct pollfd fds[1] = {
-			{
-				.fd = cookie->pidfd,
-				.events = POLLIN,
-			},
-		};
-		rc = poll(fds, 1, 0);
-		return rc == 0 || (fds[0].revents & POLLIN) == 0;
-	}
-
-	/* Failing everything else, we can use the inode number to distinguish
-	   between the pidfd of a dead process and the pidfd of a live process
-	   with the same pid as the dead process. This is slower than the
-	   rest and requires access to /proc, so the previous methods should
-	   preferably be used, and will be so on any modern Kernel. */
-
-	char procpath[PATH_MAX];
-	makepath_r(procpath, "/proc/%d", pid);
-
-	int pidfd = open(procpath, O_PATH | O_DIRECTORY);
-	if (pidfd == -1) {
-		err(1, "sig_pdeathsig_cookie_check: open %s", procpath);
-	}
-
-	struct stat buf1, buf2;
-	rc = fstat(pidfd, &buf1);
-	close(pidfd);
-
-	if (rc == -1) {
-		err(1, "sig_pdeathsig_cookie_check: fstat parent pidfd");
-	}
-	if (fstat(cookie->pidfd, &buf2) == -1) {
-		err(1, "sig_pdeathsig_cookie_check: fstat cookie pidfd");
-	}
-	return buf1.st_ino == buf2.st_ino && buf1.st_dev == buf2.st_dev;
+	/* The fd is either a pidfd, which becomes read-ready once the process
+	   exits, or is a pipe file descriptor whose write end gets closed by
+	   the parent once it dies. */
+	struct pollfd fds[1] = {
+		{
+			.fd = cookie->rfd,
+			.events = POLLIN,
+		},
+	};
+	int rc = poll(fds, 1, 0);
+	return rc == 0 || (fds[0].revents & (POLLIN | POLLHUP)) == 0;
 }
 
-void sig_pdeathsig_cookie_close(struct sig_pdeathsig_cookie *cookie)
+void sig_pdeathsig_cookie_close_child(struct sig_pdeathsig_cookie *cookie)
 {
-	close(cookie->pidfd);
+	if (cookie->wfd != -1) {
+		close(cookie->wfd);
+	}
+}
+
+void sig_pdeathsig_cookie_close_parent(struct sig_pdeathsig_cookie *cookie)
+{
+	close(cookie->rfd);
 }
 
 void sig_setpdeathsig(int signo, struct sig_pdeathsig_cookie *cookie)
 {
 	if (prctl(PR_SET_PDEATHSIG, signo) == -1) {
-		err(1, "prctl PR_SET_PDEATHSIG");
+		err(1, "sig_setpdeathsig: prctl PR_SET_PDEATHSIG");
 	}
 
 	if (!sig_pdeathsig_cookie_check(cookie)) {

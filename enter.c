@@ -341,7 +341,7 @@ int enter(struct entry_settings *opts)
 		}
 
 		close(socket_fdpass[SOCKET_CHILD]);
-		sig_pdeathsig_cookie_close(&liveness);
+		sig_pdeathsig_cookie_close_parent(&liveness);
 
 		if (opts->pidfile != NULL) {
 			int pidfile = open(opts->pidfile, O_WRONLY | O_CREAT | O_CLOEXEC | O_NOCTTY , 0666);
@@ -433,6 +433,8 @@ int enter(struct entry_settings *opts)
 		}
 	}
 
+	sig_pdeathsig_cookie_close_child(&liveness);
+
 	close(procfd);
 	procfd = openat(procfsfd, "self", O_PATH | O_DIRECTORY | O_CLOEXEC);
 	if (procfd == -1) {
@@ -456,7 +458,7 @@ int enter(struct entry_settings *opts)
 	   leaky by default which isn't great, and the obvious workaround to
 	   daemonize the process tree is to just nohup bst. */
 	sig_setpdeathsig(SIGKILL, &liveness);
-	sig_pdeathsig_cookie_close(&liveness);
+	sig_pdeathsig_cookie_close_parent(&liveness);
 
 	outer_helper_sync(&outer_helper);
 
