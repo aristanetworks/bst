@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -43,7 +44,7 @@ int recv_fd(int socket)
 
 	struct cmsghdr *pCm = CMSG_FIRSTHDR(&msg);
 	if (pCm == NULL || pCm->cmsg_len != CMSG_LEN(sizeof (int))) {
-		errx(1, "recv_fd: no descriptor passed");
+		return -1;
 	}
 	if (pCm->cmsg_level != SOL_SOCKET) {
 		errx(1, "recv_fd: control level != SOL_SOCKET");
@@ -64,19 +65,26 @@ void send_fd(int socket, int fd)
 		struct cmsghdr _align;
 		char ctrl[CMSG_SPACE(sizeof(int))];
 	} uCtrl;
+	memset(&uCtrl, 0, sizeof(uCtrl));
+
 	struct msghdr msg = {
-		.msg_control = uCtrl.ctrl,
-		.msg_controllen = sizeof(uCtrl.ctrl),
 		.msg_name = NULL,
 		.msg_namelen = 0,
 		.msg_iov = iov,
 		.msg_iovlen = 1,
 	};
-	struct cmsghdr *pCm = CMSG_FIRSTHDR(&msg);
-	pCm->cmsg_len = CMSG_LEN(sizeof(int));
-	pCm->cmsg_level = SOL_SOCKET;
-	pCm->cmsg_type = SCM_RIGHTS;
-	*((int*) CMSG_DATA(pCm)) = fd;
+
+	if (fd != -1) {
+		msg.msg_control = uCtrl.ctrl;
+		msg.msg_controllen = sizeof(uCtrl.ctrl);
+
+		struct cmsghdr *pCm = CMSG_FIRSTHDR(&msg);
+		pCm->cmsg_len = CMSG_LEN(sizeof(int));
+		pCm->cmsg_level = SOL_SOCKET;
+		pCm->cmsg_type = SCM_RIGHTS;
+		*((int*) CMSG_DATA(pCm)) = fd;
+	}
+
 	if (sendmsg(socket, &msg, 0) < 0) {
 		err(1, "send_fd: sendmsg");
 	}
