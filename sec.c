@@ -748,9 +748,8 @@ int sec_seccomp_install_filter(void)
 	int fd = seccomp(SECCOMP_SET_MODE_FILTER, SECCOMP_FILTER_FLAG_NEW_LISTENER, &prog);
 	if (fd == -1) {
 		if (errno == EBUSY) {
-			// We're likely running bst in bst; ignore the error, and return
-			// a useless file descriptor to pass to the seccomp supervisor
-			return epoll_create1(EPOLL_CLOEXEC);
+			// We're likely running bst in bst; this error is nonfatal.
+			return -1;
 		}
 		err(1, "seccomp SECCOMP_SET_MODE_FILTER");
 	}

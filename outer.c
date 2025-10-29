@@ -404,6 +404,10 @@ unshare:
 
 #ifdef HAVE_SECCOMP_UNOTIFY
 	int seccomp_fd = recv_fd(fd);
+	if (seccomp_fd == -1) {
+		/* We could not install seccomp */
+		_exit(0);
+	}
 
 	/* Don't hold onto any file descriptors before running our supervisor loop,
 	   because doing so may keep other children stuck waiting on fds that

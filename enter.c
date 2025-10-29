@@ -472,8 +472,8 @@ int enter(struct entry_settings *opts)
 
 #ifdef HAVE_SECCOMP_UNOTIFY
 		int seccomp_fd = sec_seccomp_install_filter();
+		send_fd(outer_helper.fd, seccomp_fd);
 		if (seccomp_fd != -1) {
-			send_fd(outer_helper.fd, seccomp_fd);
 			close(seccomp_fd);
 		}
 #endif
