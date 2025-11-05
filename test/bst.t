@@ -252,6 +252,7 @@ Testing Environment
 	FOO=bar
 	ROOT=/
 	EXECUTABLE=/bin/true
+	CGROUP_PATH=/sys/fs/cgroup
 
 	$ bst --no-env -- FOO-BAR=baz env
 	FOO-BAR=baz
