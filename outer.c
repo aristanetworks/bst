@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <inttypes.h>
 #include <limits.h>
+#include <sched.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -152,13 +153,83 @@ static void create_nics(pid_t child_pid, struct nic_options *nics, size_t nnics)
 	make_capable(BST_CAP_NET_ADMIN);
 
 	int rtnl = init_rtnetlink_socket();
+	bool needs_rename = false;
 
 	for (size_t i = 0; i < nnics; ++i) {
 		nics[i].netns_pid = child_pid;
-		net_if_add(rtnl, &nics[i]);
+		if (net_if_add(rtnl, &nics[i]) == -1) {
+			switch (errno) {
+			case EEXIST:
+				/* Emprirically, on some older kernels, creating a named
+				   interface via netlink in a child netns fails if the name if
+				   already taken in the current netns. To remedy this, we let
+				   the kernel pick a default name for the interface, then
+				   rename it from the target netns. */
+				nics[i].rename = true;
+				needs_rename = true;
+				if (net_if_add(rtnl, &nics[i]) == 0) {
+					break;
+				}
+				/* fallthrough */
+			default:
+				err(1, "if_add %s %.*s", nics[i].type, IF_NAMESIZE, nics[i].name);
+			}
+		}
 	}
 
 	reset_capabilities();
+
+	close(rtnl);
+
+	if (needs_rename) {
+		make_capable(BST_CAP_SYS_ADMIN | BST_CAP_SYS_PTRACE);
+
+		char procpath[PATH_MAX];
+		makepath_r(procpath, "/proc/%d/ns/net", child_pid);
+
+		int netns = open(procpath, O_RDONLY | O_CLOEXEC);
+		if (netns == -1) {
+			err(1, "if_add: open %s", procpath);
+		}
+
+		int orig_netns = open("/proc/self/ns/net", O_RDONLY | O_CLOEXEC);
+		if (orig_netns == -1) {
+			err(1, "if_add: open /proc/self/ns/net");
+		}
+
+		if (setns(netns, CLONE_NEWNET) == -1) {
+			err(1, "if_add: setns into child netns");
+		}
+
+		reset_capabilities();
+
+		make_capable(BST_CAP_NET_ADMIN);
+
+		int rtnl = init_rtnetlink_socket();
+
+		for (size_t i = 0; i < nnics; ++i) {
+			if (!nics[i].rename) {
+				continue;
+			}
+
+			net_if_rename(rtnl, (int)i + 2, nics[i].name);
+		}
+
+		reset_capabilities();
+
+		close(rtnl);
+
+		make_capable(BST_CAP_SYS_ADMIN);
+
+		if (setns(orig_netns, CLONE_NEWNET) == -1) {
+			err(1, "if_add: setns into original netns");
+		}
+
+		reset_capabilities();
+
+		close(netns);
+		close(orig_netns);
+	}
 }
 
 static void persist_ns_files(pid_t pid, const char **persist)

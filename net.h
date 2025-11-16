@@ -11,6 +11,7 @@
 # include <net/if.h>
 # include <netinet/in.h>
 # include <stdint.h>
+# include <stdbool.h>
 
 struct macvlan {
 	uint32_t mode;
@@ -24,6 +25,7 @@ struct ipvlan {
 struct nic_options {
 	char type[16];
 	char name[IF_NAMESIZE];
+	bool rename;
 	unsigned link_idx;
 	pid_t netns_pid;
 	struct ether_addr address;
@@ -64,7 +66,7 @@ struct route_options {
 int init_rtnetlink_socket();
 
 void net_addr_add(int sockfd, const struct addr_options *addropts);
-void net_if_add(int sockfd, const struct nic_options *nicopts);
+int net_if_add(int sockfd, const struct nic_options *nicopts);
 void net_if_rename(int sockfd, int link, const char *to);
 void net_if_up(int sockfd, const char *name);
 void net_route_add(int sockfd, const struct route_options *route);
