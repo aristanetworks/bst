@@ -219,7 +219,7 @@ static struct nic_handler nic_handlers[] = {
 	{ NULL, NULL },
 };
 
-void net_if_add(int sockfd, const struct nic_options *nicopts)
+int net_if_add(int sockfd, const struct nic_options *nicopts)
 {
 	struct nlpkt pkt;
 	nlpkt_init(&pkt, sizeof (struct ifinfomsg));
@@ -228,6 +228,9 @@ void net_if_add(int sockfd, const struct nic_options *nicopts)
 	pkt.hdr->nlhdr.nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_EXCL | NLM_F_CREATE;
 
 	nlpkt_add_attr(&pkt, IFLA_NET_NS_PID, nicopts->netns_pid);
+	if (!nicopts->rename) {
+		nlpkt_add_attr_nstr(&pkt, IFLA_IFNAME, nicopts->name);
+	}
 
 	static struct ether_addr zeromac;
 	if (memcmp(&nicopts->address, &zeromac, sizeof (nicopts->address)) != 0)
@@ -246,11 +249,10 @@ void net_if_add(int sockfd, const struct nic_options *nicopts)
 
 	struct iovec iov = { .iov_base = pkt.data, .iov_len = pkt.hdr->nlhdr.nlmsg_len };
 
-	if (nl_sendmsg(sockfd, &iov, 1) == -1) {
-		err(1, "if_add %s %.*s", nicopts->type, IF_NAMESIZE, nicopts->name);
-	}
+	int rc = nl_sendmsg(sockfd, &iov, 1);
 
 	nlpkt_close(&pkt);
+	return rc;
 }
 
 void net_if_rename(int sockfd, int link, const char *to)
