@@ -394,7 +394,8 @@ void outer_helper_spawn(struct outer_helper *helper)
 					err(1, "outer_helper: unable to create controller sub-cgroup");
 				} else {
 					close(cgroupfd);
-					goto unshare;
+					cgroupfd = -1;
+					break;
 				}
 			}
 			if (mkdirat(cgroupfd, "worker", 0777) == -1) {
@@ -402,7 +403,8 @@ void outer_helper_spawn(struct outer_helper *helper)
 					err(1, "outer_helper: unable to create worker sub-cgroup");
 				} else {
 					close(cgroupfd);
-					goto unshare;
+					cgroupfd = -1;
+					break;
 				}
 			}
 
@@ -414,6 +416,10 @@ void outer_helper_spawn(struct outer_helper *helper)
 			/* Put ourselves in the controller cgroup & the child in the worker cgroup */
 			burn(cgroupfd, "controller/cgroup.procs", "0");
 			burn(cgroupfd, "worker/cgroup.procs", pidstr);
+		}
+
+		if (cgroupfd == -1) {
+			goto unshare;
 		}
 
 		cgroup_enable_controllers(cgroupfd);
