@@ -30,4 +30,7 @@ void make_capable(uint64_t cap);
 void reset_capabilities(void);
 void drop_capabilities(void);
 
+# define with_capable(capmask) \
+	for (int __ok = ((void) make_capable(capmask), 1); __ok; (void) reset_capabilities(), __ok = 0)
+
 #endif /* !CAPABLE_H_ */

@@ -136,98 +136,91 @@ static void burn_uidmap_gidmap(pid_t child_pid, id_map uid_desired, id_map gid_d
 	char gid_map[ID_MAP_MAX];
 	make_idmap(gid_map, sizeof (gid_map), "gid", "/etc/subgid", "/proc/self/gid_map", &gid, gid_desired);
 
-	make_capable(BST_CAP_SETUID | BST_CAP_SETGID | BST_CAP_DAC_OVERRIDE);
-
-	if (burn(procfd, "uid_map", uid_map) == -1) {
-		err(1, "burn /proc/%d/uid_map", child_pid);
+	with_capable(BST_CAP_SETUID | BST_CAP_SETGID | BST_CAP_DAC_OVERRIDE) {
+		if (burn(procfd, "uid_map", uid_map) == -1) {
+			err(1, "burn /proc/%d/uid_map", child_pid);
+		}
+		if (burn(procfd, "gid_map", gid_map) == -1) {
+			err(1, "burn /proc/%d/gid_map", child_pid);
+		}
 	}
-	if (burn(procfd, "gid_map", gid_map) == -1) {
-		err(1, "burn /proc/%d/gid_map", child_pid);
-	}
-
-	reset_capabilities();
 }
 
 static void create_nics(pid_t child_pid, struct nic_options *nics, size_t nnics)
 {
-	make_capable(BST_CAP_NET_ADMIN);
-
-	int rtnl = init_rtnetlink_socket();
 	bool needs_rename = false;
 
-	for (size_t i = 0; i < nnics; ++i) {
-		nics[i].netns_pid = child_pid;
-		if (net_if_add(rtnl, &nics[i]) == -1) {
-			switch (errno) {
-			case EEXIST:
-				/* Emprirically, on some older kernels, creating a named
-				   interface via netlink in a child netns fails if the name if
-				   already taken in the current netns. To remedy this, we let
-				   the kernel pick a default name for the interface, then
-				   rename it from the target netns. */
-				nics[i].rename = true;
-				needs_rename = true;
-				if (net_if_add(rtnl, &nics[i]) == 0) {
-					break;
+	with_capable(BST_CAP_NET_ADMIN) {
+		int rtnl = init_rtnetlink_socket();
+
+		for (size_t i = 0; i < nnics; ++i) {
+			nics[i].netns_pid = child_pid;
+			if (net_if_add(rtnl, &nics[i]) == -1) {
+				switch (errno) {
+				case EEXIST:
+					/* Emprirically, on some older kernels, creating a named
+					   interface via netlink in a child netns fails if the name if
+					   already taken in the current netns. To remedy this, we let
+					   the kernel pick a default name for the interface, then
+					   rename it from the target netns. */
+					nics[i].rename = true;
+					needs_rename = true;
+					if (net_if_add(rtnl, &nics[i]) == 0) {
+						break;
+					}
+					/* fallthrough */
+				default:
+					err(1, "if_add %s %.*s", nics[i].type, IF_NAMESIZE, nics[i].name);
 				}
-				/* fallthrough */
-			default:
-				err(1, "if_add %s %.*s", nics[i].type, IF_NAMESIZE, nics[i].name);
 			}
 		}
+
+		close(rtnl);
 	}
 
-	reset_capabilities();
-
-	close(rtnl);
-
 	if (needs_rename) {
-		make_capable(BST_CAP_SYS_ADMIN | BST_CAP_SYS_PTRACE);
-
-		char procpath[PATH_MAX];
-		makepath_r(procpath, "/proc/%d/ns/net", child_pid);
-
-		int netns = open(procpath, O_RDONLY | O_CLOEXEC);
-		if (netns == -1) {
-			err(1, "if_add: open %s", procpath);
-		}
 
 		int orig_netns = open("/proc/self/ns/net", O_RDONLY | O_CLOEXEC);
 		if (orig_netns == -1) {
 			err(1, "if_add: open /proc/self/ns/net");
 		}
 
-		if (setns(netns, CLONE_NEWNET) == -1) {
-			err(1, "if_add: setns into child netns");
-		}
+		with_capable(BST_CAP_SYS_ADMIN | BST_CAP_SYS_PTRACE) {
+			char procpath[PATH_MAX];
+			makepath_r(procpath, "/proc/%d/ns/net", child_pid);
 
-		reset_capabilities();
-
-		make_capable(BST_CAP_NET_ADMIN);
-
-		int rtnl = init_rtnetlink_socket();
-
-		for (size_t i = 0; i < nnics; ++i) {
-			if (!nics[i].rename) {
-				continue;
+			int netns = open(procpath, O_RDONLY | O_CLOEXEC);
+			if (netns == -1) {
+				err(1, "if_add: open %s", procpath);
 			}
 
-			net_if_rename(rtnl, (int)i + 2, nics[i].name);
+			if (setns(netns, CLONE_NEWNET) == -1) {
+				err(1, "if_add: setns into child netns");
+			}
+
+			close(netns);
 		}
 
-		reset_capabilities();
+		with_capable(BST_CAP_NET_ADMIN) {
+			int rtnl = init_rtnetlink_socket();
 
-		close(rtnl);
+			for (size_t i = 0; i < nnics; ++i) {
+				if (!nics[i].rename) {
+					continue;
+				}
 
-		make_capable(BST_CAP_SYS_ADMIN);
+				net_if_rename(rtnl, (int)i + 2, nics[i].name);
+			}
 
-		if (setns(orig_netns, CLONE_NEWNET) == -1) {
-			err(1, "if_add: setns into original netns");
+			close(rtnl);
 		}
 
-		reset_capabilities();
+		with_capable(BST_CAP_SYS_ADMIN) {
+			if (setns(orig_netns, CLONE_NEWNET) == -1) {
+				err(1, "if_add: setns into original netns");
+			}
+		}
 
-		close(netns);
 		close(orig_netns);
 	}
 }
@@ -248,11 +241,10 @@ static void persist_ns_files(pid_t pid, const char **persist)
 		char procpath[PATH_MAX];
 		makepath_r(procpath, "/proc/%d/ns/%s", pid, name);
 
-		make_capable(BST_CAP_SYS_ADMIN | BST_CAP_SYS_PTRACE);
-
-		int rc = mount(procpath, persist[ns], "", MS_BIND, "");
-
-		reset_capabilities();
+		int rc;
+		with_capable(BST_CAP_SYS_ADMIN | BST_CAP_SYS_PTRACE) {
+			rc = mount(procpath, persist[ns], "", MS_BIND, "");
+		}
 
 		if (rc == -1) {
 			unlink(persist[ns]);
@@ -395,34 +387,34 @@ void outer_helper_spawn(struct outer_helper *helper)
 
 		/* NOTE: this is fine, since we did some access checks earlier on putting
 		   the current process into the parent cgroup */
-		make_capable(BST_CAP_DAC_OVERRIDE);
+		with_capable(BST_CAP_DAC_OVERRIDE) {
 
-		if (mkdirat(cgroupfd, "controller", 0777) == -1) {
-			if (critical_limits > 0) {
-				err(1, "outer_helper: unable to create controller sub-cgroup");
-			} else {
-				close(cgroupfd);
-				goto unshare;
+			if (mkdirat(cgroupfd, "controller", 0777) == -1) {
+				if (critical_limits > 0) {
+					err(1, "outer_helper: unable to create controller sub-cgroup");
+				} else {
+					close(cgroupfd);
+					goto unshare;
+				}
 			}
-		}
-		if (mkdirat(cgroupfd, "worker", 0777) == -1) {
-			if (critical_limits > 0) {
-				err(1, "outer_helper: unable to create worker sub-cgroup");
-			} else {
-				close(cgroupfd);
-				goto unshare;
+			if (mkdirat(cgroupfd, "worker", 0777) == -1) {
+				if (critical_limits > 0) {
+					err(1, "outer_helper: unable to create worker sub-cgroup");
+				} else {
+					close(cgroupfd);
+					goto unshare;
+				}
 			}
-		}
 
-		char pidstr[BUFSIZ];
-		if (sprintf(pidstr, "%d", child_pid) == -1) {
-			err(1, "outer_helper: unable to convert child_pid to string");
-		}
+			char pidstr[BUFSIZ];
+			if (sprintf(pidstr, "%d", child_pid) == -1) {
+				err(1, "outer_helper: unable to convert child_pid to string");
+			}
 
-		/* Put ourselves in the controller cgroup & the child in the worker cgroup */
-		burn(cgroupfd, "controller/cgroup.procs", "0");
-		burn(cgroupfd, "worker/cgroup.procs", pidstr);
-		reset_capabilities();
+			/* Put ourselves in the controller cgroup & the child in the worker cgroup */
+			burn(cgroupfd, "controller/cgroup.procs", "0");
+			burn(cgroupfd, "worker/cgroup.procs", pidstr);
+		}
 
 		cgroup_enable_controllers(cgroupfd);
 

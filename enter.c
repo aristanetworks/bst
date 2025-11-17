@@ -155,9 +155,9 @@ int enter(struct entry_settings *opts)
 		   is unfortunately owned by root and not ourselves, so we have
 		   to give ourselves the capability to read our own file. Geez. */
 
-		make_capable(BST_CAP_DAC_OVERRIDE);
-
-		timens_offsets = open("/proc/self/timens_offsets", O_WRONLY | O_CLOEXEC);
+		with_capable(BST_CAP_DAC_OVERRIDE) {
+			timens_offsets = open("/proc/self/timens_offsets", O_WRONLY | O_CLOEXEC);
+		}
 		if (timens_offsets == -1) {
 			if (errno != ENOENT) {
 				err(1, "open /proc/self/timens_offsets");
@@ -167,8 +167,6 @@ int enter(struct entry_settings *opts)
 			   or try to unshare or setns the time namespace below. */
 			opts->nsactions[NS_TIME] = NSACTION_SHARE_WITH_PARENT;
 		}
-
-		reset_capabilities();
 	}
 
 	enum nsaction *nsactions = opts->nsactions;

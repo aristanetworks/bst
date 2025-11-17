@@ -21,9 +21,10 @@ static int cgroup_native_driver_init(bool fatal)
 	   file exists; and second, that the mounted cgroup hierarchy can be
 	   operated on, which might not be the case if bst was left in its
 	   original cgroup. */
-	make_capable(BST_CAP_DAC_OVERRIDE);
-	int fd = open("/sys/fs/cgroup/cgroup.procs", O_WRONLY, 0);
-	reset_capabilities();
+	int fd;
+	with_capable(BST_CAP_DAC_OVERRIDE) {
+		fd = open("/sys/fs/cgroup/cgroup.procs", O_WRONLY, 0);
+	}
 
 	if (fd == -1) {
 		return -1;
@@ -58,9 +59,10 @@ static int cgroup_native_join_cgroup(const char *parent, const char *name)
 		goto unlink;
 	}
 
-	make_capable(BST_CAP_DAC_OVERRIDE);
-	int procs = openat(cgroupfd, "cgroup.procs", O_WRONLY, 0);
-	reset_capabilities();
+	int procs;
+	with_capable(BST_CAP_DAC_OVERRIDE) {
+		procs = openat(cgroupfd, "cgroup.procs", O_WRONLY, 0);
+	}
 
 	if (procs == -1) {
 		warn("cgroup_native_join_cgroup: open cgroup.procs under %s", parent);
