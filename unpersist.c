@@ -137,13 +137,11 @@ static int unpersistat(int dirfd, const char *pathname, int flags)
 	   trust the path itself, we have to rely on the kernel magic link resolution
 	   to do this for us by unmounting /proc/self/fd/<fd>. */
 
-	make_capable(BST_CAP_SYS_ADMIN);
-
-	if (umount2(selfpath, MNT_DETACH) == -1) {
-		goto error;
+	with_capable(BST_CAP_SYS_ADMIN) {
+		if (umount2(selfpath, MNT_DETACH) == -1) {
+			goto error;
+		}
 	}
-
-	reset_capabilities();
 
 	/* The file descriptor is now useless since it refers to our now-defunct
 	   nsfs file. We have to use the original path for removal, but it's fine,

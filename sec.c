@@ -62,9 +62,9 @@ static int resolve_dirfd(int procfd, int dirfd)
 {
 	int realdirfd = -1;
 	if (dirfd == AT_FDCWD) {
-		make_capable(BST_CAP_SYS_PTRACE | BST_CAP_DAC_OVERRIDE);
-		realdirfd = openat(procfd, "cwd", O_PATH | O_CLOEXEC);
-		reset_capabilities();
+		with_capable(BST_CAP_SYS_PTRACE | BST_CAP_DAC_OVERRIDE) {
+			realdirfd = openat(procfd, "cwd", O_PATH | O_CLOEXEC);
+		}
 	} else {
 		char fdpath[PATH_MAX+1];
 		if ((size_t) snprintf(fdpath, PATH_MAX, "fd/%d", dirfd) >= sizeof (fdpath)) {
@@ -72,9 +72,9 @@ static int resolve_dirfd(int procfd, int dirfd)
 			return -EINVAL;
 		}
 
-		make_capable(BST_CAP_SYS_PTRACE | BST_CAP_DAC_OVERRIDE);
-		realdirfd = openat(procfd, fdpath, O_PATH | O_CLOEXEC);
-		reset_capabilities();
+		with_capable(BST_CAP_SYS_PTRACE | BST_CAP_DAC_OVERRIDE) {
+			realdirfd = openat(procfd, fdpath, O_PATH | O_CLOEXEC);
+		}
 	}
 	if (realdirfd == -1) {
 		warn("open");
@@ -100,13 +100,12 @@ static int run_in_process_context(int seccomp_fd, int procfd,
 {
 	int rc = 0;
 
-	make_capable(BST_CAP_SYS_PTRACE | BST_CAP_DAC_OVERRIDE);
-
-	int selfmnt = self_mnt_nsfd();
-	int memfd = openat(procfd, "mem", O_RDWR | O_CLOEXEC);
-	int mntns = openat(procfd, "ns/mnt", O_RDONLY | O_CLOEXEC);
-
-	reset_capabilities();
+	int selfmnt, memfd, mntns;
+	with_capable(BST_CAP_SYS_PTRACE | BST_CAP_DAC_OVERRIDE) {
+		selfmnt = self_mnt_nsfd();
+		memfd = openat(procfd, "mem", O_RDWR | O_CLOEXEC);
+		mntns = openat(procfd, "ns/mnt", O_RDONLY | O_CLOEXEC);
+	}
 
 	if (memfd == -1) {
 		warn("open /proc/<pid>/mem");
@@ -147,9 +146,10 @@ static int run_in_process_context(int seccomp_fd, int procfd,
 		goto error_close;
 	}
 
-	make_capable(BST_CAP_SYS_ADMIN | BST_CAP_SYS_CHROOT);
-	int rc2 = setns(mntns, CLONE_NEWNS);
-	reset_capabilities();
+	int rc2;
+	with_capable(BST_CAP_SYS_ADMIN | BST_CAP_SYS_CHROOT) {
+		rc2 = setns(mntns, CLONE_NEWNS);
+	}
 
 	if (rc2 == -1) {
 		warn("setns");
@@ -175,9 +175,9 @@ static int run_in_process_context(int seccomp_fd, int procfd,
 	}
 
 error:
-	make_capable(BST_CAP_SYS_ADMIN | BST_CAP_SYS_CHROOT);
-	rc2 = setns(selfmnt, CLONE_NEWNS);
-	reset_capabilities();
+	with_capable(BST_CAP_SYS_ADMIN | BST_CAP_SYS_CHROOT) {
+		rc2 = setns(selfmnt, CLONE_NEWNS);
+	}
 
 	if (rc2 == -1) {
 		err(1, "setns");
@@ -208,14 +208,12 @@ static int sec__mknodat_callback(int procfd, void *cookie)
 
 	mode_t old_umask = umask(status.umask);
 
-	make_capable(BST_CAP_MKNOD);
-
 	int rc = 0;
-	if (mknodat(args->dirfd, args->pathname, args->mode, args->dev) == -1) {
-		rc = -errno;
+	with_capable(BST_CAP_MKNOD) {
+		if (mknodat(args->dirfd, args->pathname, args->mode, args->dev) == -1) {
+			rc = -errno;
+		}
 	}
-
-	reset_capabilities();
 
 	if (old_umask != (mode_t) -1) {
 		umask(old_umask);
