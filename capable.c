@@ -54,6 +54,9 @@ void make_capable(uint64_t cap)
 	if (deny_new_capabilities) {
 		errx(1, "called make_capable in no-new-capabilities code");
 	}
+	if (memcmp(original, current, sizeof (current)) != 0) {
+		errx(1, "cannot call make_capable twice in a row without calling reset_capabilities");
+	}
 	current[0].effective |= (__u32) (cap & (__u32) -1);
 	current[1].effective |= (__u32) (cap >> 32);
 	if (bst_capset(&hdr, current) == -1) {
