@@ -65,7 +65,7 @@ config.set('ARCH_@0@'.format(arch.to_upper()), 1)
 config.set('HAVE_SYS_mount_setattr', cc.has_header_symbol('syscall.h', 'SYS_mount_setattr'))
 config.set('HAVE_close_range', cc.has_function('close_range'))
 
-libdbus = dependency('dbus-1', required: false)
+libdbus = dependency('dbus-1', required: get_option('systemd-cgroup-driver'))
 config.set('HAVE_SYSTEMD', libdbus.found())
 
 has_seccomp_unotify = cc.has_header_symbol('linux/seccomp.h', 'SECCOMP_FILTER_FLAG_NEW_LISTENER')
