@@ -597,6 +597,7 @@ static void sec_seccomp_dispatch_syscall(int seccomp_fd,
 #endif
 
 	if (req->data.nr <= 0 || (size_t) req->data.nr >= nr_syscall) {
+		warnx("BUG: intercepted syscall %d on arch %x, but it was not in the supervisor's syscall table.", req->data.nr, req->data.arch);
 		goto fallthrough;
 	}
 	syscall_handler_func *fn = table[(size_t) req->data.nr];
@@ -643,6 +644,40 @@ fallthrough:
 
 noreturn void sec_seccomp_supervisor(int seccomp_fd)
 {
+	/* Populate any syscall handler tables prior to running the supervisor */
+
+#ifdef BST_SECCOMP_32
+	if (sec_seccomp_fix_stat_32bit) {
+#ifdef BST_NR_stat64_32
+		syscall_table_32[BST_NR_stat64_32] = sec__stat64;
+#endif
+#ifdef BST_NR_lstat64_32
+		syscall_table_32[BST_NR_lstat64_32] = sec__lstat64;
+#endif
+#ifdef BST_NR_fstat64_32
+		syscall_table_32[BST_NR_fstat64_32] = sec__fstat64;
+#endif
+#ifdef BST_NR_fstatat64_32
+		syscall_table_32[BST_NR_fstatat64_32] = sec__fstatat64;
+#endif
+		syscall_table_32[BST_NR_statx_32] = sec__statx;
+	}
+#endif
+
+	if (sec_seccomp_emulate_mknod) {
+#ifdef BST_NR_mknod
+		syscall_table[BST_NR_mknod] = sec__mknod;
+#endif
+		syscall_table[BST_NR_mknodat] = sec__mknodat;
+
+#ifdef BST_SECCOMP_32
+#ifdef BST_NR_mknod_32
+		syscall_table_32[BST_NR_mknod_32] = sec__mknod;
+#endif
+		syscall_table_32[BST_NR_mknodat_32] = sec__mknodat;
+#endif
+	}
+
 	/* Run the seccomp supervisor. This supervisor is a privileged helper
 	   that runs safe syscalls on behalf of the unprivileged child in a
 	   user namespace.
@@ -710,38 +745,6 @@ int sec_seccomp_install_filter(void)
 		.len    = syscall_filter_length,
 		.filter = (struct sock_filter *)syscall_filter,
 	};
-
-#ifdef BST_SECCOMP_32
-	if (sec_seccomp_fix_stat_32bit) {
-#ifdef BST_NR_stat64_32
-		syscall_table_32[BST_NR_stat64_32] = sec__stat64;
-#endif
-#ifdef BST_NR_lstat64_32
-		syscall_table_32[BST_NR_lstat64_32] = sec__lstat64;
-#endif
-#ifdef BST_NR_fstat64_32
-		syscall_table_32[BST_NR_fstat64_32] = sec__fstat64;
-#endif
-#ifdef BST_NR_fstatat64_32
-		syscall_table_32[BST_NR_fstatat64_32] = sec__fstatat64;
-#endif
-		syscall_table_32[BST_NR_statx_32] = sec__statx;
-	}
-#endif
-
-	if (sec_seccomp_emulate_mknod) {
-#ifdef BST_NR_mknod
-		syscall_table[BST_NR_mknod] = sec__mknod;
-#endif
-		syscall_table[BST_NR_mknodat] = sec__mknodat;
-
-#ifdef BST_SECCOMP_32
-#ifdef BST_NR_mknod_32
-		syscall_table_32[BST_NR_mknod_32] = sec__mknod;
-#endif
-		syscall_table_32[BST_NR_mknodat_32] = sec__mknodat;
-#endif
-	}
 
 	int fd = seccomp(SECCOMP_SET_MODE_FILTER, SECCOMP_FILTER_FLAG_NEW_LISTENER, &prog);
 	if (fd == -1) {

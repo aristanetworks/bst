@@ -469,11 +469,11 @@ int enter(struct entry_settings *opts)
 	ns_enter_postfork(namespaces, ns_len);
 
 #ifdef HAVE_SECCOMP_UNOTIFY
-		int seccomp_fd = sec_seccomp_install_filter();
-		send_fd(outer_helper.fd, seccomp_fd);
-		if (seccomp_fd != -1) {
-			close(seccomp_fd);
-		}
+	int seccomp_fd = sec_seccomp_install_filter();
+	send_fd(outer_helper.fd, seccomp_fd);
+	if (seccomp_fd != -1) {
+		close(seccomp_fd);
+	}
 #endif
 
 	outer_helper_close(&outer_helper);
