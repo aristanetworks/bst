@@ -320,22 +320,9 @@ struct statx_args {
 
 static int do_statx(int dirfd, char *pathname, int flags, unsigned int mask, struct statx *statxbuf)
 {
-	/* We always mock timestamps, so no need to query them. */
-	mask &= ~(STATX_ATIME | STATX_BTIME | STATX_MTIME | STATX_CTIME);
-
 	if (statx(dirfd, pathname, flags, mask, statxbuf) == -1) {
 		return -errno;
 	}
-
-	/* Normalize the timestamps to a fixed 32-bit date. */
-	struct statx_timestamp well_known_date = {
-		.tv_sec = 946728000, /* 2000-01-01 12:00:00 +0000 UTC */
-	};
-
-	statxbuf->stx_atime = well_known_date;
-	statxbuf->stx_btime = well_known_date;
-	statxbuf->stx_mtime = well_known_date;
-	statxbuf->stx_ctime = well_known_date;
 
 	/* Normalize the inode so that it fits in 32-bit space.
 	   There's no good way to solve this perfectly, but a reasonable compromise
