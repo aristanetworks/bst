@@ -46,7 +46,7 @@ void init_capabilities(void)
 bool capable(uint64_t cap)
 {
 	uint64_t caps = (uint64_t) current[1].effective << 32 | current[0].effective;
-	return caps & ((uint64_t)1 << cap);
+	return caps & cap;
 }
 
 void make_capable(uint64_t cap)
