@@ -5,11 +5,13 @@
  */
 
 #include <err.h>
+#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <linux/audit.h>
 #include <linux/filter.h>
+#include <linux/prctl.h>
 #include <linux/seccomp.h>
 #include <sched.h>
 #include <stdint.h>
@@ -18,6 +20,7 @@
 #include <string.h>
 #include <sys/epoll.h>
 #include <sys/ioctl.h>
+#include <sys/prctl.h>
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
 #include <syscall.h>
@@ -97,6 +100,7 @@ static int run_in_process_context(int seccomp_fd, int procfd,
 		struct arg_buf *in,
 		struct arg_buf *out,
 		void *cookie,
+		runproc_func *init,
 		runproc_func *fn)
 {
 	int rc = 0;
@@ -135,6 +139,10 @@ static int run_in_process_context(int seccomp_fd, int procfd,
 			total += nread;
 		}
 		a->size = total;
+	}
+
+	if (init && (rc = init(procfd, cookie)) == -1) {
+		goto error_close;
 	}
 
 	/* Check again that the process is alive and blocked on the syscall. This
@@ -195,24 +203,59 @@ struct mknodat_args {
 	mode_t mode;
 	dev_t dev;
 	char pathname[PATH_MAX];
+
+	struct proc_status status;
 };
+
+static int sec__mknodat_init(int procfd, void *cookie)
+{
+	struct mknodat_args *args = cookie;
+
+	if (proc_read_status(procfd, &args->status) == -1) {
+		warn("proc_read_status /proc/<pid>/status");
+		return -EINVAL;
+	}
+
+	return 0;
+}
 
 static int sec__mknodat_callback(int procfd, void *cookie)
 {
 	struct mknodat_args *args = cookie;
 
-	struct proc_status status;
-	if (proc_read_status(procfd, &status) == -1) {
-		warn("proc_read_status /proc/<pid>/status");
-		return -EINVAL;
-	}
+	mode_t old_umask = umask(args->status.umask);
 
-	mode_t old_umask = umask(status.umask);
+	uid_t uid = geteuid();
+	uid_t gid = getegid();
 
 	int rc = 0;
-	with_capable(BST_CAP_MKNOD) {
+	with_capable(BST_CAP_MKNOD | BST_CAP_SETUID | BST_CAP_SETGID) {
+
+		/* We must switch our effective {u,g}id because we need the owner IDs
+		   to match mknodat's calling thread. We cannot switch the file
+		   ownership after the fact because if the calling thread is in a user
+		   namespace and operates with an effective ID outside of our own
+		   0-65534 range, then mknod fails with a rather baffling EOVERFLOW. */
+		if (seteuid(args->status.euid)) {
+			rc = -errno;
+			break;
+		}
+		if (setegid(args->status.egid)) {
+			rc = -errno;
+			goto error;
+		}
+
 		if (mknodat(args->dirfd, args->pathname, args->mode, args->dev) == -1) {
 			rc = -errno;
+			goto error;
+		}
+
+	error:
+		if (seteuid(uid) == -1) {
+			err(1, "seteuid");
+		}
+		if (setegid(gid) == -1) {
+			err(1, "setegid");
 		}
 	}
 
@@ -270,7 +313,7 @@ safe: {}
 		},
 	};
 
-	int rc = run_in_process_context(seccomp_fd, procfd, req, in, NULL, &args, sec__mknodat_callback);
+	int rc = run_in_process_context(seccomp_fd, procfd, req, in, NULL, &args, sec__mknodat_init, sec__mknodat_callback);
 
 	close(realdirfd);
 	return rc;
@@ -393,7 +436,7 @@ static int sec__statx(int seccomp_fd, int procfd, struct seccomp_notif *req)
 		},
 	};
 
-	int rc = run_in_process_context(seccomp_fd, procfd, req, in, out, &args, sec__statx_callback);
+	int rc = run_in_process_context(seccomp_fd, procfd, req, in, out, &args, NULL, sec__statx_callback);
 
 	close(realdirfd);
 	return rc;
@@ -510,7 +553,7 @@ static int sec__fstatat64_impl(int seccomp_fd, int procfd,
 		},
 	};
 
-	int rc = run_in_process_context(seccomp_fd, procfd, req, in, out, &args, sec__fstatat64_callback);
+	int rc = run_in_process_context(seccomp_fd, procfd, req, in, out, &args, NULL, sec__fstatat64_callback);
 
 	close(realdirfd);
 	return rc;
@@ -649,6 +692,12 @@ noreturn void sec_seccomp_supervisor(int seccomp_fd)
 #endif
 		syscall_table_32[BST_NR_mknodat_32] = sec__mknodat;
 #endif
+	}
+
+	/* Some system call handlers expect to be able to run with the tid's
+	   credentials, but still need to retain some capabilities. */
+	if (prctl(PR_SET_KEEPCAPS, 1) == -1) {
+		err(1, "prctl PR_SET_KEEPCAPS");
 	}
 
 	/* Run the seccomp supervisor. This supervisor is a privileged helper
