@@ -704,7 +704,46 @@ noreturn void sec_seccomp_supervisor(int seccomp_fd)
 	if (resp == NULL)
 		err(1, "malloc");
 
+	int epollfd = epoll_create1(0);
+	if (epollfd == -1) {
+		err(1, "epoll_create1");
+	}
+
+	struct epoll_event event = {
+		.events = EPOLLIN,
+	};
+	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, seccomp_fd, &event) == -1) {
+		err(1, "epoll_ctl EPOLL_CTL_ADD");
+	}
+
 	for (;;) {
+
+		int ready = epoll_wait(epollfd, &event, 1, -1);
+		if (ready == -1) {
+			if (errno == EINTR) {
+				continue;
+			}
+			err(1, "epoll_wait");
+		}
+
+		/* We don't need to check for EPOLLERR -- it's not documented that
+		   the seccomp fd can be in that condition, but even if it can,
+		   the correct action is to let the ioctl clear the error condition.
+		   Either the ioctl will return immediately and the error will be
+		   handled correctly, or it will block until a syscall is received
+		   or no users of the filter are left, both of which will cause
+		   this code to loop back on itself and check for EPOLLHUP eventually. */
+
+		if (ready != 1) {
+			continue;
+		}
+
+		/* There are no users to the seccomp filter, meaning there
+		   are no processes left. Exit. */
+		if ((event.events & EPOLLHUP) != 0) {
+			_exit(0);
+		}
+
 		memset(req,  0, sizes.seccomp_notif);
 		memset(resp, 0, resp_size);
 
