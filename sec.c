@@ -113,13 +113,13 @@ static int run_in_process_context(int seccomp_fd, int procfd,
 	}
 
 	if (memfd == -1) {
-		warn("open /proc/<pid>/mem");
+		warn("open /proc/%d/mem", req->pid);
 		rc = -EINVAL;
 		goto error_close;
 	}
 
 	if (mntns == -1) {
-		warn("open /proc/<pid>/ns/mnt");
+		warn("open /proc/%d/ns/mnt", req->pid);
 		rc = -EINVAL;
 		goto error_close;
 	}
@@ -199,12 +199,14 @@ error_close:
 }
 
 struct mknodat_args {
+	pid_t pid;
 	int dirfd;
 	mode_t mode;
 	dev_t dev;
 	char pathname[PATH_MAX];
 
 	struct proc_status status;
+	struct capabilities caps;
 };
 
 static int sec__mknodat_init(int procfd, void *cookie)
@@ -212,8 +214,14 @@ static int sec__mknodat_init(int procfd, void *cookie)
 	struct mknodat_args *args = cookie;
 
 	if (proc_read_status(procfd, &args->status) == -1) {
-		warn("proc_read_status /proc/<pid>/status");
+		warn("proc_read_status /proc/%d/status", args->pid);
 		return -EINVAL;
+	}
+
+	if (tid_capget(args->pid, &args->caps) == -1) {
+		int err = errno;
+		warn("capget %d", args->pid);
+		return -err;
 	}
 
 	return 0;
@@ -222,6 +230,14 @@ static int sec__mknodat_init(int procfd, void *cookie)
 static int sec__mknodat_callback(int procfd, void *cookie)
 {
 	struct mknodat_args *args = cookie;
+
+	/* It wouldn't technically matter for a user without CAP_MKNOD to be
+	   able to create safe devices, but some programs handle EPERM with
+	   fallback code to account for root and non-root execution. Deny
+	   the syscall in order to be faithful to that behavior */
+	if (!(args->caps.effective & BST_CAP_MKNOD)) {
+		return -EPERM;
+	}
 
 	mode_t old_umask = umask(args->status.umask);
 
@@ -297,6 +313,7 @@ safe: {}
 	}
 
 	struct mknodat_args args = {
+		.pid = req->pid,
 		.dirfd = realdirfd,
 		.dev = dev,
 		.mode = mode,
