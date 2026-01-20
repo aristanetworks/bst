@@ -35,6 +35,28 @@ static int bst_capget(cap_user_header_t header, cap_user_data_t data)
 	return (int) syscall(SYS_capget, header, data);
 }
 
+int tid_capget(pid_t tid, struct capabilities *caps)
+{
+	struct __user_cap_header_struct hdr = {
+		.version = _LINUX_CAPABILITY_VERSION_3,
+		.pid     = tid,
+	};
+
+	struct __user_cap_data_struct current[2];
+
+	if (bst_capget(&hdr, current) == -1) {
+		return -1;
+	}
+
+	*caps = (struct capabilities) {
+		.inheritable = (uint64_t) current[1].inheritable << 32 | current[0].inheritable,
+		.permitted   = (uint64_t) current[1].permitted << 32   | current[0].permitted,
+		.effective   = (uint64_t) current[1].effective << 32   | current[0].effective,
+	};
+
+	return 0;
+}
+
 void init_capabilities(void)
 {
 	if (bst_capget(&hdr, current) == -1) {

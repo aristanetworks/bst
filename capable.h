@@ -10,6 +10,7 @@
 # include <stdbool.h>
 # include <stdint.h>
 # include <linux/capability.h>
+# include <unistd.h>
 
 /* Define more useful capability constants */
 # define BST_CAP_SYS_ADMIN      ((uint64_t) 1 << CAP_SYS_ADMIN)
@@ -29,6 +30,14 @@ bool capable(uint64_t cap);
 void make_capable(uint64_t cap);
 void reset_capabilities(void);
 void drop_capabilities(void);
+
+struct capabilities {
+	uint64_t inheritable;
+	uint64_t permitted;
+	uint64_t effective;
+};
+
+int tid_capget(pid_t tid, struct capabilities *capabilities);
 
 # define with_capable(capmask) \
 	for (int __ok = ((void) make_capable(capmask), 1); __ok; (void) reset_capabilities(), __ok = 0)
