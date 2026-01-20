@@ -5,6 +5,7 @@
  */
 
 #include <fcntl.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -24,6 +25,8 @@ int proc_read_status(int procfd, struct proc_status *out)
 	char line[4096];
 	while (fgets(line, sizeof (line) - 1, f)) {
 		sscanf(line, "Umask:\t%o\n", &out->umask);
+		sscanf(line, "Uid:\t%" PRIu32 "\t%" PRIu32 "\t%" PRIu32 "\t%" PRIu32 "\n", &out->ruid, &out->euid, &out->suid, &out->fsuid);
+		sscanf(line, "Gid:\t%" PRIu32 "\t%" PRIu32 "\t%" PRIu32 "\t%" PRIu32 "\n", &out->rgid, &out->egid, &out->sgid, &out->fsgid);
 	}
 
 	fclose(f);
