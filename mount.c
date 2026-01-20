@@ -186,6 +186,38 @@ static void do_mount(const char *source, const char *target, const char *type, u
 	}
 }
 
+/* makedev isn't a macro, but we need it in a const initializer */
+
+#define bst_makedev(Major, Minor) \
+	( (((dev_t) ((Major) & 0x00000fffu)) <<  8) \
+	| (((dev_t) ((Major) & 0xfffff000u)) << 32) \
+	| (((dev_t) ((Minor) & 0x000000ffu)) <<  0) \
+	| (((dev_t) ((Minor) & 0xffffff00u)) << 12) )
+
+const struct devtmpfs_device devtmpfs_safe_devices[] = {
+	{ "null",    S_IFCHR | 0666, bst_makedev(1, 3) },
+	{ "full",    S_IFCHR | 0666, bst_makedev(1, 7) },
+	{ "zero",    S_IFCHR | 0666, bst_makedev(1, 5) },
+	{ "tty",     S_IFCHR | 0666, bst_makedev(5, 0) },
+	{ "random",  S_IFCHR | 0666, bst_makedev(1, 8) },
+	{ "urandom", S_IFCHR | 0666, bst_makedev(1, 9) },
+	{ "net/tun", S_IFCHR | 0666, bst_makedev(10, 200) },
+	{ "fuse",    S_IFCHR | 0666, bst_makedev(10, 229) },
+	{ "kvm",     S_IFCHR | 0666, bst_makedev(10, 232) },
+
+	/* The devices below are safe devices, but we do not mount them in
+	   devtmpfs. This is indicated by not having a path.
+
+	   This part of the list is used by the emulated mknod to see
+	   what extra devices might be allowed. */
+
+	{ "", S_IFCHR | 0666, bst_makedev(0, 0) }, /* whiteout device */
+	{ "", S_IFCHR | 0666, bst_makedev(5, 2) }, /* ptmx device -- typically pts/ptmx is used instead */
+
+	/* Sentinel value -- keep at the end */
+	{ NULL, 0, 0 },
+};
+
 void mount_entries(const char *root, const struct mount_entry *mounts, size_t nmounts, int no_derandomize)
 {
 	mode_t old_mask = umask(0);
@@ -246,32 +278,16 @@ void mount_entries(const char *root, const struct mount_entry *mounts, size_t nm
 				}
 			}
 
-			struct {
-				const char *path;
-				mode_t mode;
-				dev_t dev;
-			} devices[] = {
-				{ "null",    S_IFCHR | 0666, makedev(1, 3) },
-				{ "full",    S_IFCHR | 0666, makedev(1, 7) },
-				{ "zero",    S_IFCHR | 0666, makedev(1, 5) },
-				{ "tty",     S_IFCHR | 0666, makedev(5, 0) },
-				{ "random",  S_IFCHR | 0666, makedev(1, 8) },
-				{ "urandom", S_IFCHR | 0666, makedev(1, 9) },
-				{ "net/tun", S_IFCHR | 0666, makedev(10, 200) },
-				{ "fuse",    S_IFCHR | 0666, makedev(10, 229) },
-				{ "kvm",     S_IFCHR | 0666, makedev(10, 232) },
-			};
-
-			for (size_t i = 0; i < lengthof(devices); ++i) {
+			for (const struct devtmpfs_device *dev = devtmpfs_safe_devices; dev->path != NULL && dev->path[0] != '\0'; dev++) {
 
 				/* Skip random and urandom when derandomizing */
-				if (!no_derandomize && major(devices[i].dev) == 1 && (minor(devices[i].dev) == 8 || minor(devices[i].dev) == 9)) {
+				if (!no_derandomize && major(dev->dev) == 1 && (minor(dev->dev) == 8 || minor(dev->dev) == 9)) {
 					continue;
 				}
 
-				const char *path = makepath("%s%s/%s", root, mnt_target, devices[i].path);
+				const char *path = makepath("%s%s/%s", root, mnt_target, dev->path);
 
-				if (mknod(path, devices[i].mode, devices[i].dev) == 0) {
+				if (mknod(path, dev->mode, dev->dev) == 0) {
 					continue;
 				}
 
@@ -280,18 +296,18 @@ void mount_entries(const char *root, const struct mount_entry *mounts, size_t nm
 				if (errno != EPERM) {
 					err(1, "mount_entries: bst_devtmpfs: mknod %s mode 0%o dev {%d, %d})",
 							path,
-							devices[i].mode,
-							major(devices[i].dev),
-							minor(devices[i].dev));
+							dev->mode,
+							major(dev->dev),
+							minor(dev->dev));
 				}
 
 				char source[PATH_MAX];
-				makepath_r(source, "/dev/%s", devices[i].path);
+				makepath_r(source, "/dev/%s", dev->path);
 
-				if (mknod(path, S_IFREG | (devices[i].mode & 0777), 0) == -1) {
+				if (mknod(path, S_IFREG | (dev->mode & 0777), 0) == -1) {
 					err(1, "mount_entries: bst_devtmpfs: mknod %s mode 0%o",
 							path,
-							devices[i].mode);
+							dev->mode);
 				}
 
 				if (mount(source, path, "", MS_BIND, "") == -1) {

@@ -25,6 +25,7 @@
 
 #include "arch.h"
 #include "capable.h"
+#include "mount.h"
 #include "proc.h"
 #include "sec.h"
 #include "util.h"
@@ -237,23 +238,8 @@ static int sec__mknodat_impl(int seccomp_fd, int procfd,
 
 	/* Is this one of the safe devices? */
 
-	struct devtype {
-		mode_t type;
-		dev_t  dev;
-	};
-
-	const struct devtype safe_devices[] = {
-		{ .type = S_IFCHR, .dev = makedev(0, 0) }, // whiteout device
-		{ .type = S_IFCHR, .dev = makedev(1, 3) }, // null device
-		{ .type = S_IFCHR, .dev = makedev(1, 5) }, // zero device
-		{ .type = S_IFCHR, .dev = makedev(1, 7) }, // full device
-		{ .type = S_IFCHR, .dev = makedev(1, 8) }, // random device
-		{ .type = S_IFCHR, .dev = makedev(1, 9) }, // urandom device
-		{ .type = S_IFCHR, .dev = makedev(5, 0) }, // tty device
-	};
-
-	for (size_t i = 0; i < lengthof(safe_devices); i++) {
-		if ((mode & S_IFMT) == safe_devices[i].type && dev == safe_devices[i].dev) {
+	for (const struct devtmpfs_device *device = devtmpfs_safe_devices; device->path != NULL; device++) {
+		if ((mode & S_IFMT) == (device->mode & S_IFMT) && dev == device->dev) {
 			goto safe;
 		}
 	}
