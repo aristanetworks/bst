@@ -11,7 +11,6 @@
 #include <limits.h>
 #include <linux/audit.h>
 #include <linux/filter.h>
-#include <linux/prctl.h>
 #include <linux/seccomp.h>
 #include <sched.h>
 #include <stdint.h>
