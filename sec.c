@@ -356,7 +356,7 @@ static int sec__mknodat(int seccomp_fd, int procfd, struct seccomp_notif *req)
 }
 
 #ifdef BST_SECCOMP_32
-struct statx_args {
+struct sec32__statx_args {
 	int dirfd;
 	char pathname[PATH_MAX];
 	int flags;
@@ -364,7 +364,7 @@ struct statx_args {
 	struct statx statxbuf;
 };
 
-static int do_statx(int dirfd, char *pathname, int flags, unsigned int mask, struct statx *statxbuf)
+static int sec32__do_statx(int dirfd, char *pathname, int flags, unsigned int mask, struct statx *statxbuf)
 {
 	if (statx(dirfd, pathname, flags, mask, statxbuf) == -1) {
 		return -errno;
@@ -406,13 +406,13 @@ static int do_statx(int dirfd, char *pathname, int flags, unsigned int mask, str
 	return 0;
 }
 
-static int sec__statx_callback(int procfd, void *cookie)
+static int sec32__statx_callback(int procfd, void *cookie)
 {
-	struct statx_args *args = cookie;
-	return do_statx(args->dirfd, args->pathname, args->flags, args->mask, &args->statxbuf);
+	struct sec32__statx_args *args = cookie;
+	return sec32__do_statx(args->dirfd, args->pathname, args->flags, args->mask, &args->statxbuf);
 }
 
-static int sec__statx(int seccomp_fd, int procfd, struct seccomp_notif *req)
+static int sec32__statx(int seccomp_fd, int procfd, struct seccomp_notif *req)
 {
 	int dirfd = req->data.args[0];
 	uintptr_t pathnameaddr = req->data.args[1];
@@ -425,7 +425,7 @@ static int sec__statx(int seccomp_fd, int procfd, struct seccomp_notif *req)
 		return realdirfd;
 	}
 
-	struct statx_args args = {
+	struct sec32__statx_args args = {
 		.dirfd = realdirfd,
 		.flags = flags,
 		.mask = mask,
@@ -453,13 +453,13 @@ static int sec__statx(int seccomp_fd, int procfd, struct seccomp_notif *req)
 		},
 	};
 
-	int rc = run_in_process_context(seccomp_fd, procfd, req, in, out, &args, NULL, sec__statx_callback);
+	int rc = run_in_process_context(seccomp_fd, procfd, req, in, out, &args, NULL, sec32__statx_callback);
 
 	close(realdirfd);
 	return rc;
 }
 
-struct sec__stat64 {
+struct sec32__stat64 {
 	uint64_t dev;
 	uint64_t ino;
 	uint64_t nlink;
@@ -482,12 +482,12 @@ struct sec__stat64 {
 	int64_t __unused[3];
 };
 
-struct fstatat64_args {
+struct sec32__fstatat64_args {
 	int dirfd;
 	char pathname[PATH_MAX];
 	int flags;
 	unsigned int mask;
-	struct sec__stat64 statbuf;
+	struct sec32__stat64 statbuf;
 };
 
 static inline uint64_t makedev64(uint32_t major, uint32_t minor)
@@ -501,18 +501,19 @@ static inline uint64_t makedev64(uint32_t major, uint32_t minor)
 	return dev;
 }
 
-static int sec__fstatat64_callback(int procfd, void *cookie)
+static int sec32__fstatat64_callback(int procfd, void *cookie)
 {
-	struct fstatat64_args *args = cookie;
+	struct sec32__fstatat64_args *args = cookie;
 	struct statx statxbuf;
 
-	int rc = do_statx(args->dirfd, args->pathname, args->flags, STATX_BASIC_STATS, &statxbuf);
+	int rc = sec32__do_statx(args->dirfd, args->pathname, args->flags, STATX_BASIC_STATS, &statxbuf);
 	if (rc < 0) {
 		return rc;
 	}
 
 	args->statbuf.dev = makedev64(statxbuf.stx_dev_major, statxbuf.stx_dev_minor);
 	args->statbuf.ino = statxbuf.stx_ino;
+	args->statbuf._ino = statxbuf.stx_ino;
 	args->statbuf.nlink = statxbuf.stx_nlink;
 	args->statbuf.mode = statxbuf.stx_mode;
 	args->statbuf.uid = statxbuf.stx_uid;
@@ -531,7 +532,7 @@ static int sec__fstatat64_callback(int procfd, void *cookie)
 	return 0;
 }
 
-static int sec__fstatat64_impl(int seccomp_fd, int procfd,
+static int sec32__fstatat64_impl(int seccomp_fd, int procfd,
 		struct seccomp_notif *req,
 		int dirfd,
 		uintptr_t pathnameaddr,
@@ -543,7 +544,7 @@ static int sec__fstatat64_impl(int seccomp_fd, int procfd,
 		return realdirfd;
 	}
 
-	struct fstatat64_args args = {
+	struct sec32__fstatat64_args args = {
 		.dirfd = realdirfd,
 		.flags = flags,
 	};
@@ -563,37 +564,37 @@ static int sec__fstatat64_impl(int seccomp_fd, int procfd,
 		{
 			.addr = statbufaddr,
 			.buf  = (char *)&args.statbuf,
-			.size = sizeof (struct sec__stat64),
+			.size = sizeof (struct sec32__stat64),
 		},
 		{
 			.addr = 0,
 		},
 	};
 
-	int rc = run_in_process_context(seccomp_fd, procfd, req, in, out, &args, NULL, sec__fstatat64_callback);
+	int rc = run_in_process_context(seccomp_fd, procfd, req, in, out, &args, NULL, sec32__fstatat64_callback);
 
 	close(realdirfd);
 	return rc;
 }
 
-static int sec__stat64(int seccomp_fd, int procfd, struct seccomp_notif *req)
+static int sec32__stat64(int seccomp_fd, int procfd, struct seccomp_notif *req)
 {
-	return sec__fstatat64_impl(seccomp_fd, procfd, req, AT_FDCWD, req->data.args[0], req->data.args[1], 0);
+	return sec32__fstatat64_impl(seccomp_fd, procfd, req, AT_FDCWD, req->data.args[0], req->data.args[1], 0);
 }
 
-static int sec__lstat64(int seccomp_fd, int procfd, struct seccomp_notif *req)
+static int sec32__lstat64(int seccomp_fd, int procfd, struct seccomp_notif *req)
 {
-	return sec__fstatat64_impl(seccomp_fd, procfd, req, AT_FDCWD, req->data.args[0], req->data.args[1], AT_SYMLINK_NOFOLLOW);
+	return sec32__fstatat64_impl(seccomp_fd, procfd, req, AT_FDCWD, req->data.args[0], req->data.args[1], AT_SYMLINK_NOFOLLOW);
 }
 
-static int sec__fstat64(int seccomp_fd, int procfd, struct seccomp_notif *req)
+static int sec32__fstat64(int seccomp_fd, int procfd, struct seccomp_notif *req)
 {
-	return sec__fstatat64_impl(seccomp_fd, procfd, req, req->data.args[0], 0, req->data.args[1], AT_EMPTY_PATH);
+	return sec32__fstatat64_impl(seccomp_fd, procfd, req, req->data.args[0], 0, req->data.args[1], AT_EMPTY_PATH);
 }
 
-static int sec__fstatat64(int seccomp_fd, int procfd, struct seccomp_notif *req)
+static int sec32__fstatat64(int seccomp_fd, int procfd, struct seccomp_notif *req)
 {
-	return sec__fstatat64_impl(seccomp_fd, procfd, req, req->data.args[0], req->data.args[1], req->data.args[2], req->data.args[3]);
+	return sec32__fstatat64_impl(seccomp_fd, procfd, req, req->data.args[0], req->data.args[1], req->data.args[2], req->data.args[3]);
 }
 #endif /* !BST_SECCOMP_32 */
 
@@ -682,18 +683,18 @@ noreturn void sec_seccomp_supervisor(int seccomp_fd)
 #ifdef BST_SECCOMP_32
 	if (sec_seccomp_fix_stat_32bit) {
 #ifdef BST_NR_stat64_32
-		syscall_table_32[BST_NR_stat64_32] = sec__stat64;
+		syscall_table_32[BST_NR_stat64_32] = sec32__stat64;
 #endif
 #ifdef BST_NR_lstat64_32
-		syscall_table_32[BST_NR_lstat64_32] = sec__lstat64;
+		syscall_table_32[BST_NR_lstat64_32] = sec32__lstat64;
 #endif
 #ifdef BST_NR_fstat64_32
-		syscall_table_32[BST_NR_fstat64_32] = sec__fstat64;
+		syscall_table_32[BST_NR_fstat64_32] = sec32__fstat64;
 #endif
 #ifdef BST_NR_fstatat64_32
-		syscall_table_32[BST_NR_fstatat64_32] = sec__fstatat64;
+		syscall_table_32[BST_NR_fstatat64_32] = sec32__fstatat64;
 #endif
-		syscall_table_32[BST_NR_statx_32] = sec__statx;
+		syscall_table_32[BST_NR_statx_32] = sec32__statx;
 	}
 #endif
 
