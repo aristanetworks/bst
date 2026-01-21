@@ -355,6 +355,16 @@ static int sec__mknodat(int seccomp_fd, int procfd, struct seccomp_notif *req)
 }
 
 #ifdef BST_SECCOMP_32
+
+/* We don't have to redefine our own 4-byte-aligned version of the statx struct
+   type because it's been constructed in a way that the layout stays the same
+   across bitness.
+
+   Still, we must assert this, because we can't blindly trust that still will
+   remain true over time. */
+
+_Static_assert(sizeof(struct statx) == 256, "statx buffer size must be the same on all architectures");
+
 struct sec32__statx_args {
 	int dirfd;
 	char pathname[PATH_MAX];
@@ -458,28 +468,34 @@ static int sec32__statx(int seccomp_fd, int procfd, struct seccomp_notif *req)
 	return rc;
 }
 
+#if defined(__i386__) || defined(__x86_64__)
+
+/* This type matches exactly the stat64 type in
+   linux/arch/x86/include/uapi/asm/stat.h, except that it's aligned on a
+   4-byte-boundary. */
 struct sec32__stat64 {
 	uint64_t dev;
-	uint64_t ino;
-	uint64_t nlink;
-
+	uint8_t  __pad0[4];
+	uint32_t _ino;
 	uint32_t mode;
+	uint32_t nlink;
 	uint32_t uid;
 	uint32_t gid;
-	uint32_t __pad0;
 	uint64_t rdev;
-	int64_t size;
-	int64_t blksize;
-	int64_t blocks;
+	uint8_t  __pad3[4];
+	uint64_t size;
+	uint32_t blksize;
+	uint64_t blocks;
+	uint32_t atime;
+	uint32_t atime_nsec;
+	uint32_t mtime;
+	uint32_t mtime_nsec;
+	uint32_t ctime;
+	uint32_t ctime_nsec;
+	uint64_t ino;
+} __attribute__((aligned(4),packed));
 
-	uint64_t atime;
-	uint64_t atime_nsec;
-	uint64_t mtime;
-	uint64_t mtime_nsec;
-	uint64_t ctime;
-	uint64_t ctime_nsec;
-	int64_t __unused[3];
-};
+#endif /* !__i386__ || __x86_64__ */
 
 struct sec32__fstatat64_args {
 	int dirfd;
