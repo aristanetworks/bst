@@ -55,7 +55,7 @@ enum {
    under some circumstances. */
 ssize_t burn(int dirfd, char *path, char *data)
 {
-	int fd = openat(dirfd, path, O_WRONLY, 0);
+	int fd = openat(dirfd, path, O_WRONLY | O_NOFOLLOW, 0);
 	if (fd == -1) {
 		return -1;
 	}
@@ -409,7 +409,7 @@ void outer_helper_spawn(struct outer_helper *helper)
 			}
 
 			char pidstr[BUFSIZ];
-			if (sprintf(pidstr, "%d", child_pid) == -1) {
+			if (snprintf(pidstr, sizeof (pidstr), "%d", child_pid) >= (int) sizeof (pidstr)) {
 				err(1, "outer_helper: unable to convert child_pid to string");
 			}
 
@@ -432,6 +432,9 @@ void outer_helper_spawn(struct outer_helper *helper)
 
 		for (size_t i = 0; i < helper->nclimits; ++i) {
 			struct climit *lim = &helper->climits[i];
+			if (strchr(lim->fname, '/') != NULL) {
+				errx(1, "invalid cgroup limit name '%s': must not contain '/'", lim->fname);
+			}
 			if (burn(subcgroupfd, lim->fname, lim->limit) == -1) {
 				switch (errno) {
 				case ENOENT:

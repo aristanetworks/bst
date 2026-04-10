@@ -57,7 +57,8 @@ static uint32_t id_parse(const char *s, const char *which)
 		errx(1, "missing %s in id map", which);
 	}
 	unsigned long id = strtoul(s, NULL, 0);
-	if (id == ULONG_MAX) {
+	if (id > UINT32_MAX) {
+		errno = ERANGE;
 		err(1, "parsing %s", s);
 	}
 	return (uint32_t) id;
@@ -132,7 +133,7 @@ void id_map_load_subids(id_map map, const char *subid_path, const struct id *id)
 		uint32_t length;
 
 		_Static_assert(ID_STR_MAX == 32, "scanf width must be equal to ID_STR_MAX");
-		int items = sscanf(line, "%32[^:]:%" PRIu32 ":%" PRIu32 "u\n",
+		int items = sscanf(line, "%32[^:]:%" PRIu32 ":%" PRIu32 "\n",
 				entryname,
 				&start,
 				&length);
@@ -453,7 +454,7 @@ uint32_t id_map_count_ids(id_map map)
 	uint32_t len = 0;
 	for (struct id_range *r = map; r < map + MAX_USER_MAPPINGS; ++r) {
 		if (len > UINT32_MAX - r->length) {
-			errno = EOVERFLOW;
+			errno = ERANGE;
 			return UINT32_MAX;
 		}
 		len += r->length;

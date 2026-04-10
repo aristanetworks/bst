@@ -69,6 +69,9 @@ static void apply_rlimit(int resource, struct rlimit const *value)
 			}
 			err(1, "getrlimit(%d) failed", resource);
 		}
+		if (new_limit.rlim_cur == new_limit.rlim_max) {
+			return;
+		}
 		new_limit.rlim_cur = new_limit.rlim_max;
 		value = &new_limit;
 	}
@@ -460,12 +463,6 @@ int enter(struct entry_settings *opts)
 
 	outer_helper_sync(&outer_helper);
 
-	/* Read the current cgroup before ns_enter_postfork; this allows us
-	   to get the real path to the cgroup */
-	char cgroup_path[PATH_MAX];
-	if (!cgroup_read_current(procfd, cgroup_path)) {
-		cgroup_path[0] = '\0';
-	}
 	ns_enter_postfork(namespaces, ns_len);
 
 #ifdef HAVE_SECCOMP_UNOTIFY
@@ -478,9 +475,13 @@ int enter(struct entry_settings *opts)
 
 	outer_helper_close(&outer_helper);
 
-	int rtnl = init_rtnetlink_socket();
-
 	if (opts->setup_program != NULL) {
+		/* Read the current cgroup to expose it as $CGROUP_PATH to the setup program */
+		char cgroup_path[PATH_MAX];
+		if (!cgroup_read_current(procfd, cgroup_path)) {
+			cgroup_path[0] = '\0';
+		}
+
 		pid_t pid = fork();
 		if (pid == -1) {
 			err(1, "setup: fork");
@@ -639,6 +640,7 @@ int enter(struct entry_settings *opts)
 	}
 
 	if (net_unshare) {
+		int rtnl = init_rtnetlink_socket();
 		/* Setup localhost */
 		if (!opts->no_loopback_setup) {
 			net_if_up(rtnl, "lo");
