@@ -15,7 +15,7 @@ jobs:
         - snaipe/ci-meson:gcc-alpine-3.10
         - snaipe/ci-meson:gcc-fedora-31
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 1
       - name: make
