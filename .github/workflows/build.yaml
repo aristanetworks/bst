@@ -26,4 +26,5 @@ jobs:
           command -v dnf && dnf install -y glibc-static scdoc
           CPPFLAGS='-Wconversion -pedantic-errors' meson build -Dsuid-fallback=true
           ninja -C build
+          ninja -C build test
 
