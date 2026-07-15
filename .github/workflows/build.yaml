@@ -21,9 +21,10 @@ jobs:
       - name: make
         run: |
           set -xeu
-          command -v apk && apk add --no-cache linux-headers scdoc gcc musl-dev make meson ninja pkgconf libcap-dev
+          command -v apk && apk add --no-cache linux-headers scdoc gcc musl-dev make meson ninja pkgconf libcap-dev gawk git jq
           command -v apt && apt-get update && apt-get install -y scdoc
           command -v dnf && dnf install -y glibc-static scdoc
           CPPFLAGS='-Wconversion -pedantic-errors' meson build -Dsuid-fallback=true
           ninja -C build
+          PATH="$PWD/build:$PATH" meson test -C build --print-errorlogs
 
