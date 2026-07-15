@@ -13,7 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         image:
-        - snaipe/ci-meson:gcc-debian-10
+        - debian:12
         - alpine:3.23
         - snaipe/ci-meson:gcc-fedora-31
     steps:
@@ -24,7 +24,7 @@ jobs:
         run: |
           set -xeu
           command -v apk && apk add --no-cache linux-headers scdoc gcc musl-dev make meson ninja pkgconf libcap-dev libcap-setcap gawk git jq util-linux iproute2
-          command -v apt && apt-get update && apt-get install -y scdoc
+          command -v apt-get && apt-get update && apt-get install -y gcc make meson ninja-build pkg-config libcap-dev scdoc gawk git jq iproute2
           command -v dnf && dnf install -y glibc-static scdoc findutils gawk git iproute jq which
           CPPFLAGS='-Wconversion -pedantic-errors' meson build -Dsuid-fallback=true
           ninja -C build
