@@ -55,12 +55,9 @@ Testing mount semantics
 	$ bst --mount tmp,/tmp,tmpfs,defaults sh -c 'tail -n 1 /proc/mounts | sed -Ee "s/,uid=[[:digit:]]+,gid=[[:digit:]]+//" -e "s/,seclabel//" -e "s/,inode64//"'
 	tmp /tmp tmpfs rw,relatime 0 0
 
-	$ [ "$(bst --mount /dev/shm,/mnt,none,bind sh -c 'tail -n 1 /proc/mounts | sed -Ee "s/,uid=[[:digit:]]+,gid=[[:digit:]]+//" -e "s|/mnt|/dev/shm|"')" = "$(grep /dev/shm /proc/mounts | sed -Ee "s/,uid=[[:digit:]]+,gid=[[:digit:]]+//")" ]
+	$ bst --mount /dev/shm,/mnt,none,bind sh -c 'test "$(stat -c %d /dev/shm)" = "$(stat -c %d /mnt)"'
 
-
-	$ act=$(bst --mount /dev/shm,/mnt,none,bind sh -c 'tail -n 1 /proc/mounts | sed -Ee "s/,uid=[[:digit:]]+,gid=[[:digit:]]+//" -e "s|/mnt|/dev/shm|"')
-	> exp=$(grep /dev/shm /proc/mounts | sed -Ee "s/,uid=[[:digit:]]+,gid=[[:digit:]]+//")
-	> [ "$exp" = "$act" ] || echo -e "-$exp\n+$act"
+	$ bst --mount tmp,/mnt,tmpfs,defaults sh -c 'test "$(stat -c %d /dev/shm)" != "$(stat -c %d /mnt)"'
 
 	$ bst --mount tmp,/tmp,tmpfs,dirsync,noatime,nodev,nodiratime,noexec,nosuid,relatime,ro,silent,strictatime,sync sh -c 'tail -n 1 /proc/mounts | sed -Ee "s/,uid=[[:digit:]]+,gid=[[:digit:]]+//" -e "s/,seclabel//" -e "s/,inode64//"'
 	tmp /tmp tmpfs ro,sync,dirsync,nosuid,nodev,noexec,nodiratime 0 0
