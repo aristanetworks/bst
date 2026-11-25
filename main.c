@@ -64,6 +64,7 @@ enum {
 	OPTION_TTY,
 	OPTION_CLOSE_FD,
 	OPTION_CGROUP_DRIVER,
+	OPTION_MOCK_SYSCALL,
 
 	/* Opt-in feature flags */
 	OPTION_FIX_STAT_32BIT_OVERFLOW,
@@ -392,6 +393,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ "tty",                optional_argument, NULL, OPTION_TTY             },
 		{ "close-fd",           optional_argument, NULL, OPTION_CLOSE_FD        },
 		{ "cgroup-driver",      required_argument, NULL, OPTION_CGROUP_DRIVER   },
+		{ "mock-syscall",       required_argument, NULL, OPTION_MOCK_SYSCALL    },
 
 		/* Opt-in feature flags */
 #ifdef HAVE_SECCOMP_UNOTIFY
@@ -879,6 +881,18 @@ int main(int argc, char *argv[], char *envp[])
 			}
 #endif
 
+			case OPTION_MOCK_SYSCALL:
+			{
+#ifdef HAVE_SECCOMP_UNOTIFY
+				char message[256];
+				if (mock_syscall_parse(&sec_mock_rules, optarg, message, sizeof (message)))
+					errx(2, "%s", message);
+#else
+				errx(2, "--mock-syscall: seccomp notification support is unavailable");
+#endif
+				break;
+			}
+
 			case 'r':
 				opts.root = optarg;
 				break;
@@ -900,6 +914,12 @@ int main(int argc, char *argv[], char *envp[])
 				}
 		}
 	}
+
+#ifdef HAVE_SECCOMP_UNOTIFY
+	char mock_error[256];
+	if (sec_mock_prepare(mock_error, sizeof (mock_error)))
+		errx(2, "%s", mock_error);
+#endif
 
 	/* ARG_MAX isn't really supposed to be the size of a pointer array, but
 	   instead the size of the cmdline area... but this is a good enough upper

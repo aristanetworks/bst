@@ -34,6 +34,19 @@
 
 int sec_seccomp_fix_stat_32bit = 0;
 int sec_seccomp_emulate_mknod = 0;
+struct mock_syscall_rules sec_mock_rules;
+static struct mock_syscall_program sec_mock_program;
+
+int sec_mock_prepare(char *error, size_t error_size)
+{
+	return mock_syscall_build(&sec_mock_rules, syscall_filter_length,
+				  &sec_mock_program, error, error_size);
+}
+
+int sec_mock_install(void)
+{
+	return mock_syscall_install(&sec_mock_program);
+}
 
 typedef int syscall_handler_func(int, int, struct seccomp_notif *);
 

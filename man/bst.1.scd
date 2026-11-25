@@ -147,6 +147,59 @@ spacetime process.
 	This affects the output of _uname -m_, and takes the same architecture names
 	as *setarch*(1).
 
+\--mock-syscall nr=<name-or-number>,ret=<result>[,arch=<abi>]
+	Skip the selected syscall and return a constant result. Repeat this option
+	for multiple rules. Both *nr* and *ret* are required, and the fields can
+	appear in any order. An exact syscall name without *SYS\_* or *\_\_NR\_* expands
+	to all supported ABIs defining that name, unless *arch* selects one ABI.
+	Overlapping rules are rejected, including overlaps caused by name expansion.
+
+	The supported ABIs are *x86\_64*, *i386*, and *x32* on x86 builds, and
+	*aarch64* on AArch64 builds. The *--arch* execution domain does not select
+	the syscall ABI. Numeric syscall numbers require *arch* and must be decimal
+	and nonnegative. On *x86\_64* and *x32* the maximum is 1073741823; on
+	*i386* and *aarch64* it is 2147483647. For *x32*, specify the untagged
+	number: bst adds the ABI bit. Numbers absent from the bundled Linux v6.6
+	name tables are allowed, which permits selecting newer calls numerically.
+	This option requires a build with seccomp notification support.
+
+	*ret=0* returns success; *ret=-N* returns Linux error *-N*, where *N* is
+	decimal and between 1 and 4095. A libc syscall wrapper reports -1 and sets
+	_errno_ to *N*. Positive results are unsupported. The syscall body is not
+	executed, arguments are not validated, and output buffers or file descriptors
+	are not produced. A successful result need not mean the operation occurred.
+
+	The filter is installed after bst hands its notification listener to the
+	outer helper, and before the setup program runs. It affects the setup program,
+	the remaining in-process configuration, init, the command, and descendants;
+	the outer helper and host-side parent are unaffected. Mocking control calls
+	such as *mount*, *setuid*, *execve*, *sendmsg*, or *seccomp* can break setup
+	or make it appear to succeed without taking effect. In particular, a parent
+	mock returning success for *seccomp* can interfere with installation of a
+	nested filter. This option is for deliberate compatibility changes, not an
+	isolation or authorization mechanism.
+
+	Nested filters cannot restore a syscall suppressed by a parent. A newer mock
+	for the same syscall can change the result returned when both filters use
+	ERRNO actions; a more restrictive inherited action can take precedence.
+	An explicit mock takes precedence over bst's notification-based mknod and
+	32-bit stat emulation for that syscall. Existing kernel filter limits may
+	prevent installation; bst fails if the kernel reports installation failure.
+
+	For example, the following skips four synchronization syscalls:
+
+	```
+	bst --mock-syscall nr=sync,ret=0 \\
+	    --mock-syscall nr=syncfs,ret=0 \\
+	    --mock-syscall nr=fsync,ret=0 \\
+	    --mock-syscall nr=fdatasync,ret=0 command args...
+	```
+
+	This removes the requested durability guarantee: after a crash, writes may
+	be lost or inconsistent. It does not prevent background writeback,
+	*O\_SYNC* or *O\_DSYNC* writes, *msync*, *sync\_file\_range*, or synchronization
+	issued through *io\_uring*. Use only when that loss of durability is acceptable.
+
 \--hostname <hostname>
 	Set the hostname for the inner process' UTS namespace.
 

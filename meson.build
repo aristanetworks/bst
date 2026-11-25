@@ -125,12 +125,14 @@ endif
 if has_seccomp_unotify
 	bst_sources += [
 		'arch/@0@/syscall.c'.format(arch),
+		'mock_filter.c',
+		'mock_syscall.c',
 		'proc.c',
 		'sec.c',
 	]
 endif
 
-executable('bst', bst_sources, install: true, dependencies: [libdbus])
+bst = executable('bst', bst_sources, install: true, dependencies: [libdbus])
 
 if not get_option('no-setcap-or-suid')
 	capabilities = {

@@ -71,3 +71,7 @@ Options:
 
       --fix-stat-32bit-overflow     Make 32-bit stat work on 64-bit filesystems.
       --emulate-mknod               Emulate mknod for safe character devices.
+      --mock-syscall nr=<name-or-number>,ret=<result>[,arch=<abi>]
+                                    Skip a syscall and return 0 or -1..-4095.
+                                    Repeat for more rules; see bst(1) for ABI,
+                                    setup, nesting, and durability implications.
