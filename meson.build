@@ -132,7 +132,7 @@ if has_seccomp_unotify
 	]
 endif
 
-executable('bst', bst_sources, install: true, dependencies: [libdbus])
+bst = executable('bst', bst_sources, install: true, dependencies: [libdbus])
 
 if not get_option('no-setcap-or-suid')
 	capabilities = {
