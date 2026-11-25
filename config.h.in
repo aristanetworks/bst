@@ -15,6 +15,7 @@
 #mesondefine ARCH
 #mesondefine ARCH_X86
 #mesondefine ARCH_X86_64
+#mesondefine ARCH_AARCH64
 
 #mesondefine HAVE_SECCOMP_UNOTIFY
 #mesondefine HAVE_SYSTEMD

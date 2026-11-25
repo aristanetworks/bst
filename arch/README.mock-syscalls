@@ -1,0 +1,32 @@
+Mock syscall name tables
+========================
+
+The checked-in mock-syscalls.inc files are generated from Linux v6.6,
+commit ffc253263a1375a65fa6c9f62a893e9767fbebfa. The x86 syscall tables
+are the source used to generate the UAPI syscall numbers. The arm64 UAPI
+header includes the generic UAPI syscall definitions. The generator checks
+the SHA-256 of each of its four source files before producing output.
+
+To regenerate without cloning a repository, download the four pinned files
+to a source tree outside the user's home directory. For example:
+
+    linux=/tmp/bst-linux-v6.6
+    base=https://raw.githubusercontent.com/torvalds/linux/ffc253263a1375a65fa6c9f62a893e9767fbebfa
+    for file in arch/x86/entry/syscalls/syscall_32.tbl \
+                arch/x86/entry/syscalls/syscall_64.tbl \
+                arch/arm64/include/uapi/asm/unistd.h \
+                include/uapi/asm-generic/unistd.h; do
+        mkdir -p "$linux/$(dirname "$file")"
+        curl -fL "$base/$file" -o "$linux/$file"
+    done
+
+Then run from the bst root:
+
+    python3 arch/gen-mock-syscalls.py "$linux"
+
+Python 3 and a C preprocessor (cc, or --cc to select another) are needed.
+No source download or host compatibility headers are needed to build bst.
+The arm64 preprocessing environment fixes __BITS_PER_LONG at 64. The x32
+table combines common and x32 entries, including the x32-specific numbers.
+The generated numbers do not include x32's ABI bit; the parser adds it.
+This metadata does not change the existing notification filters.

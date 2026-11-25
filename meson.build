@@ -125,6 +125,7 @@ endif
 if has_seccomp_unotify
 	bst_sources += [
 		'arch/@0@/syscall.c'.format(arch),
+		'mock_syscall.c',
 		'proc.c',
 		'sec.c',
 	]
