@@ -9,6 +9,7 @@
 
 # include <stddef.h>
 # include <stdint.h>
+# include <linux/filter.h>
 
 enum mock_syscall_abi {
 	MOCK_ABI_X86_64,
@@ -34,5 +35,18 @@ struct mock_syscall_rules {
 int mock_syscall_parse(struct mock_syscall_rules *rules, const char *arg,
 		       char *error, size_t error_size);
 void mock_syscall_rules_free(struct mock_syscall_rules *rules);
+
+struct mock_syscall_program {
+	struct sock_filter *insns;
+	size_t length;
+};
+
+/* previous_length is the instruction count of bst's notification filter.
+ * Inherited filters are opaque; the kernel may still reject installation. */
+int mock_syscall_build(const struct mock_syscall_rules *rules,
+		       size_t previous_length, struct mock_syscall_program *program,
+		       char *error, size_t error_size);
+int mock_syscall_install(const struct mock_syscall_program *program);
+void mock_syscall_program_free(struct mock_syscall_program *program);
 
 #endif /* !MOCK_SYSCALL_H_ */

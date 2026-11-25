@@ -481,6 +481,11 @@ int enter(struct entry_settings *opts)
 
 	outer_helper_close(&outer_helper);
 
+#ifdef HAVE_SECCOMP_UNOTIFY
+	if (sec_mock_install() == -1)
+		err(1, "--mock-syscall: seccomp filter installation failed");
+#endif
+
 	if (opts->setup_program != NULL) {
 		pid_t pid = fork();
 		if (pid == -1) {
